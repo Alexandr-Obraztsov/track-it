@@ -59,6 +59,14 @@ export class RoleService {
         return (result.affected ?? 0) > 0
     }
 
+    // Удаление роли по имени
+    async deleteRoleByName(chatId: string, roleName: string): Promise<boolean> {
+        const role = await this.getRoleByName(chatId, roleName)
+        if (!role) return false
+        
+        return await this.deleteRole(role.id)
+    }
+
     // Обновление роли
     async updateRole(roleId: number, updateData: Partial<{
         name: string
@@ -67,6 +75,21 @@ export class RoleService {
         if (!role) return null
 
         Object.assign(role, updateData)
+        return await this.roleRepository.save(role)
+    }
+
+    // Обновление роли по имени
+    async updateRoleByName(chatId: string, oldRoleName: string, newRoleName: string): Promise<RoleEntity | null> {
+        const role = await this.getRoleByName(chatId, oldRoleName)
+        if (!role) return null
+
+        // Проверяем, не занято ли новое имя
+        const existingRole = await this.getRoleByName(chatId, newRoleName)
+        if (existingRole && existingRole.id !== role.id) {
+            return null // Имя уже занято
+        }
+
+        role.name = newRoleName
         return await this.roleRepository.save(role)
     }
 

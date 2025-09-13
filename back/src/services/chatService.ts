@@ -1,15 +1,18 @@
 import { DataSource, Repository } from 'typeorm'
 import { ChatEntity } from '../entities/Chat'
 import { ChatMemberEntity } from '../entities/ChatMember'
+import { RoleService } from './roleService'
 
 // Сервис для управления беседами и участниками
 export class ChatService {
     private chatRepository: Repository<ChatEntity>
     private memberRepository: Repository<ChatMemberEntity>
+    private roleService: RoleService
 
     constructor(dataSource: DataSource) {
         this.chatRepository = dataSource.getRepository(ChatEntity)
         this.memberRepository = dataSource.getRepository(ChatMemberEntity)
+        this.roleService = new RoleService(dataSource)
     }
 
     // Создание или получение беседы
@@ -120,5 +123,31 @@ export class ChatService {
             where: { chatId, userId },
             relations: ['role']
         })
+    }
+
+    // Получение ролей чата с информацией о пользователях
+    async getChatRolesWithMembers(chatId: string): Promise<Array<{
+        id: number
+        name: string
+        membersCount: number
+        members: string[]
+    }>> {
+        const roles = await this.roleService.getChatRoles(chatId)
+        const result = []
+
+        for (const role of roles) {
+            const members = await this.memberRepository.find({
+                where: { chatId, roleId: role.id }
+            })
+
+            result.push({
+                id: role.id,
+                name: role.name,
+                membersCount: members.length,
+                members: members.map(member => member.firstName || member.username || 'Неизвестный')
+            })
+        }
+
+        return result
     }
 }

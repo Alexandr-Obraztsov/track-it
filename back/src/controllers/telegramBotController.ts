@@ -721,6 +721,7 @@ class TelegramBotController {
 				// Get group members for context
 				let members: GroupMember[] = []
 				let existingTasks: any[] = []
+				let existingRoles: any[] = []
 				let userRole: string | null = null
 				
 				if (isGroup) {
@@ -733,6 +734,9 @@ class TelegramBotController {
 						
 						// Получаем существующие задачи группы
 						existingTasks = await this.taskService.getTasksByChat(chatId)
+						
+						// Получаем существующие роли группы
+						existingRoles = await this.chatService.getChatRolesWithMembers(chatId)
 						
 						// Получаем роль пользователя
 						const currentMember = await this.chatService.getMemberWithRole(chatId, userId)
@@ -750,7 +754,7 @@ class TelegramBotController {
 				}
 
 				// Process with Gemini
-				const geminiResponse = this.geminiService ? await this.geminiService.processAudio(mp3Path, members, existingTasks, userRole) : 'Gemini AI is not configured'
+				const geminiResponse = this.geminiService ? await this.geminiService.processAudio(mp3Path, members, existingTasks, userRole, existingRoles) : 'Gemini AI is not configured'
 
 				// Format response for user
 				let formattedResponse: string
@@ -938,6 +942,108 @@ class TelegramBotController {
 							} catch (operationError) {
 								console.error('Ошибка при выполнении операции с задачей:', operationError)
 								formattedResponse += `❌ Ошибка при выполнении операции с задачей #${operation.taskId}\n`
+							}
+						}
+					}
+
+					// Обрабатываем операции с ролями
+					if (geminiResponse.roleOperations && geminiResponse.roleOperations.length > 0) {
+						formattedResponse += '\n\n🎭 Операции с ролями:\n'
+						
+						for (const operation of geminiResponse.roleOperations) {
+							try {
+								switch (operation.operation) {
+									case 'create':
+										if (isGroup) {
+											const role = await this.roleService.createRole({
+												name: operation.roleName,
+												chatId: chatId
+											})
+											formattedResponse += `✅ Роль "${operation.roleName}" создана\n`
+										} else {
+											formattedResponse += `❌ Создание ролей доступно только в группах\n`
+										}
+										break
+
+									case 'update':
+										if (operation.newRoleName && isGroup) {
+											const role = await this.roleService.updateRoleByName(chatId, operation.roleName, operation.newRoleName)
+											if (role) {
+												formattedResponse += `✅ Роль "${operation.roleName}" переименована в "${operation.newRoleName}"\n`
+											} else {
+												formattedResponse += `❌ Не удалось переименовать роль "${operation.roleName}"\n`
+											}
+										}
+										break
+
+									case 'delete':
+										if (isGroup) {
+											const success = await this.roleService.deleteRoleByName(chatId, operation.roleName)
+											if (success) {
+												formattedResponse += `✅ Роль "${operation.roleName}" удалена\n`
+											} else {
+												formattedResponse += `❌ Не удалось удалить роль "${operation.roleName}"\n`
+											}
+										} else {
+											formattedResponse += `❌ Удаление ролей доступно только в группах\n`
+										}
+										break
+
+									case 'assign':
+										if (operation.targetUser && isGroup) {
+											// Найдем пользователя в списке участников
+											const targetMember = members.find(member => 
+												(member.name && member.name.toLowerCase().includes(operation.targetUser!.toLowerCase())) ||
+												(member.username && member.username.toLowerCase().includes(operation.targetUser!.toLowerCase()))
+											)
+											
+											if (targetMember && targetMember.username) {
+												// Найдем роль по имени
+												const role = await this.roleService.getRoleByName(chatId, operation.roleName)
+												if (role) {
+													const success = await this.chatService.assignRoleToUser(chatId, targetMember.username, role.id)
+													if (success) {
+														formattedResponse += `✅ Роль "${operation.roleName}" назначена пользователю ${operation.targetUser}\n`
+													} else {
+														formattedResponse += `❌ Не удалось назначить роль "${operation.roleName}" пользователю ${operation.targetUser}\n`
+													}
+												} else {
+													formattedResponse += `❌ Роль "${operation.roleName}" не найдена\n`
+												}
+											} else {
+												formattedResponse += `❌ Пользователь ${operation.targetUser} не найден\n`
+											}
+										} else {
+											formattedResponse += `❌ Назначение ролей доступно только в группах\n`
+										}
+										break
+
+									case 'unassign':
+										if (operation.targetUser && isGroup) {
+											// Найдем пользователя в списке участников
+											const targetMember = members.find(member => 
+												(member.name && member.name.toLowerCase().includes(operation.targetUser!.toLowerCase())) ||
+												(member.username && member.username.toLowerCase().includes(operation.targetUser!.toLowerCase()))
+											)
+											
+											if (targetMember && targetMember.username) {
+												const success = await this.chatService.removeRoleFromUser(chatId, targetMember.username)
+												if (success) {
+													formattedResponse += `✅ Роль снята с пользователя ${operation.targetUser}\n`
+												} else {
+													formattedResponse += `❌ Не удалось снять роль с пользователя ${operation.targetUser}\n`
+												}
+											} else {
+												formattedResponse += `❌ Пользователь ${operation.targetUser} не найден\n`
+											}
+										} else {
+											formattedResponse += `❌ Снятие ролей доступно только в группах\n`
+										}
+										break
+								}
+							} catch (operationError) {
+								console.error('Ошибка при выполнении операции с ролью:', operationError)
+								formattedResponse += `❌ Ошибка при выполнении операции с ролью "${operation.roleName}"\n`
 							}
 						}
 					}

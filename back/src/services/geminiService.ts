@@ -38,6 +38,22 @@ export interface TaskOperation {
     }
 }
 
+// Интерфейс операции с ролью
+export interface RoleOperation {
+    operation: 'create' | 'update' | 'delete' | 'assign' | 'unassign'
+    roleName: string
+    newRoleName?: string // Для операции update
+    targetUser?: string // Для операций assign/unassign
+}
+
+// Интерфейс существующей роли для передачи в Gemini
+export interface ExistingRole {
+    id: number
+    name: string
+    membersCount: number
+    members: string[] // Список пользователей с этой ролью
+}
+
 // Интерфейс существующей задачи для передачи в Gemini
 export interface ExistingTask {
     id: number
@@ -55,6 +71,7 @@ export interface AudioTranscriptionResponse {
     roles: Role[]
     tasks: Task[]
     taskOperations?: TaskOperation[]
+    roleOperations?: RoleOperation[]
 }
 
 // Сервис для работы с Gemini AI
@@ -66,19 +83,26 @@ export class GeminiService {
     }
 
     // Обработка аудио файла и извлечение задач с ролями
-    public async processAudio(audioPath: string, members: GroupMember[] = [], existingTasks: ExistingTask[] = [], userRole: string | null = null): Promise<AudioTranscriptionResponse | string> {
+    public async processAudio(audioPath: string, members: GroupMember[] = [], existingTasks: ExistingTask[] = [], userRole: string | null = null, existingRoles: ExistingRole[] = []): Promise<AudioTranscriptionResponse | string> {
         try {
             const model = this.genAI.getGenerativeModel({ model: 'gemini-2.5-flash' })
             const audioData = fs.readFileSync(audioPath)
             const base64Audio = audioData.toString('base64')
 
-            // Подставляем текущее время, список участников, роль пользователя и задач в промпт
+            // Подставляем текущее время, список участников, роль пользователя, роли и задач в промпт
             const currentTime = new Date().toLocaleString('ru-RU')
             const membersString = members.length > 0 
                 ? members.map(m => m.username ? `${m.name} (@${m.username})` : m.name).join(', ')
                 : 'Участники не указаны'
             
             const userRoleString = userRole || 'Обычный пользователь'
+            
+            const rolesString = existingRoles.length > 0
+                ? existingRoles.map(r => 
+                    `ID: ${r.id}, Название: ${r.name}, Участников: ${r.membersCount}, ` +
+                    `Пользователи: ${r.members.length > 0 ? r.members.join(', ') : 'отсутствуют'}`
+                  ).join('\n')
+                : 'Роли отсутствуют'
             
             const tasksString = existingTasks.length > 0
                 ? existingTasks.map(t => 
@@ -92,6 +116,7 @@ export class GeminiService {
                 .replace('{currentTime}', currentTime)
                 .replace('{members}', membersString)
                 .replace('{userRole}', userRoleString)
+                .replace('{roles}', rolesString)
                 .replace('{tasks}', tasksString)
 
             const result = await model.generateContent([
@@ -128,7 +153,7 @@ export class GeminiService {
 
     // Извлечение задач из аудио (для обратной совместимости)
     public async extractTasksFromAudio(audioPath: string, members: GroupMember[] = [], existingTasks: ExistingTask[] = []): Promise<Task[]> {
-        const result = await this.processAudio(audioPath, members, existingTasks, null)
+        const result = await this.processAudio(audioPath, members, existingTasks, null, [])
         
         if (typeof result === 'string') {
             return []
@@ -139,7 +164,7 @@ export class GeminiService {
 
     // Извлечение ролей из аудио
     public async extractRolesFromAudio(audioPath: string, members: GroupMember[] = [], existingTasks: ExistingTask[] = []): Promise<Role[]> {
-        const result = await this.processAudio(audioPath, members, existingTasks, null)
+        const result = await this.processAudio(audioPath, members, existingTasks, null, [])
         
         if (typeof result === 'string') {
             return []
@@ -150,7 +175,7 @@ export class GeminiService {
 
     // Извлечение операций с задачами из аудио
     public async extractTaskOperationsFromAudio(audioPath: string, members: GroupMember[] = [], existingTasks: ExistingTask[] = []): Promise<TaskOperation[]> {
-        const result = await this.processAudio(audioPath, members, existingTasks, null)
+        const result = await this.processAudio(audioPath, members, existingTasks, null, [])
         
         if (typeof result === 'string') {
             return []
