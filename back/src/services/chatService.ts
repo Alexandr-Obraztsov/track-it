@@ -13,7 +13,7 @@ export class ChatService {
     }
 
     // Создание или получение беседы
-    async getOrCreateChat(chatId: number, title: string, username?: string): Promise<ChatEntity> {
+    async getOrCreateChat(chatId: string, title: string, username?: string): Promise<ChatEntity> {
         let chat = await this.chatRepository.findOne({ where: { chatId } })
         if (!chat) {
             chat = this.chatRepository.create({ chatId, title, username })
@@ -23,7 +23,7 @@ export class ChatService {
     }
 
     // Регистрация участника в беседе
-    async registerMember(chatId: number, userId: number, username?: string, firstName?: string, lastName?: string): Promise<ChatMemberEntity> {
+    async registerMember(chatId: string, userId: string, username?: string, firstName?: string, lastName?: string): Promise<ChatMemberEntity> {
         let member = await this.memberRepository.findOne({ where: { chatId, userId } })
         if (!member) {
             member = this.memberRepository.create({
@@ -39,7 +39,7 @@ export class ChatService {
     }
 
     // Получение всех участников беседы
-    async getChatMembers(chatId: number): Promise<ChatMemberEntity[]> {
+    async getChatMembers(chatId: string): Promise<ChatMemberEntity[]> {
         return await this.memberRepository.find({
             where: { chatId },
             order: { joinedAt: 'ASC' }
@@ -47,18 +47,35 @@ export class ChatService {
     }
 
     // Проверка, зарегистрирован ли участник
-    async isMemberRegistered(chatId: number, userId: number): Promise<boolean> {
+    async isMemberRegistered(chatId: string, userId: string): Promise<boolean> {
         const member = await this.memberRepository.findOne({ where: { chatId, userId } })
         return !!member
     }
 
     // Получение участника по ID
-    async getMemberById(chatId: number, userId: number): Promise<ChatMemberEntity | null> {
+    async getMemberById(chatId: string, userId: string): Promise<ChatMemberEntity | null> {
         return await this.memberRepository.findOne({ where: { chatId, userId } })
     }
 
-    // Получение информации о беседе
-    async getChat(chatId: number): Promise<ChatEntity | null> {
-        return await this.chatRepository.findOne({ where: { chatId } })
+    // Обновление ID приветственного сообщения
+    async updateWelcomeMessageId(chatId: string, messageId: number): Promise<void> {
+        await this.chatRepository.update({ chatId }, { welcomeMessageId: messageId })
+    }
+
+    // Обновление ID сообщения с предупреждением
+    async updateWarningMessageId(chatId: string, messageId: number): Promise<void> {
+        await this.chatRepository.update({ chatId }, { warningMessageId: messageId })
+    }
+
+    // Получение ID сообщения с предупреждением
+    async getWarningMessageId(chatId: string): Promise<number | null> {
+        const chat = await this.chatRepository.findOne({ where: { chatId } })
+        return chat?.warningMessageId || null
+    }
+
+    // Получение ID приветственного сообщения
+    async getWelcomeMessageId(chatId: string): Promise<number | null> {
+        const chat = await this.chatRepository.findOne({ where: { chatId } })
+        return chat?.welcomeMessageId || null
     }
 }

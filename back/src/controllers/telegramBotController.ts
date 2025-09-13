@@ -3,13 +3,16 @@ import * as fs from 'fs'
 import * as path from 'path'
 import ffmpeg from 'fluent-ffmpeg'
 import { GeminiService } from '../services/geminiService'
-import { taskService, chatService } from '../server'
+import { TaskService } from '../services/taskService'
+import { ChatService } from '../services/chatService'
 
 // Контроллер для Telegram бота
 class TelegramBotController {
 	private bot?: TelegramBot
 	private token: string
 	private geminiService?: GeminiService
+	private taskService: TaskService
+	private chatService: ChatService
 
 	// Функция для перевода приоритета на русский
 	private translatePriority(priority: 'high' | 'medium' | 'low'): string {
@@ -21,7 +24,9 @@ class TelegramBotController {
 		}
 	}
 
-	constructor() {
+	constructor(taskService: TaskService, chatService: ChatService) {
+		this.taskService = taskService
+		this.chatService = chatService
 		this.token = process.env.TELEGRAM_BOT_TOKEN || 'YOUR_BOT_TOKEN'
 		if (this.token === 'YOUR_BOT_TOKEN') {
 			console.error(
@@ -74,9 +79,57 @@ class TelegramBotController {
 	private initializeHandlers(): void {
 		if (!this.bot) return
 		
+		// Обработка изменения статуса бота в чате (например, получение прав администратора)
+		this.bot.on('my_chat_member', async update => {
+			const chatId = update.chat.id.toString()
+			const newStatus = update.new_chat_member.status
+			const oldStatus = update.old_chat_member.status
+			
+			console.log(`Bot status changed in chat ${chatId}: ${oldStatus} -> ${newStatus}`)
+			
+			// Проверяем, стал ли бот администратором
+			if (newStatus === 'administrator' && oldStatus !== 'administrator') {
+				try {
+					// Получаем ID сообщения с предупреждением
+					const warningMessageId = await this.chatService.getWarningMessageId(chatId)
+					
+					// Если есть предупреждение, удаляем его
+					if (warningMessageId) {
+						try {
+							await this.bot!.deleteMessage(chatId, warningMessageId)
+							console.log('Предупреждение о правах удалено')
+							// Очищаем ID предупреждения в БД
+							await this.chatService.updateWarningMessageId(chatId, 0)
+						} catch (deleteError) {
+							console.warn('Не удалось удалить предупреждение:', deleteError)
+						}
+					}
+					
+					// Получаем ID приветственного сообщения
+					const welcomeMessageId = await this.chatService.getWelcomeMessageId(chatId)
+					
+					// Если есть приветственное сообщение, пытаемся его закрепить
+					if (welcomeMessageId) {
+						try {
+							await this.bot!.pinChatMessage(chatId, welcomeMessageId)
+							console.log('Приветственное сообщение закреплено после получения прав администратора')
+							
+							// Отправляем уведомление об успешном закреплении
+							await this.bot!.sendMessage(chatId, '✅ Бот получил права администратора! Приветственное сообщение закреплено.')
+						} catch (pinError) {
+							console.warn('Не удалось закрепить приветственное сообщение:', pinError)
+						}
+					}
+					
+				} catch (error) {
+					console.error('Ошибка обработки изменения статуса бота:', error)
+				}
+			}
+		})
+		
 		// Обработка добавления бота в группу
 		this.bot.on('new_chat_members', async msg => {
-			const chatId = msg.chat.id
+			const chatId = msg.chat.id.toString()
 			const isGroup = msg.chat.type === 'group' || msg.chat.type === 'supergroup'
 			
 			if (!isGroup) return
@@ -87,7 +140,7 @@ class TelegramBotController {
 			if (botAdded) {
 				try {
 					// Создаем или получаем группу в БД
-					const chat = await chatService.getOrCreateChat(chatId, msg.chat.title || 'Unknown Group', msg.chat.username)
+					const chat = await this.chatService.getOrCreateChat(chatId, msg.chat.title || 'Unknown Group', msg.chat.username)
 					
 					// Отправляем приветственное сообщение с кнопкой регистрации
 					const welcomeMessage = `🎉 Привет! Я бот для управления задачами в группах!\n\n` +
@@ -104,6 +157,9 @@ class TelegramBotController {
 						reply_markup: registerKeyboard
 					})
 					
+					// Сохраняем ID приветственного сообщения
+					await this.chatService.updateWelcomeMessageId(chatId, sentMessage.message_id)
+					
 					// Пытаемся закрепить сообщение (если есть права)
 					try {
 						await this.bot!.pinChatMessage(chatId, sentMessage.message_id)
@@ -116,7 +172,9 @@ class TelegramBotController {
 							`Пока что регистрация доступна через команду \`/register\` или кнопку выше.`
 						
 						try {
-							await this.bot!.sendMessage(chatId, instructionMessage, { parse_mode: 'Markdown' })
+							const warningMessage = await this.bot!.sendMessage(chatId, instructionMessage, { parse_mode: 'Markdown' })
+							// Сохраняем ID сообщения с предупреждением
+							await this.chatService.updateWarningMessageId(chatId, warningMessage.message_id)
 						} catch (instructionError) {
 							console.warn('Не удалось отправить инструкцию:', instructionError)
 						}
@@ -127,12 +185,10 @@ class TelegramBotController {
 				}
 			}
 		})
-		
-		// Обработка нажатия на кнопку регистрации
 		this.bot.on('callback_query', async query => {
 			if (query.data === 'register') {
-				const chatId = query.message?.chat.id
-				const userId = query.from.id
+				const chatId = query.message?.chat.id?.toString()
+				const userId = query.from.id.toString()
 				const username = query.from.username || 'unknown'
 				const firstName = query.from.first_name
 				const lastName = query.from.last_name
@@ -140,8 +196,11 @@ class TelegramBotController {
 				if (!chatId) return
 				
 				try {
-					// Регистрируем участника
-					const member = await chatService.registerMember(chatId, userId, username, firstName, lastName)
+					// Получаем или создаем чат в базе данных
+					const chat = await this.chatService.getOrCreateChat(chatId, query.message?.chat.title || 'Unknown Group', query.message?.chat.username)
+					
+					// Регистрируем участника с ID чата из базы данных
+					const member = await this.chatService.registerMember(chatId, userId, username, firstName, lastName)
 					
 					// Отвечаем на callback
 					await this.bot!.answerCallbackQuery(query.id, {
@@ -166,7 +225,7 @@ class TelegramBotController {
 		
 		// Обработка команды /start
 		this.bot.onText(/\/start/, msg => {
-			const chatId = msg.chat.id
+			const chatId = msg.chat.id.toString()
 			const isGroup = msg.chat.type === 'group' || msg.chat.type === 'supergroup'
 			
 			if (isGroup) {
@@ -178,7 +237,7 @@ class TelegramBotController {
 
 		// Обработка команды /help
 		this.bot.onText(/\/help/, msg => {
-			const chatId = msg.chat.id
+			const chatId = msg.chat.id.toString()
 			const isGroup = msg.chat.type === 'group' || msg.chat.type === 'supergroup'
 			
 			if (isGroup) {
@@ -196,7 +255,7 @@ class TelegramBotController {
 
 		// Обработка команды /members
 		this.bot.onText(/\/members/, async msg => {
-			const chatId = msg.chat.id
+			const chatId = msg.chat.id.toString()
 			const isGroup = msg.chat.type === 'group' || msg.chat.type === 'supergroup'
 
 			if (!isGroup) {
@@ -205,7 +264,9 @@ class TelegramBotController {
 			}
 
 			try {
-				const members = await chatService.getChatMembers(chatId)
+				// Получаем чат из базы данных
+				const chat = await this.chatService.getOrCreateChat(chatId, msg.chat.title || 'Unknown Group', msg.chat.username)
+				const members = await this.chatService.getChatMembers(chatId)
 				
 				if (members.length === 0) {
 					this.sendMessage(chatId, 'В группе нет зарегистрированных участников')
@@ -229,7 +290,7 @@ class TelegramBotController {
 
 		// Обработка команды /pin_welcome
 		this.bot.onText(/\/pin_welcome/, async msg => {
-			const chatId = msg.chat.id
+			const chatId = msg.chat.id.toString()
 			const userId = msg.from!.id
 			const isGroup = msg.chat.type === 'group' || msg.chat.type === 'supergroup'
 
@@ -275,16 +336,18 @@ class TelegramBotController {
 
 		// Обработка команды /tasks
 		this.bot.onText(/\/tasks/, async msg => {
-			const chatId = msg.chat.id
-			const userId = msg.from!.id
+			const chatId = msg.chat.id.toString()
+			const userId = msg.from!.id.toString()
 			const isGroup = msg.chat.type === 'group' || msg.chat.type === 'supergroup'
 
 			try {
 				let tasks
 				if (isGroup) {
-					tasks = await taskService.getTasksByChat(chatId)
+					// Получаем чат из базы данных для получения его ID
+					const chat = await this.chatService.getOrCreateChat(chatId, msg.chat.title || 'Unknown Group', msg.chat.username)
+					tasks = await this.taskService.getTasksByChat(chatId)
 				} else {
-					tasks = await taskService.getPersonalTasks(userId)
+					tasks = await this.taskService.getPersonalTasks(userId)
 				}
 
 				if (tasks.length === 0) {
@@ -313,28 +376,30 @@ class TelegramBotController {
 
 		// Обработка команды /add
 		this.bot.onText(/\/add (.+)/, async msg => {
-			const chatId = msg.chat.id
-			const userId = msg.from!.id
+			const chatId = msg.chat.id.toString()
+			const userId = msg.from!.id.toString()
 			const taskText = msg.text!.replace('/add ', '')
 			const isGroup = msg.chat.type === 'group' || msg.chat.type === 'supergroup'
 
 			try {
 				if (isGroup) {
-					await taskService.createGroupTask({
+					// Получаем чат из базы данных для получения его ID
+					const chat = await this.chatService.getOrCreateChat(chatId, msg.chat.title || 'Unknown Group', msg.chat.username)
+					await this.taskService.createGroupTask({
 						title: taskText,
 						description: taskText,
 						priority: 'medium',
 						deadline: null,
-						userId: userId,
+						userId,
 						chatId: chatId
 					})
 				} else {
-					await taskService.createPersonalTask({
+					await this.taskService.createPersonalTask({
 						title: taskText,
 						description: taskText,
 						priority: 'medium',
 						deadline: null,
-						userId: userId
+						userId
 					})
 				}
 				this.sendMessage(chatId, `Задача "${taskText}" добавлена`)
@@ -346,10 +411,21 @@ class TelegramBotController {
 
 		// Обработка команды /delete
 		this.bot.onText(/\/delete (\d+)/, async msg => {
-			const chatId = msg.chat.id
+			const chatId = msg.chat.id.toString()
+			const userId = msg.from!.id.toString()
 			const taskId = parseInt(msg.text!.replace('/delete ', ''))
+			const isGroup = msg.chat.type === 'group' || msg.chat.type === 'supergroup'
+
 			try {
-				const deleted = await taskService.deleteTask(taskId, chatId)
+				let deleted
+				if (isGroup) {
+					// В группах удаляем задачу без проверки пользователя (групповую задачу)
+					deleted = await this.taskService.deleteGroupTask(taskId)
+				} else {
+					// В личных чатах удаляем задачу пользователя
+					deleted = await this.taskService.deleteTask(taskId, userId)
+				}
+
 				if (deleted) {
 					this.sendMessage(chatId, `Задача ${taskId} удалена`)
 				} else {
@@ -363,8 +439,8 @@ class TelegramBotController {
 
 		// Обработка команды /assign
 		this.bot.onText(/\/assign (\d+) @?(\w+)/, async msg => {
-			const chatId = msg.chat.id
-			const userId = msg.from!.id
+			const chatId = msg.chat.id.toString()
+			const userId = msg.from!.id.toString()
 			const taskId = parseInt(msg.text!.replace(/\/assign \d+ @?\w+/, '$1'))
 			const assigneeUsername = msg.text!.replace(/\/assign \d+ @?/, '')
 			const isGroup = msg.chat.type === 'group' || msg.chat.type === 'supergroup'
@@ -375,8 +451,11 @@ class TelegramBotController {
 			}
 
 			try {
+				// Получаем чат из базы данных
+				const chat = await this.chatService.getOrCreateChat(chatId, msg.chat.title || 'Unknown Group', msg.chat.username)
+				
 				// Получаем участников группы
-				const members = await chatService.getChatMembers(chatId)
+				const members = await this.chatService.getChatMembers(chatId)
 				const assignee = members.find((m: any) => m.username === assigneeUsername)
 
 				if (!assignee) {
@@ -385,7 +464,7 @@ class TelegramBotController {
 				}
 
 				// Назначаем задачу
-				const updatedTask = await taskService.updateGroupTask(taskId, { assignedToUserId: assignee.userId })
+				const updatedTask = await this.taskService.updateGroupTask(taskId, { assignedToUserId: assignee.userId })
 
 				if (updatedTask) {
 					this.sendMessage(chatId, `Задача ${taskId} назначена пользователю @${assigneeUsername}`)
@@ -400,8 +479,8 @@ class TelegramBotController {
 
 		// Обработка команды /complete
 		this.bot.onText(/\/complete (\d+)/, async msg => {
-			const chatId = msg.chat.id
-			const userId = msg.from!.id
+			const chatId = msg.chat.id.toString()
+			const userId = msg.from!.id.toString()
 			const taskId = parseInt(msg.text!.replace('/complete ', ''))
 			const isGroup = msg.chat.type === 'group' || msg.chat.type === 'supergroup'
 
@@ -409,15 +488,15 @@ class TelegramBotController {
 				let updatedTask
 				if (isGroup) {
 					// В группах проверяем, что задача назначена текущему пользователю
-					const task = await taskService.getGroupTaskById(taskId)
+					const task = await this.taskService.getGroupTaskById(taskId)
 					if (task && task.assignedToUserId === userId) {
-						updatedTask = await taskService.updateGroupTask(taskId, { isCompleted: true })
+						updatedTask = await this.taskService.updateGroupTask(taskId, { isCompleted: true })
 					} else {
 						this.sendMessage(chatId, 'Вы можете отмечать как выполненные только задачи, назначенные вам')
 						return
 					}
 				} else {
-					updatedTask = await taskService.updateTask(taskId, userId, { isCompleted: true })
+					updatedTask = await this.taskService.updateTask(taskId, userId, { isCompleted: true })
 				}
 
 				if (updatedTask) {
@@ -433,8 +512,8 @@ class TelegramBotController {
 
 		// Handle voice messages
 		this.bot.on('voice', async msg => {
-			const chatId = msg.chat.id
-			const userId = msg.from!.id
+			const chatId = msg.chat.id.toString()
+			const userId = msg.from!.id.toString()
 			const isGroup = msg.chat.type === 'group' || msg.chat.type === 'supergroup'
 			const fileId = msg.voice!.file_id
 			const oggFileName = `voice_${Date.now()}.ogg`
@@ -507,13 +586,15 @@ class TelegramBotController {
 						for (const task of geminiResponse.tasks) {
 							try {
 								if (isGroup) {
-									await taskService.createGroupTask({
+									// Получаем чат из базы данных для получения его ID
+									const chat = await this.chatService.getOrCreateChat(chatId, msg.chat.title || 'Unknown Group', msg.chat.username)
+									await this.taskService.createGroupTask({
 										...task,
 										userId: userId,
 										chatId: chatId
 									})
 								} else {
-									await taskService.createPersonalTask({
+									await this.taskService.createPersonalTask({
 										...task,
 										userId: userId
 									})
@@ -591,7 +672,7 @@ class TelegramBotController {
 
 		// Handle any message
 		this.bot.on('message', msg => {
-			const chatId = msg.chat.id
+			const chatId = msg.chat.id.toString()
 			console.log(`Received message: ${msg.text} from ${msg.from?.username}`)
 		})
 	}
@@ -608,7 +689,7 @@ class TelegramBotController {
 		})
 	}
 
-	public sendMessage(chatId: number, text: string): void {
+	public sendMessage(chatId: string | number, text: string): void {
 		if (!this.bot) {
 			console.error('Bot is not initialized')
 			return
@@ -621,5 +702,5 @@ class TelegramBotController {
 	}
 }
 
-const telegramBotController = new TelegramBotController()
-export { telegramBotController, TelegramBotController }
+// Экспортируем класс для инициализации с сервисами
+export { TelegramBotController }

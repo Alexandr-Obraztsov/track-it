@@ -15,7 +15,7 @@ export class TaskService {
         description: string
         priority: 'high' | 'medium' | 'low'
         deadline: string | null
-        userId: number
+        userId: string
     }): Promise<TaskEntity> {
         const task = this.taskRepository.create({
             ...taskData,
@@ -30,9 +30,9 @@ export class TaskService {
         description: string
         priority: 'high' | 'medium' | 'low'
         deadline: string | null
-        userId: number
-        chatId: number
-        assignedToUserId?: number
+        userId: string
+        chatId: string
+        assignedToUserId?: string
     }): Promise<TaskEntity> {
         const task = this.taskRepository.create({
             ...taskData,
@@ -42,7 +42,7 @@ export class TaskService {
     }
 
     // Получение всех личных задач пользователя
-    async getPersonalTasks(userId: number): Promise<TaskEntity[]> {
+    async getPersonalTasks(userId: string): Promise<TaskEntity[]> {
         return await this.taskRepository.find({
             where: { userId, type: 'personal' },
             order: { createdAt: 'DESC' }
@@ -50,7 +50,7 @@ export class TaskService {
     }
 
     // Получение всех групповых задач пользователя
-    async getGroupTasks(userId: number): Promise<TaskEntity[]> {
+    async getGroupTasks(userId: string): Promise<TaskEntity[]> {
         return await this.taskRepository.find({
             where: { userId, type: 'group' },
             order: { createdAt: 'DESC' }
@@ -58,7 +58,7 @@ export class TaskService {
     }
 
     // Получение всех задач группы
-    async getTasksByChat(chatId: number): Promise<TaskEntity[]> {
+    async getTasksByChat(chatId: string): Promise<TaskEntity[]> {
         return await this.taskRepository.find({
             where: { chatId, type: 'group' },
             relations: ['assignedTo'],
@@ -67,7 +67,7 @@ export class TaskService {
     }
 
     // Получение задач, назначенных конкретному участнику в группе
-    async getTasksAssignedTo(chatId: number, assignedToUserId: number): Promise<TaskEntity[]> {
+    async getTasksAssignedTo(chatId: string, assignedToUserId: string): Promise<TaskEntity[]> {
         return await this.taskRepository.find({
             where: { chatId, type: 'group', assignedToUserId },
             order: { createdAt: 'DESC' }
@@ -75,7 +75,7 @@ export class TaskService {
     }
 
     // Получение задачи по ID для конкретного пользователя
-    async getTaskById(id: number, userId: number): Promise<TaskEntity | null> {
+    async getTaskById(id: number, userId: string): Promise<TaskEntity | null> {
         return await this.taskRepository.findOne({
             where: { id, userId }
         })
@@ -90,12 +90,12 @@ export class TaskService {
     }
 
     // Обновление задачи
-    async updateTask(id: number, userId: number, updateData: Partial<{
+    async updateTask(id: number, userId: string, updateData: Partial<{
         title: string
         description: string
         priority: 'high' | 'medium' | 'low'
         deadline: string | null
-        assignedToUserId?: number
+        assignedToUserId?: string
         isCompleted?: boolean
     }>): Promise<TaskEntity | null> {
         const task = await this.getTaskById(id, userId)
@@ -111,7 +111,7 @@ export class TaskService {
         description: string
         priority: 'high' | 'medium' | 'low'
         deadline: string | null
-        assignedToUserId?: number
+        assignedToUserId?: string
         isCompleted?: boolean
     }>): Promise<TaskEntity | null> {
         const task = await this.getGroupTaskById(id)
@@ -122,7 +122,7 @@ export class TaskService {
     }
 
     // Удаление задачи
-    async deleteTask(id: number, userId: number): Promise<boolean> {
+    async deleteTask(id: number, userId: string): Promise<boolean> {
         const result = await this.taskRepository.delete({ id, userId })
         return (result.affected ?? 0) > 0
     }

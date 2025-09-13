@@ -7,11 +7,11 @@ export class ChatMemberEntity {
     @PrimaryGeneratedColumn()
     id!: number
 
-    @Column({ type: 'bigint' })
-    chatId!: number // ID беседы
+    @Column({ type: 'varchar' })
+    chatId!: string // ID беседы (ссылается на chatId из таблицы chats)
 
-    @Column({ type: 'bigint' })
-    userId!: number // ID пользователя в Telegram
+    @Column({ type: 'bigint', unsigned: true })
+    userId!: string // ID пользователя в Telegram
 
     @Column({ type: 'varchar', nullable: true })
     username?: string // Username пользователя
@@ -26,6 +26,6 @@ export class ChatMemberEntity {
     joinedAt!: Date // Дата регистрации в беседе
 
     @ManyToOne(() => ChatEntity)
-    @JoinColumn({ name: 'chatId' })
+    @JoinColumn({ name: 'chatId', referencedColumnName: 'chatId' })
     chat?: ChatEntity
 }

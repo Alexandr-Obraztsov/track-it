@@ -8,7 +8,7 @@ export class ChatEntity {
     id!: number
 
     @Column({ type: 'bigint', unique: true })
-    chatId!: number // ID беседы в Telegram
+    chatId!: string // ID беседы в Telegram (bigint как строка)
 
     @Column({ type: 'varchar' })
     title!: string // Название беседы
@@ -21,4 +21,7 @@ export class ChatEntity {
 
     @Column({ type: 'bigint', nullable: true })
     warningMessageId?: number // ID сообщения с предупреждением о правах
+
+    @OneToMany(() => TaskEntity, task => task.chat, { cascade: true })
+    tasks?: TaskEntity[] // Задачи беседы
 }

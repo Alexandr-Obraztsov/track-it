@@ -32,19 +32,19 @@ export class TaskEntity {
     })
     type!: 'personal' | 'group' // Тип задачи: личная или групповая
 
-    @Column({ type: 'bigint', nullable: true })
-    userId!: number | null // ID пользователя Telegram (для личных задач)
+    @Column({ type: 'bigint', unsigned: true, nullable: true })
+    userId!: string | null // ID пользователя Telegram (для личных задач)
 
-    @Column({ type: 'bigint', nullable: true })
-    chatId!: number | null // ID группы (для групповых задач)
+    @Column({ type: 'varchar', nullable: true })
+    chatId!: string | null // ID группы (для групповых задач) - ссылается на chatId в chats
 
-    @Column({ type: 'bigint', nullable: true })
-    assignedToUserId!: number | null // ID пользователя, которому назначена задача (для групповых задач)
+    @Column({ type: 'bigint', unsigned: true, nullable: true })
+    assignedToUserId!: string | null // ID пользователя, которому назначена задача (для групповых задач)
 
     @Column({ type: 'boolean', default: false })
     isCompleted!: boolean // Статус выполнения задачи
 
     @ManyToOne(() => ChatEntity, chat => chat.tasks)
-    @JoinColumn({ name: 'chatId' })
+    @JoinColumn({ name: 'chatId', referencedColumnName: 'chatId' })
     chat?: ChatEntity
 }

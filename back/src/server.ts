@@ -3,17 +3,18 @@ import 'reflect-metadata'
 import express, { Application } from 'express'
 import { DataSource } from 'typeorm'
 import { TaskEntity } from './entities/Task'
-import { ChatEntity } from './entities/Chat'
-import { ChatMemberEntity } from './entities/ChatMember'
 import { TaskService } from './services/taskService'
-import { ChatService } from './services/chatService'
-import './controllers/telegramBotController' // Инициализируем Telegram бота
+import { TelegramBotController } from './controllers/telegramBotController'
 import logger from './middleware/logger'
+import { ChatService } from './services/chatService'
+import { ChatMemberEntity } from './entities/ChatMember'
+import { ChatEntity } from './entities/Chat'
 
 // Глобальные переменные для работы с БД
 export let dataSource: DataSource
 export let taskService: TaskService
 export let chatService: ChatService
+export let telegramBotController: TelegramBotController
 
 // Класс сервера
 class Server {
@@ -40,12 +41,15 @@ class Server {
 			entities: [TaskEntity, ChatEntity, ChatMemberEntity],
 			synchronize: true, // В продакшене использовать миграции
 			logging: false,
+			dropSchema: true,
 		})
 
 		try {
 			await dataSource.initialize()
 			taskService = new TaskService(dataSource)
 			chatService = new ChatService(dataSource)
+			// Инициализируем Telegram бота после подключения к БД
+			telegramBotController = new TelegramBotController(taskService, chatService)
 			console.log('База данных подключена успешно')
 		} catch (error) {
 			console.error('Ошибка подключения к базе данных:', error)
