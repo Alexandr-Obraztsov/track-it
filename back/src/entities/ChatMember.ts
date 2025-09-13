@@ -1,5 +1,6 @@
 import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, JoinColumn } from 'typeorm'
 import { ChatEntity } from './Chat'
+import { RoleEntity } from './Role'
 
 // Сущность участника беседы для хранения в базе данных
 @Entity('chat_members')
@@ -25,7 +26,14 @@ export class ChatMemberEntity {
     @Column({ type: 'timestamp', default: () => 'CURRENT_TIMESTAMP' })
     joinedAt!: Date // Дата регистрации в беседе
 
+    @Column({ type: 'integer', nullable: true })
+    roleId?: number // ID роли (может быть null, если роли нет)
+
     @ManyToOne(() => ChatEntity)
     @JoinColumn({ name: 'chatId', referencedColumnName: 'chatId' })
     chat?: ChatEntity
+
+    @ManyToOne(() => RoleEntity, role => role.members, { nullable: true })
+    @JoinColumn({ name: 'roleId' })
+    role?: RoleEntity
 }

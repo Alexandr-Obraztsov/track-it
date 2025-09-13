@@ -9,6 +9,7 @@ import logger from './middleware/logger'
 import { ChatService } from './services/chatService'
 import { ChatMemberEntity } from './entities/ChatMember'
 import { ChatEntity } from './entities/Chat'
+import { RoleEntity } from './entities/Role'
 
 // Глобальные переменные для работы с БД
 export let dataSource: DataSource
@@ -38,7 +39,7 @@ class Server {
 			username: process.env.DB_USER || 'user',
 			password: process.env.DB_PASSWORD || 'password',
 			database: process.env.DB_NAME || 'trackit',
-			entities: [TaskEntity, ChatEntity, ChatMemberEntity],
+			entities: [TaskEntity, ChatEntity, ChatMemberEntity, RoleEntity],
 			synchronize: true, // В продакшене использовать миграции
 			logging: false,
 			dropSchema: true,
