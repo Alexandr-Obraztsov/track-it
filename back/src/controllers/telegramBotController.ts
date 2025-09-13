@@ -27,6 +27,22 @@ class TelegramBotController {
 		}
 	}
 
+	// Функция для получения эмодзи роли
+	private getRoleIcon(roleName?: string): string {
+		if (!roleName) return '🎭'
+		
+		switch (roleName.toLowerCase()) {
+			case 'admin': 
+			case 'administrator': 
+				return '👑'
+			case 'moderator': 
+			case 'mod': 
+				return '🛡️'
+			default: 
+				return '🎭'
+		}
+	}
+
 	constructor(taskService: TaskService, chatService: ChatService) {
 		this.taskService = taskService
 		this.chatService = chatService
@@ -756,6 +772,11 @@ class TelegramBotController {
 				// Process with Gemini
 				const geminiResponse = this.geminiService ? await this.geminiService.processAudio(mp3Path, members, existingTasks, userRole, existingRoles) : 'Gemini AI is not configured'
 
+				// Выводим сырой ответ нейронки в среде разработки
+				console.log('=== RAW GEMINI RESPONSE ===')
+				console.log(JSON.stringify(geminiResponse, null, 2))
+				console.log('=== END GEMINI RESPONSE ===')
+
 				// Format response for user
 				let formattedResponse: string
 				if (typeof geminiResponse === 'string') {
@@ -1044,6 +1065,80 @@ class TelegramBotController {
 							} catch (operationError) {
 								console.error('Ошибка при выполнении операции с ролью:', operationError)
 								formattedResponse += `❌ Ошибка при выполнении операции с ролью "${operation.roleName}"\n`
+							}
+						}
+					}
+
+					// Обрабатываем команды бота
+					if (geminiResponse.commands && geminiResponse.commands.length > 0) {
+						for (const commandData of geminiResponse.commands) {
+							try {
+								const command = commandData.command.toLowerCase().trim()
+								
+								if (command === '/tasks') {
+									// Выполняем команду показа задач
+									let tasks
+									if (isGroup) {
+										tasks = await this.taskService.getTasksByChat(chatId)
+									} else {
+										tasks = await this.taskService.getPersonalTasks(userId)
+									}
+
+									if (tasks.length === 0) {
+										this.sendMessage(chatId, '📋 У вас нет задач')
+									} else {
+										let response = isGroup ? '📋 Задачи группы:\n' : '📋 Ваши задачи:\n'
+										tasks.forEach((task, index) => {
+											response += `\n${index + 1}. ${task.title}\n`
+											response += `   Описание: ${task.description}\n`
+											response += `   Приоритет: ${this.translatePriority(task.priority)}\n`
+											if (task.deadline) {
+												response += `   Срок: ${task.deadline}\n`
+											}
+											if (task.assignedToUserId) {
+												response += `   Назначена на: ${task.assignedToUserId}\n`
+											}
+											if (task.assignedToRoleId) {
+												response += `   Роль: ID ${task.assignedToRoleId}\n`
+											}
+											response += `   Статус: ${task.isCompleted ? '✅ Выполнена' : '⏳ В процессе'}\n`
+										})
+										this.sendMessage(chatId, response)
+									}
+								} else if (command === '/members' && isGroup) {
+									// Выполняем команду показа участников
+									const chatMembers = await this.chatService.getChatMembers(chatId)
+									if (chatMembers.length === 0) {
+										this.sendMessage(chatId, '👥 Нет зарегистрированных участников')
+									} else {
+										let response = '👥 Участники группы:\n'
+										for (const member of chatMembers) {
+											const memberWithRole = await this.chatService.getMemberWithRole(chatId, member.userId)
+											const roleIcon = this.getRoleIcon(memberWithRole?.role?.name)
+											const roleName = memberWithRole?.role?.name ? ` ${roleIcon}` : ''
+											response += `\n• ${member.firstName || member.username || 'Неизвестный'}${roleName}`
+										}
+										this.sendMessage(chatId, response)
+									}
+								} else if (command === '/roles' && isGroup) {
+									// Выполняем команду показа ролей
+									const roles = await this.chatService.getChatRolesWithMembers(chatId)
+									if (roles.length === 0) {
+										this.sendMessage(chatId, '🎭 Роли в группе отсутствуют')
+									} else {
+										let response = '🎭 Роли в группе:\n'
+										roles.forEach((role, index) => {
+											const roleIcon = this.getRoleIcon(role.name)
+											response += `\n${index + 1}. ${roleIcon} ${role.name} (${role.membersCount} участников)`
+											if (role.members.length > 0) {
+												response += `\n   Участники: ${role.members.join(', ')}`
+											}
+										})
+										this.sendMessage(chatId, response)
+									}
+								}
+							} catch (commandError) {
+								console.error('Ошибка при выполнении команды:', commandError)
 							}
 						}
 					}

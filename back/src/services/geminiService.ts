@@ -66,12 +66,19 @@ export interface ExistingTask {
     isCompleted: boolean
 }
 
+// Интерфейс команды бота
+export interface BotCommand {
+    command: string
+    reason: string
+}
+
 // Интерфейс ответа от Gemini
 export interface AudioTranscriptionResponse {
     roles: Role[]
     tasks: Task[]
     taskOperations?: TaskOperation[]
     roleOperations?: RoleOperation[]
+    commands?: BotCommand[]
 }
 
 // Сервис для работы с Gemini AI
