@@ -2,9 +2,11 @@ import TelegramBot from 'node-telegram-bot-api'
 import * as fs from 'fs'
 import * as path from 'path'
 import ffmpeg from 'fluent-ffmpeg'
-import { GeminiService } from '../services/geminiService'
+import { GeminiService, GroupMember } from '../services/geminiService'
 import { TaskService } from '../services/taskService'
 import { ChatService } from '../services/chatService'
+import { RoleService } from '../services/roleService'
+import { dataSource } from '../server'
 
 // Контроллер для Telegram бота
 class TelegramBotController {
@@ -13,6 +15,7 @@ class TelegramBotController {
 	private geminiService?: GeminiService
 	private taskService: TaskService
 	private chatService: ChatService
+	private roleService: RoleService
 
 	// Функция для перевода приоритета на русский
 	private translatePriority(priority: 'high' | 'medium' | 'low'): string {
@@ -27,6 +30,7 @@ class TelegramBotController {
 	constructor(taskService: TaskService, chatService: ChatService) {
 		this.taskService = taskService
 		this.chatService = chatService
+		this.roleService = new RoleService(dataSource)
 		this.token = process.env.TELEGRAM_BOT_TOKEN || 'YOUR_BOT_TOKEN'
 		if (this.token === 'YOUR_BOT_TOKEN') {
 			console.error(
@@ -243,7 +247,7 @@ class TelegramBotController {
 			if (isGroup) {
 				this.sendMessage(
 					chatId,
-					'Доступные команды в группе:\n/start - Запуск бота\n/help - Помощь\n/register - Зарегистрироваться в группе\n/tasks - Показать задачи группы\n/members - Показать зарегистрированных участников\n/pin_welcome - Закрепить приветственное сообщение (только для админов)\n/add [задача] - Добавить задачу в группу\n/assign [id] @[username] - Назначить задачу участнику\n/complete [id] - Отметить задачу как выполненную\n/delete [id] - Удалить задачу\nОтправьте голосовое сообщение для извлечения задач'
+					'Доступные команды в группе:\n/start - Запуск бота\n/help - Помощь\n/register - Зарегистрироваться в группе\n/tasks - Показать задачи группы\n/members - Показать зарегистрированных участников\n/pin_welcome - Закрепить приветственное сообщение (только для админов)\n/add [задача] - Добавить задачу в группу\n/assign [id] @[username] - Назначить задачу участнику\n/complete [id] - Отметить задачу как выполненную\n/delete [id] - Удалить задачу\n/roles - Показать роли в группе\n/role_assign @[username] [role] - Назначить роль пользователю\n/role_remove @[username] - Удалить роль у пользователя\nОтправьте голосовое сообщение для извлечения задач'
 				)
 			} else {
 				this.sendMessage(
@@ -272,14 +276,29 @@ class TelegramBotController {
 					this.sendMessage(chatId, 'В группе нет зарегистрированных участников')
 				} else {
 					let response = `👥 Зарегистрированные участники (${members.length}):\n\n`
-					members.forEach((member: any, index: number) => {
+					
+					// Получаем участников с ролями
+					for (let i = 0; i < members.length; i++) {
+						const member = members[i]
+						const memberWithRole = await this.chatService.getMemberWithRole(chatId, member.userId)
+						
 						const name = member.firstName || member.username || 'Неизвестный'
-						response += `${index + 1}. ${name}`
+						response += `${i + 1}. ${name}`
+						
 						if (member.username) {
 							response += ` (@${member.username})`
 						}
+						
+						// Добавляем роль, если она есть
+						if (memberWithRole?.role) {
+							const roleEmoji = memberWithRole.role.name === 'admin' ? '👑' : 
+											 memberWithRole.role.name === 'moderator' ? '🛡️' : '🎭'
+							response += ` ${roleEmoji} [${memberWithRole.role.name}]`
+						}
+						
 						response += `\n`
-					})
+					}
+					
 					this.sendMessage(chatId, response)
 				}
 			} catch (error) {
@@ -510,6 +529,136 @@ class TelegramBotController {
 			}
 		})
 
+		// Команда для назначения роли пользователю
+		this.bot.onText(/\/role_assign @?(\w+) (\w+)/, async msg => {
+			const chatId = msg.chat.id.toString()
+			const userId = msg.from!.id.toString()
+			const isGroup = msg.chat.type === 'group' || msg.chat.type === 'supergroup'
+
+			if (!isGroup) {
+				this.sendMessage(chatId, 'Команда доступна только в групповых чатах')
+				return
+			}
+
+			try {
+				const matches = msg.text!.match(/\/role_assign @?(\w+) (\w+)/)
+				if (!matches) return
+
+				const targetUsername = matches[1]
+				const roleName = matches[2]
+
+				// Проверяем права пользователя
+				const currentMember = await this.chatService.getMemberWithRole(chatId, userId)
+				if (!currentMember?.role || (currentMember.role.name !== 'admin' && currentMember.role.name !== 'moderator')) {
+					this.sendMessage(chatId, 'У вас нет прав для назначения ролей')
+					return
+				}
+
+				// Ищем целевого пользователя
+				const members = await this.chatService.getChatMembers(chatId)
+				const targetMember = members.find(member => member.username === targetUsername)
+				
+				if (!targetMember) {
+					this.sendMessage(chatId, `Пользователь @${targetUsername} не найден в группе`)
+					return
+				}
+
+				// Ищем роль
+				const role = await this.roleService.getRoleByName(chatId, roleName)
+				if (!role) {
+					this.sendMessage(chatId, `Роль "${roleName}" не найдена`)
+					return
+				}
+
+				// Назначаем роль
+				const success = await this.chatService.assignRoleToUser(chatId, targetMember.userId, role.id)
+				if (success) {
+					this.sendMessage(chatId, `✅ Роль "${roleName}" назначена пользователю @${targetUsername}`)
+				} else {
+					this.sendMessage(chatId, `❌ Ошибка при назначении роли`)
+				}
+			} catch (error) {
+				console.error('Ошибка при назначении роли:', error)
+				this.sendMessage(chatId, 'Ошибка при назначении роли')
+			}
+		})
+
+		// Команда для удаления роли у пользователя
+		this.bot.onText(/\/role_remove @?(\w+)/, async msg => {
+			const chatId = msg.chat.id.toString()
+			const userId = msg.from!.id.toString()
+			const isGroup = msg.chat.type === 'group' || msg.chat.type === 'supergroup'
+
+			if (!isGroup) {
+				this.sendMessage(chatId, 'Команда доступна только в групповых чатах')
+				return
+			}
+
+			try {
+				const matches = msg.text!.match(/\/role_remove @?(\w+)/)
+				if (!matches) return
+
+				const targetUsername = matches[1]
+
+				// Проверяем права пользователя
+				const currentMember = await this.chatService.getMemberWithRole(chatId, userId)
+				if (!currentMember?.role || (currentMember.role.name !== 'admin' && currentMember.role.name !== 'moderator')) {
+					this.sendMessage(chatId, 'У вас нет прав для управления ролями')
+					return
+				}
+
+				// Ищем целевого пользователя
+				const members = await this.chatService.getChatMembers(chatId)
+				const targetMember = members.find(member => member.username === targetUsername)
+				
+				if (!targetMember) {
+					this.sendMessage(chatId, `Пользователь @${targetUsername} не найден в группе`)
+					return
+				}
+
+				// Удаляем роль
+				const success = await this.chatService.removeRoleFromUser(chatId, targetMember.userId)
+				if (success) {
+					this.sendMessage(chatId, `✅ Роль удалена у пользователя @${targetUsername}`)
+				} else {
+					this.sendMessage(chatId, `❌ Ошибка при удалении роли`)
+				}
+			} catch (error) {
+				console.error('Ошибка при удалении роли:', error)
+				this.sendMessage(chatId, 'Ошибка при удалении роли')
+			}
+		})
+
+		// Команда для просмотра ролей в группе
+		this.bot.onText(/\/roles/, async msg => {
+			const chatId = msg.chat.id.toString()
+			const isGroup = msg.chat.type === 'group' || msg.chat.type === 'supergroup'
+
+			if (!isGroup) {
+				this.sendMessage(chatId, 'Команда доступна только в групповых чатах')
+				return
+			}
+
+			try {
+				const roles = await this.roleService.getChatRoles(chatId)
+				
+				if (roles.length === 0) {
+					this.sendMessage(chatId, 'В группе нет созданных ролей')
+					return
+				}
+
+				let response = '🎭 Роли в группе:\n\n'
+				for (const role of roles) {
+					response += `• ${role.name}\n`
+				}
+
+				this.sendMessage(chatId, response)
+			} catch (error) {
+				console.error('Ошибка при получении ролей:', error)
+				this.sendMessage(chatId, 'Ошибка при получении ролей')
+			}
+		})
+
 		// Handle voice messages
 		this.bot.on('voice', async msg => {
 			const chatId = msg.chat.id.toString()
@@ -569,15 +718,68 @@ class TelegramBotController {
 					throw new Error(`MP3 file not created at ${mp3Path}`)
 				}
 
+				// Get group members for context
+				let members: GroupMember[] = []
+				let existingTasks: any[] = []
+				let userRole: string | null = null
+				
+				if (isGroup) {
+					try {
+						const chatMembers = await this.chatService.getChatMembers(chatId)
+						members = chatMembers.map(member => ({
+							name: member.firstName || member.username || 'Неизвестный',
+							username: member.username
+						}))
+						
+						// Получаем существующие задачи группы
+						existingTasks = await this.taskService.getTasksByChat(chatId)
+						
+						// Получаем роль пользователя
+						const currentMember = await this.chatService.getMemberWithRole(chatId, userId)
+						userRole = currentMember?.role?.name || null
+					} catch (error) {
+						console.error('Ошибка получения участников группы или задач:', error)
+					}
+				} else {
+					// Для личных чатов получаем персональные задачи
+					try {
+						existingTasks = await this.taskService.getPersonalTasks(userId)
+					} catch (error) {
+						console.error('Ошибка получения персональных задач:', error)
+					}
+				}
+
 				// Process with Gemini
-				const geminiResponse = this.geminiService ? await this.geminiService.processAudio(mp3Path) : 'Gemini AI is not configured'
+				const geminiResponse = this.geminiService ? await this.geminiService.processAudio(mp3Path, members, existingTasks, userRole) : 'Gemini AI is not configured'
 
 				// Format response for user
 				let formattedResponse: string
 				if (typeof geminiResponse === 'string') {
 					formattedResponse = geminiResponse
 				} else {
-					formattedResponse = 'Найденные задачи:\n'
+					formattedResponse = ''
+					
+					// Сначала создаем роли
+					const createdRoles: { [name: string]: number } = {}
+					if (geminiResponse.roles && geminiResponse.roles.length > 0 && isGroup) {
+						formattedResponse += 'Создаю роли:\n'
+						for (const roleData of geminiResponse.roles) {
+							try {
+								const role = await this.roleService.createRole({
+									name: roleData.name,
+									chatId: chatId
+								})
+								createdRoles[roleData.name] = role.id
+								formattedResponse += `✅ Роль "${roleData.name}" создана\n`
+							} catch (dbError) {
+								console.error('Ошибка создания роли:', dbError)
+								formattedResponse += `❌ Ошибка создания роли "${roleData.name}"\n`
+							}
+						}
+						formattedResponse += '\n'
+					}
+
+					formattedResponse += 'Найденные задачи:\n'
 					
 					if (geminiResponse.tasks.length === 0) {
 						formattedResponse += 'Задач не найдено'
@@ -585,13 +787,38 @@ class TelegramBotController {
 						// Сохраняем задачи в БД
 						for (const task of geminiResponse.tasks) {
 							try {
+								let assignedToUserId: string | undefined = undefined
+								let assignedToRoleId: number | undefined = undefined
+
+								// Определяем назначение задачи
+								if (task.assignedToUser && isGroup) {
+									// Ищем пользователя по имени в группе
+									const chatMembers = await this.chatService.getChatMembers(chatId)
+									const assignedMember = chatMembers.find(member => 
+										(member.firstName && member.firstName.toLowerCase().includes(task.assignedToUser!.toLowerCase())) ||
+										(member.username && member.username.toLowerCase().includes(task.assignedToUser!.toLowerCase()))
+									)
+									if (assignedMember) {
+										assignedToUserId = assignedMember.userId
+									}
+								}
+
+								if (task.assignedToRole && createdRoles[task.assignedToRole]) {
+									assignedToRoleId = createdRoles[task.assignedToRole]
+								}
+
 								if (isGroup) {
 									// Получаем чат из базы данных для получения его ID
 									const chat = await this.chatService.getOrCreateChat(chatId, msg.chat.title || 'Unknown Group', msg.chat.username)
-									await this.taskService.createGroupTask({
-										...task,
+									await this.taskService.createTaskWithAssignment({
+										title: task.title,
+										description: task.description,
+										priority: task.priority,
+										deadline: task.deadline ? new Date(task.deadline) : undefined,
 										userId: userId,
-										chatId: chatId
+										chatId: chatId,
+										assignedToUserId,
+										assignedToRoleId
 									})
 								} else {
 									await this.taskService.createPersonalTask({
@@ -611,7 +838,108 @@ class TelegramBotController {
 							if (task.deadline) {
 								formattedResponse += `   Срок: ${task.deadline}\n`
 							}
+							if (task.assignedToUser) {
+								formattedResponse += `   Назначена на: ${task.assignedToUser}\n`
+							}
+							if (task.assignedToRole) {
+								formattedResponse += `   Роль: ${task.assignedToRole}\n`
+							}
 						})
+					}
+
+					// Обрабатываем операции с существующими задачами
+					if (geminiResponse.taskOperations && geminiResponse.taskOperations.length > 0) {
+						formattedResponse += '\n\n🔄 Операции с задачами:\n'
+						
+						for (const operation of geminiResponse.taskOperations) {
+							try {
+								const taskId = parseInt(operation.taskId)
+								
+								switch (operation.operation) {
+									case 'delete':
+										if (isGroup) {
+											const success = await this.taskService.deleteGroupTask(taskId)
+											if (success) {
+												formattedResponse += `✅ Задача #${taskId} удалена\n`
+											} else {
+												formattedResponse += `❌ Не удалось удалить задачу #${taskId}\n`
+											}
+										} else {
+											const success = await this.taskService.deleteTask(taskId, userId)
+											if (success) {
+												formattedResponse += `✅ Задача #${taskId} удалена\n`
+											} else {
+												formattedResponse += `❌ Не удалось удалить задачу #${taskId}\n`
+											}
+										}
+										break
+
+									case 'complete':
+										if (isGroup) {
+											const task = await this.taskService.updateGroupTask(taskId, { isCompleted: true })
+											if (task) {
+												formattedResponse += `✅ Задача #${taskId} отмечена как выполненная\n`
+											} else {
+												formattedResponse += `❌ Не удалось отметить задачу #${taskId} как выполненную\n`
+											}
+										} else {
+											const task = await this.taskService.updateTask(taskId, userId, { isCompleted: true })
+											if (task) {
+												formattedResponse += `✅ Задача #${taskId} отмечена как выполненная\n`
+											} else {
+												formattedResponse += `❌ Не удалось отметить задачу #${taskId} как выполненную\n`
+											}
+										}
+										break
+
+									case 'update':
+										if (operation.updateData) {
+											const updateData: any = {}
+											
+											if (operation.updateData.title) updateData.title = operation.updateData.title
+											if (operation.updateData.description) updateData.description = operation.updateData.description
+											if (operation.updateData.priority) updateData.priority = operation.updateData.priority
+											if (operation.updateData.deadline) updateData.deadline = operation.updateData.deadline
+											if (operation.updateData.isCompleted !== undefined) updateData.isCompleted = operation.updateData.isCompleted
+
+											// Обработка назначений
+											if (operation.updateData.assignedToUser) {
+												const targetMember = members.find(member => 
+													(member.name && member.name.toLowerCase().includes(operation.updateData!.assignedToUser!.toLowerCase())) ||
+													(member.username && member.username.toLowerCase().includes(operation.updateData!.assignedToUser!.toLowerCase()))
+												)
+												if (targetMember) {
+													updateData.assignedToUserId = targetMember.username // Используем username как userId
+												}
+											}
+
+											if (operation.updateData.assignedToRole && createdRoles[operation.updateData.assignedToRole]) {
+												updateData.assignedToRoleId = createdRoles[operation.updateData.assignedToRole]
+											}
+
+											if (isGroup) {
+												const task = await this.taskService.updateGroupTask(taskId, updateData)
+												if (task) {
+													formattedResponse += `✅ Задача #${taskId} обновлена\n`
+												} else {
+													formattedResponse += `❌ Не удалось обновить задачу #${taskId}\n`
+												}
+											} else {
+												const task = await this.taskService.updateTask(taskId, userId, updateData)
+												if (task) {
+													formattedResponse += `✅ Задача #${taskId} обновлена\n`
+												} else {
+													formattedResponse += `❌ Не удалось обновить задачу #${taskId}\n`
+												}
+											}
+										}
+										break
+								}
+							} catch (operationError) {
+								console.error('Ошибка при выполнении операции с задачей:', operationError)
+								formattedResponse += `❌ Ошибка при выполнении операции с задачей #${operation.taskId}\n`
+							}
+						}
 					}
 				}
 

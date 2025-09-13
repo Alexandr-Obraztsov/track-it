@@ -78,4 +78,47 @@ export class ChatService {
         const chat = await this.chatRepository.findOne({ where: { chatId } })
         return chat?.welcomeMessageId || null
     }
+
+    // Назначение роли пользователю
+    async assignRoleToUser(chatId: string, userId: string, roleId: number): Promise<boolean> {
+        try {
+            const member = await this.memberRepository.findOne({ where: { chatId, userId } })
+            if (!member) {
+                return false
+            }
+            
+            member.roleId = roleId
+            await this.memberRepository.save(member)
+            return true
+        } catch (error) {
+            console.error('Ошибка при назначении роли пользователю:', error)
+            return false
+        }
+    }
+
+    // Удаление роли у пользователя (назначение роли member по умолчанию)
+    async removeRoleFromUser(chatId: string, userId: string): Promise<boolean> {
+        try {
+            const member = await this.memberRepository.findOne({ where: { chatId, userId } })
+            if (!member) {
+                return false
+            }
+            
+            // Назначаем роль member по умолчанию
+            member.roleId = undefined
+            await this.memberRepository.save(member)
+            return true
+        } catch (error) {
+            console.error('Ошибка при удалении роли у пользователя:', error)
+            return false
+        }
+    }
+
+    // Получение пользователя с ролью
+    async getMemberWithRole(chatId: string, userId: string): Promise<ChatMemberEntity | null> {
+        return await this.memberRepository.findOne({
+            where: { chatId, userId },
+            relations: ['role']
+        })
+    }
 }

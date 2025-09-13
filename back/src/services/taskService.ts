@@ -94,6 +94,7 @@ export class TaskService {
         priority: 'high' | 'medium' | 'low'
         deadline: string | null
         assignedToUserId?: string
+        assignedToRoleId?: number
         isCompleted?: boolean
     }>): Promise<TaskEntity | null> {
         const task = await this.getTaskById(id, userId)
@@ -110,6 +111,7 @@ export class TaskService {
         priority: 'high' | 'medium' | 'low'
         deadline: string | null
         assignedToUserId?: string
+        assignedToRoleId?: number
         isCompleted?: boolean
     }>): Promise<TaskEntity | null> {
         const task = await this.getGroupTaskById(id)
@@ -129,5 +131,38 @@ export class TaskService {
     async deleteGroupTask(id: number): Promise<boolean> {
         const result = await this.taskRepository.delete({ id, type: 'group' })
         return (result.affected ?? 0) > 0
+    }
+
+    // Создание задачи с возможностью назначения на роль
+    async createTaskWithAssignment(taskData: {
+        title: string
+        description: string
+        priority: 'high' | 'medium' | 'low'
+        deadline?: Date
+        userId: string
+        chatId?: string
+        assignedToUserId?: string
+        assignedToRoleId?: number
+    }): Promise<TaskEntity> {
+        const task = this.taskRepository.create({
+            title: taskData.title,
+            description: taskData.description,
+            priority: taskData.priority,
+            deadline: taskData.deadline?.toISOString() || null,
+            userId: taskData.userId,
+            chatId: taskData.chatId,
+            assignedToUserId: taskData.assignedToUserId,
+            assignedToRoleId: taskData.assignedToRoleId,
+            type: taskData.chatId ? 'group' : 'personal'
+        })
+        return await this.taskRepository.save(task)
+    }
+
+    // Получение задач, назначенных на роль
+    async getTasksByRole(chatId: string, roleId: number): Promise<TaskEntity[]> {
+        return await this.taskRepository.find({
+            where: { chatId, type: 'group', assignedToRoleId: roleId },
+            order: { createdAt: 'DESC' }
+        })
     }
 }

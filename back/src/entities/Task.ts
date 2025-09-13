@@ -1,5 +1,6 @@
 import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, JoinColumn } from 'typeorm'
 import { ChatEntity } from './Chat'
+import { RoleEntity } from './Role'
 
 // Сущность задачи для хранения в базе данных
 @Entity('tasks')
@@ -41,10 +42,17 @@ export class TaskEntity {
     @Column({ type: 'bigint', unsigned: true, nullable: true })
     assignedToUserId!: string | null // ID пользователя, которому назначена задача (для групповых задач)
 
+    @Column({ type: 'int', nullable: true })
+    assignedToRoleId!: number | null // ID роли, которой назначена задача
+
     @Column({ type: 'boolean', default: false })
     isCompleted!: boolean // Статус выполнения задачи
 
     @ManyToOne(() => ChatEntity, chat => chat.tasks)
     @JoinColumn({ name: 'chatId', referencedColumnName: 'chatId' })
     chat?: ChatEntity
+
+    @ManyToOne(() => RoleEntity, role => role.tasks)
+    @JoinColumn({ name: 'assignedToRoleId' })
+    assignedToRole?: RoleEntity
 }

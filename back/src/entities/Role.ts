@@ -1,6 +1,7 @@
 import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, JoinColumn, OneToMany } from 'typeorm'
 import { ChatEntity } from './Chat'
 import { ChatMemberEntity } from './ChatMember'
+import { TaskEntity } from './Task'
 
 // Сущность роли для хранения в базе данных
 @Entity('roles')
@@ -23,4 +24,7 @@ export class RoleEntity {
 
     @OneToMany(() => ChatMemberEntity, member => member.role)
     members?: ChatMemberEntity[] // Участники с этой ролью
+
+    @OneToMany(() => TaskEntity, task => task.assignedToRole)
+    tasks?: TaskEntity[] // Задачи, назначенные на эту роль
 }
