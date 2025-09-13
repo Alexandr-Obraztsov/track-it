@@ -9,22 +9,67 @@ export class TaskService {
         this.taskRepository = dataSource.getRepository(TaskEntity)
     }
 
-    // Создание новой задачи
-    async createTask(taskData: {
+    // Создание новой личной задачи
+    async createPersonalTask(taskData: {
         title: string
         description: string
         priority: 'high' | 'medium' | 'low'
         deadline: string | null
         userId: number
     }): Promise<TaskEntity> {
-        const task = this.taskRepository.create(taskData)
+        const task = this.taskRepository.create({
+            ...taskData,
+            type: 'personal'
+        })
         return await this.taskRepository.save(task)
     }
 
-    // Получение всех задач пользователя
-    async getTasksByUser(userId: number): Promise<TaskEntity[]> {
+    // Создание новой групповой задачи
+    async createGroupTask(taskData: {
+        title: string
+        description: string
+        priority: 'high' | 'medium' | 'low'
+        deadline: string | null
+        userId: number
+        chatId: number
+        assignedToUserId?: number
+    }): Promise<TaskEntity> {
+        const task = this.taskRepository.create({
+            ...taskData,
+            type: 'group'
+        })
+        return await this.taskRepository.save(task)
+    }
+
+    // Получение всех личных задач пользователя
+    async getPersonalTasks(userId: number): Promise<TaskEntity[]> {
         return await this.taskRepository.find({
-            where: { userId },
+            where: { userId, type: 'personal' },
+            order: { createdAt: 'DESC' }
+        })
+    }
+
+    // Получение всех групповых задач пользователя
+    async getGroupTasks(userId: number): Promise<TaskEntity[]> {
+        return await this.taskRepository.find({
+            where: { userId, type: 'group' },
+            order: { createdAt: 'DESC' }
+        })
+    }
+
+    // Получение всех задач группы
+    async getTasksByChat(chatId: number): Promise<TaskEntity[]> {
+        return await this.taskRepository.find({
+            where: { chatId, type: 'group' },
+            relations: ['assignedTo'],
+            order: { createdAt: 'DESC' }
+        })
+    }
+
+    // Получение задач, назначенных конкретному участнику в группе
+    async getTasksAssignedTo(chatId: number, assignedToUserId: number): Promise<TaskEntity[]> {
+        return await this.taskRepository.find({
+            where: { chatId, type: 'group', assignedToUserId },
             order: { createdAt: 'DESC' }
         })
     }
@@ -36,14 +81,40 @@ export class TaskService {
         })
     }
 
+    // Получение групповой задачи по ID (без проверки пользователя)
+    async getGroupTaskById(id: number): Promise<TaskEntity | null> {
+        return await this.taskRepository.findOne({
+            where: { id, type: 'group' },
+            relations: ['assignedTo']
+        })
+    }
+
     // Обновление задачи
     async updateTask(id: number, userId: number, updateData: Partial<{
         title: string
         description: string
         priority: 'high' | 'medium' | 'low'
         deadline: string | null
+        assignedToUserId?: number
+        isCompleted?: boolean
     }>): Promise<TaskEntity | null> {
         const task = await this.getTaskById(id, userId)
+        if (!task) return null
+
+        Object.assign(task, updateData)
+        return await this.taskRepository.save(task)
+    }
+
+    // Обновление групповой задачи (без проверки пользователя)
+    async updateGroupTask(id: number, updateData: Partial<{
+        title: string
+        description: string
+        priority: 'high' | 'medium' | 'low'
+        deadline: string | null
+        assignedToUserId?: number
+        isCompleted?: boolean
+    }>): Promise<TaskEntity | null> {
+        const task = await this.getGroupTaskById(id)
         if (!task) return null
 
         Object.assign(task, updateData)
@@ -53,6 +124,12 @@ export class TaskService {
     // Удаление задачи
     async deleteTask(id: number, userId: number): Promise<boolean> {
         const result = await this.taskRepository.delete({ id, userId })
+        return (result.affected ?? 0) > 0
+    }
+
+    // Удаление групповой задачи (без проверки пользователя)
+    async deleteGroupTask(id: number): Promise<boolean> {
+        const result = await this.taskRepository.delete({ id, type: 'group' })
         return (result.affected ?? 0) > 0
     }
 }

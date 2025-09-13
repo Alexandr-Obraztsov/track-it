@@ -3,7 +3,7 @@ import * as fs from 'fs'
 import * as path from 'path'
 import ffmpeg from 'fluent-ffmpeg'
 import { GeminiService } from '../services/geminiService'
-import { taskService } from '../server'
+import { taskService, chatService } from '../server'
 
 // Контроллер для Telegram бота
 class TelegramBotController {
@@ -74,36 +74,232 @@ class TelegramBotController {
 	private initializeHandlers(): void {
 		if (!this.bot) return
 		
+		// Обработка добавления бота в группу
+		this.bot.on('new_chat_members', async msg => {
+			const chatId = msg.chat.id
+			const isGroup = msg.chat.type === 'group' || msg.chat.type === 'supergroup'
+			
+			if (!isGroup) return
+			
+			// Проверяем, был ли добавлен наш бот
+			const botAdded = msg.new_chat_members?.some(member => member.is_bot)
+			
+			if (botAdded) {
+				try {
+					// Создаем или получаем группу в БД
+					const chat = await chatService.getOrCreateChat(chatId, msg.chat.title || 'Unknown Group', msg.chat.username)
+					
+					// Отправляем приветственное сообщение с кнопкой регистрации
+					const welcomeMessage = `🎉 Привет! Я бот для управления задачами в группах!\n\n` +
+						`Чтобы начать использовать все возможности бота, каждый участник должен зарегистрироваться.\n\n` +
+						`Зарегистрируйтесь, нажав кнопку ниже:`
+					
+					const registerKeyboard = {
+						inline_keyboard: [
+							[{ text: '📝 Зарегистрироваться', callback_data: 'register' }]
+						]
+					}
+					
+					const sentMessage = await this.bot!.sendMessage(chatId, welcomeMessage, {
+						reply_markup: registerKeyboard
+					})
+					
+					// Пытаемся закрепить сообщение (если есть права)
+					try {
+						await this.bot!.pinChatMessage(chatId, sentMessage.message_id)
+						console.log('Приветственное сообщение закреплено')
+					} catch (pinError) {
+						console.warn('Не удалось закрепить сообщение (нет прав администратора):', pinError)
+						// Отправляем дополнительное сообщение с инструкцией
+						const instructionMessage = `💡 *Важно для администраторов группы:*\n` +
+							`Чтобы бот мог закреплять важные сообщения, дайте ему права администратора с возможностью "Закреплять сообщения".\n\n` +
+							`Пока что регистрация доступна через команду \`/register\` или кнопку выше.`
+						
+						try {
+							await this.bot!.sendMessage(chatId, instructionMessage, { parse_mode: 'Markdown' })
+						} catch (instructionError) {
+							console.warn('Не удалось отправить инструкцию:', instructionError)
+						}
+					}
+					
+				} catch (error) {
+					console.error('Ошибка обработки добавления бота в группу:', error)
+				}
+			}
+		})
+		
+		// Обработка нажатия на кнопку регистрации
+		this.bot.on('callback_query', async query => {
+			if (query.data === 'register') {
+				const chatId = query.message?.chat.id
+				const userId = query.from.id
+				const username = query.from.username || 'unknown'
+				const firstName = query.from.first_name
+				const lastName = query.from.last_name
+				
+				if (!chatId) return
+				
+				try {
+					// Регистрируем участника
+					const member = await chatService.registerMember(chatId, userId, username, firstName, lastName)
+					
+					// Отвечаем на callback
+					await this.bot!.answerCallbackQuery(query.id, {
+						text: '✅ Вы успешно зарегистрированы!',
+						show_alert: true
+					})
+					
+					// Обновляем сообщение для пользователя
+					const successMessage = `✅ ${firstName || username} успешно зарегистрирован в группе!\n\nТеперь вы можете:\n• Добавлять задачи командой /add\n• Просматривать задачи командой /tasks\n• Отправлять голосовые сообщения для извлечения задач`
+					
+					await this.bot!.sendMessage(chatId, successMessage, { reply_to_message_id: query.message?.message_id })
+					
+				} catch (error) {
+					console.error('Ошибка регистрации участника:', error)
+					await this.bot!.answerCallbackQuery(query.id, {
+						text: '❌ Ошибка регистрации. Попробуйте еще раз.',
+						show_alert: true
+					})
+				}
+			}
+		})
+		
 		// Обработка команды /start
 		this.bot.onText(/\/start/, msg => {
 			const chatId = msg.chat.id
-			this.sendMessage(chatId, 'Привет! Я бот для управления задачами. Отправь голосовое сообщение, чтобы извлечь задачи, или используй команды:\n/tasks - показать все задачи\n/add [задача] - добавить задачу\n/delete [id] - удалить задачу')
+			const isGroup = msg.chat.type === 'group' || msg.chat.type === 'supergroup'
+			
+			if (isGroup) {
+				this.sendMessage(chatId, 'Привет! Я бот для управления задачами в группах. Используйте:\n/register - зарегистрироваться в группе\n/tasks - показать задачи группы\n/members - показать зарегистрированных участников\n/pin_welcome - закрепить приветственное сообщение (для админов)\n/add [задача] - добавить задачу в группу\n/assign [id] @[username] - назначить задачу участнику\n/complete [id] - отметить задачу как выполненную\nОтправьте голосовое сообщение для извлечения задач')
+			} else {
+				this.sendMessage(chatId, 'Привет! Я бот для управления задачами. Отправь голосовое сообщение, чтобы извлечь задачи, или используй команды:\n/tasks - показать все задачи\n/add [задача] - добавить задачу\n/delete [id] - удалить задачу')
+			}
 		})
 
 		// Обработка команды /help
 		this.bot.onText(/\/help/, msg => {
 			const chatId = msg.chat.id
-			this.sendMessage(
-				chatId,
-				'Доступные команды:\n/start - Запуск бота\n/help - Помощь\n/tasks - Показать все задачи\n/add [задача] - Добавить задачу\n/delete [id] - Удалить задачу\nОтправь голосовое сообщение для извлечения задач из аудио'
-			)
+			const isGroup = msg.chat.type === 'group' || msg.chat.type === 'supergroup'
+			
+			if (isGroup) {
+				this.sendMessage(
+					chatId,
+					'Доступные команды в группе:\n/start - Запуск бота\n/help - Помощь\n/register - Зарегистрироваться в группе\n/tasks - Показать задачи группы\n/members - Показать зарегистрированных участников\n/pin_welcome - Закрепить приветственное сообщение (только для админов)\n/add [задача] - Добавить задачу в группу\n/assign [id] @[username] - Назначить задачу участнику\n/complete [id] - Отметить задачу как выполненную\n/delete [id] - Удалить задачу\nОтправьте голосовое сообщение для извлечения задач'
+				)
+			} else {
+				this.sendMessage(
+					chatId,
+					'Доступные команды:\n/start - Запуск бота\n/help - Помощь\n/tasks - Показать все задачи\n/add [задача] - Добавить задачу\n/delete [id] - Удалить задачу\nОтправь голосовое сообщение для извлечения задач из аудио'
+				)
+			}
+		})
+
+		// Обработка команды /members
+		this.bot.onText(/\/members/, async msg => {
+			const chatId = msg.chat.id
+			const isGroup = msg.chat.type === 'group' || msg.chat.type === 'supergroup'
+
+			if (!isGroup) {
+				this.sendMessage(chatId, 'Команда /members доступна только в группах')
+				return
+			}
+
+			try {
+				const members = await chatService.getChatMembers(chatId)
+				
+				if (members.length === 0) {
+					this.sendMessage(chatId, 'В группе нет зарегистрированных участников')
+				} else {
+					let response = `👥 Зарегистрированные участники (${members.length}):\n\n`
+					members.forEach((member: any, index: number) => {
+						const name = member.firstName || member.username || 'Неизвестный'
+						response += `${index + 1}. ${name}`
+						if (member.username) {
+							response += ` (@${member.username})`
+						}
+						response += `\n`
+					})
+					this.sendMessage(chatId, response)
+				}
+			} catch (error) {
+				console.error('Ошибка получения списка участников:', error)
+				this.sendMessage(chatId, 'Ошибка получения списка участников')
+			}
+		})
+
+		// Обработка команды /pin_welcome
+		this.bot.onText(/\/pin_welcome/, async msg => {
+			const chatId = msg.chat.id
+			const userId = msg.from!.id
+			const isGroup = msg.chat.type === 'group' || msg.chat.type === 'supergroup'
+
+			if (!isGroup) {
+				this.sendMessage(chatId, 'Команда /pin_welcome доступна только в группах')
+				return
+			}
+
+			try {
+				// Проверяем, является ли пользователь администратором
+				const chatMember = await this.bot!.getChatMember(chatId, userId)
+				const isAdmin = ['administrator', 'creator'].includes(chatMember.status)
+
+				if (!isAdmin) {
+					this.sendMessage(chatId, '❌ Только администраторы группы могут использовать эту команду')
+					return
+				}
+
+				// Отправляем новое приветственное сообщение
+				const welcomeMessage = `🎉 Привет! Я бот для управления задачами в группах!\n\n` +
+					`Чтобы начать использовать все возможности бота, каждый участник должен зарегистрироваться.\n\n` +
+					`Зарегистрируйтесь, нажав кнопку ниже:`
+
+				const registerKeyboard = {
+					inline_keyboard: [
+						[{ text: '📝 Зарегистрироваться', callback_data: 'register' }]
+					]
+				}
+
+				const sentMessage = await this.bot!.sendMessage(chatId, welcomeMessage, {
+					reply_markup: registerKeyboard
+				})
+
+				// Закрепляем сообщение
+				await this.bot!.pinChatMessage(chatId, sentMessage.message_id)
+				this.sendMessage(chatId, '✅ Приветственное сообщение закреплено!')
+
+			} catch (error) {
+				console.error('Ошибка закрепления приветственного сообщения:', error)
+				this.sendMessage(chatId, '❌ Ошибка закрепления сообщения. Возможно, у бота нет прав администратора.')
+			}
 		})
 
 		// Обработка команды /tasks
 		this.bot.onText(/\/tasks/, async msg => {
 			const chatId = msg.chat.id
+			const userId = msg.from!.id
+			const isGroup = msg.chat.type === 'group' || msg.chat.type === 'supergroup'
+
 			try {
-				const tasks = await taskService.getTasksByUser(chatId)
+				let tasks
+				if (isGroup) {
+					tasks = await taskService.getTasksByChat(chatId)
+				} else {
+					tasks = await taskService.getPersonalTasks(userId)
+				}
+
 				if (tasks.length === 0) {
 					this.sendMessage(chatId, 'У вас нет задач')
 				} else {
-					let response = 'Ваши задачи:\n'
+					let response = isGroup ? 'Задачи группы:\n' : 'Ваши задачи:\n'
 					tasks.forEach((task, index) => {
 						response += `\n${index + 1}. ${task.title}\n`
 						response += `   Описание: ${task.description}\n`
 						response += `   Приоритет: ${this.translatePriority(task.priority)}\n`
 						if (task.deadline) {
 							response += `   Срок: ${task.deadline}\n`
+						}
+						if (isGroup && task.assignedToUserId) {
+							response += `   Назначена: @${task.assignedToUserId}\n`
 						}
 						response += `   ID: ${task.id}\n`
 					})
@@ -118,15 +314,29 @@ class TelegramBotController {
 		// Обработка команды /add
 		this.bot.onText(/\/add (.+)/, async msg => {
 			const chatId = msg.chat.id
+			const userId = msg.from!.id
 			const taskText = msg.text!.replace('/add ', '')
+			const isGroup = msg.chat.type === 'group' || msg.chat.type === 'supergroup'
+
 			try {
-				await taskService.createTask({
-					title: taskText,
-					description: taskText,
-					priority: 'medium',
-					deadline: null,
-					userId: chatId
-				})
+				if (isGroup) {
+					await taskService.createGroupTask({
+						title: taskText,
+						description: taskText,
+						priority: 'medium',
+						deadline: null,
+						userId: userId,
+						chatId: chatId
+					})
+				} else {
+					await taskService.createPersonalTask({
+						title: taskText,
+						description: taskText,
+						priority: 'medium',
+						deadline: null,
+						userId: userId
+					})
+				}
 				this.sendMessage(chatId, `Задача "${taskText}" добавлена`)
 			} catch (error) {
 				console.error('Ошибка добавления задачи:', error)
@@ -151,9 +361,81 @@ class TelegramBotController {
 			}
 		})
 
+		// Обработка команды /assign
+		this.bot.onText(/\/assign (\d+) @?(\w+)/, async msg => {
+			const chatId = msg.chat.id
+			const userId = msg.from!.id
+			const taskId = parseInt(msg.text!.replace(/\/assign \d+ @?\w+/, '$1'))
+			const assigneeUsername = msg.text!.replace(/\/assign \d+ @?/, '')
+			const isGroup = msg.chat.type === 'group' || msg.chat.type === 'supergroup'
+
+			if (!isGroup) {
+				this.sendMessage(chatId, 'Команда /assign доступна только в группах')
+				return
+			}
+
+			try {
+				// Получаем участников группы
+				const members = await chatService.getChatMembers(chatId)
+				const assignee = members.find((m: any) => m.username === assigneeUsername)
+
+				if (!assignee) {
+					this.sendMessage(chatId, `Пользователь @${assigneeUsername} не зарегистрирован в группе`)
+					return
+				}
+
+				// Назначаем задачу
+				const updatedTask = await taskService.updateGroupTask(taskId, { assignedToUserId: assignee.userId })
+
+				if (updatedTask) {
+					this.sendMessage(chatId, `Задача ${taskId} назначена пользователю @${assigneeUsername}`)
+				} else {
+					this.sendMessage(chatId, `Задача ${taskId} не найдена`)
+				}
+			} catch (error) {
+				console.error('Ошибка назначения задачи:', error)
+				this.sendMessage(chatId, 'Ошибка назначения задачи')
+			}
+		})
+
+		// Обработка команды /complete
+		this.bot.onText(/\/complete (\d+)/, async msg => {
+			const chatId = msg.chat.id
+			const userId = msg.from!.id
+			const taskId = parseInt(msg.text!.replace('/complete ', ''))
+			const isGroup = msg.chat.type === 'group' || msg.chat.type === 'supergroup'
+
+			try {
+				let updatedTask
+				if (isGroup) {
+					// В группах проверяем, что задача назначена текущему пользователю
+					const task = await taskService.getGroupTaskById(taskId)
+					if (task && task.assignedToUserId === userId) {
+						updatedTask = await taskService.updateGroupTask(taskId, { isCompleted: true })
+					} else {
+						this.sendMessage(chatId, 'Вы можете отмечать как выполненные только задачи, назначенные вам')
+						return
+					}
+				} else {
+					updatedTask = await taskService.updateTask(taskId, userId, { isCompleted: true })
+				}
+
+				if (updatedTask) {
+					this.sendMessage(chatId, `✅ Задача ${taskId} отмечена как выполненная`)
+				} else {
+					this.sendMessage(chatId, `Задача ${taskId} не найдена`)
+				}
+			} catch (error) {
+				console.error('Ошибка отметки задачи как выполненной:', error)
+				this.sendMessage(chatId, 'Ошибка отметки задачи как выполненной')
+			}
+		})
+
 		// Handle voice messages
 		this.bot.on('voice', async msg => {
 			const chatId = msg.chat.id
+			const userId = msg.from!.id
+			const isGroup = msg.chat.type === 'group' || msg.chat.type === 'supergroup'
 			const fileId = msg.voice!.file_id
 			const oggFileName = `voice_${Date.now()}.ogg`
 			const mp3FileName = `voice_${Date.now()}.mp3`
@@ -224,10 +506,18 @@ class TelegramBotController {
 						// Сохраняем задачи в БД
 						for (const task of geminiResponse.tasks) {
 							try {
-								await taskService.createTask({
-									...task,
-									userId: chatId
-								})
+								if (isGroup) {
+									await taskService.createGroupTask({
+										...task,
+										userId: userId,
+										chatId: chatId
+									})
+								} else {
+									await taskService.createPersonalTask({
+										...task,
+										userId: userId
+									})
+								}
 							} catch (dbError) {
 								console.error('Ошибка сохранения задачи в БД:', dbError)
 							}

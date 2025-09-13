@@ -3,13 +3,17 @@ import 'reflect-metadata'
 import express, { Application } from 'express'
 import { DataSource } from 'typeorm'
 import { TaskEntity } from './entities/Task'
+import { ChatEntity } from './entities/Chat'
+import { ChatMemberEntity } from './entities/ChatMember'
 import { TaskService } from './services/taskService'
-import './controllers/telegramBotController'; // Инициализируем Telegram бота
+import { ChatService } from './services/chatService'
+import './controllers/telegramBotController' // Инициализируем Telegram бота
 import logger from './middleware/logger'
 
 // Глобальные переменные для работы с БД
 export let dataSource: DataSource
 export let taskService: TaskService
+export let chatService: ChatService
 
 // Класс сервера
 class Server {
@@ -33,7 +37,7 @@ class Server {
 			username: process.env.DB_USER || 'user',
 			password: process.env.DB_PASSWORD || 'password',
 			database: process.env.DB_NAME || 'trackit',
-			entities: [TaskEntity],
+			entities: [TaskEntity, ChatEntity, ChatMemberEntity],
 			synchronize: true, // В продакшене использовать миграции
 			logging: false,
 		})
@@ -41,6 +45,7 @@ class Server {
 		try {
 			await dataSource.initialize()
 			taskService = new TaskService(dataSource)
+			chatService = new ChatService(dataSource)
 			console.log('База данных подключена успешно')
 		} catch (error) {
 			console.error('Ошибка подключения к базе данных:', error)
