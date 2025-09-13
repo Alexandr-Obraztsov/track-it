@@ -61,7 +61,6 @@ export class TaskService {
     async getTasksByChat(chatId: string): Promise<TaskEntity[]> {
         return await this.taskRepository.find({
             where: { chatId, type: 'group' },
-            relations: ['assignedTo'],
             order: { createdAt: 'DESC' }
         })
     }
@@ -84,8 +83,7 @@ export class TaskService {
     // Получение групповой задачи по ID (без проверки пользователя)
     async getGroupTaskById(id: number): Promise<TaskEntity | null> {
         return await this.taskRepository.findOne({
-            where: { id, type: 'group' },
-            relations: ['assignedTo']
+            where: { id, type: 'group' }
         })
     }
 
