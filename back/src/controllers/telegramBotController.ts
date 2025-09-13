@@ -2,42 +2,54 @@ import TelegramBot from 'node-telegram-bot-api'
 import * as fs from 'fs'
 import * as path from 'path'
 import ffmpeg from 'fluent-ffmpeg'
-import { GoogleGenerativeAI } from '@google/generative-ai'
+import { GeminiService } from '../services/geminiService'
+import { taskService } from '../server'
 
-// Note: Global proxy environment variables are set above
-// Google Generative AI SDK should automatically use HTTP_PROXY/HTTPS_PROXY or SOCKS_PROXY
-// if they are set in the environment
-
+// Контроллер для Telegram бота
 class TelegramBotController {
 	private bot?: TelegramBot
 	private token: string
-	private genAI?: GoogleGenerativeAI
+	private geminiService?: GeminiService
+
+	// Функция для перевода приоритета на русский
+	private translatePriority(priority: 'high' | 'medium' | 'low'): string {
+		switch (priority) {
+			case 'high': return 'высокий'
+			case 'medium': return 'средний'
+			case 'low': return 'низкий'
+			default: return priority
+		}
+	}
 
 	constructor() {
 		this.token = process.env.TELEGRAM_BOT_TOKEN || 'YOUR_BOT_TOKEN'
 		if (this.token === 'YOUR_BOT_TOKEN') {
 			console.error(
-				'Error: TELEGRAM_BOT_TOKEN is not set. Please set your bot token in the environment variables.'
+				'Ошибка: TELEGRAM_BOT_TOKEN не установлен. Установите токен бота в переменные окружения.'
 			)
 			return
 		}
 
-		// Configure bot
+		// Настройка бота
 		const botOptions: any = {
 			polling: true,
 			request: {
-				timeout: 30000, // 30 second timeout
+				timeout: 30000, // 30 секунд таймаут
 			},
 		}
 
-		this.genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '')
+		const geminiApiKey = process.env.GEMINI_API_KEY || ''
+		if (geminiApiKey) {
+			this.geminiService = new GeminiService(geminiApiKey)
+		}
 		this.bot = new TelegramBot(this.token, botOptions)
 		this.initializeHandlers()
 		this.initializeErrorHandling()
 		this.ensureDownloadsDirectory()
-		console.log('Bot initialized successfully')
+		console.log('Бот инициализирован успешно')
 	}
 
+	// Создание директории для загрузок, если не существует
 	private ensureDownloadsDirectory(): void {
 		const downloadsDir = path.join(__dirname, '../downloads')
 		if (!fs.existsSync(downloadsDir)) {
@@ -45,6 +57,7 @@ class TelegramBotController {
 		}
 	}
 
+	// Конвертация OGG в MP3
 	private async convertOggToMp3(
 		inputPath: string,
 		outputPath: string
@@ -58,50 +71,84 @@ class TelegramBotController {
 		})
 	}
 
-	private async processWithGemini(audioPath: string): Promise<string> {
-		if (!this.genAI) {
-			return 'Gemini AI is not configured'
-		}
-		try {
-			const model = this.genAI.getGenerativeModel({ model: 'gemini-1.5-flash' })
-			const audioData = fs.readFileSync(audioPath)
-			const base64Audio = audioData.toString('base64')
-
-			const result = await model.generateContent([
-				'Please transcribe this audio file and provide a summary.',
-				{
-					inlineData: {
-						mimeType: 'audio/mp3',
-						data: base64Audio,
-					},
-				},
-			])
-
-			return result.response.text()
-		} catch (error) {
-			console.error(
-				'Error processing with Gemini:',
-				error instanceof Error ? error.message : String(error)
-			)
-			return 'Error processing audio with Gemini'
-		}
-	}
-
 	private initializeHandlers(): void {
 		if (!this.bot) return
-		// Handle /start command
+		
+		// Обработка команды /start
 		this.bot.onText(/\/start/, msg => {
 			const chatId = msg.chat.id
-			this.sendMessage(chatId, 'Welcome to the Telegram Bot!')
+			this.sendMessage(chatId, 'Привет! Я бот для управления задачами. Отправь голосовое сообщение, чтобы извлечь задачи, или используй команды:\n/tasks - показать все задачи\n/add [задача] - добавить задачу\n/delete [id] - удалить задачу')
 		})
 
-		// Handle /help command
+		// Обработка команды /help
 		this.bot.onText(/\/help/, msg => {
 			const chatId = msg.chat.id
 			this.sendMessage(
 				chatId,
-				'Available commands:\n/start - Start the bot\n/help - Get help\nSend voice message to process it with AI'
+				'Доступные команды:\n/start - Запуск бота\n/help - Помощь\n/tasks - Показать все задачи\n/add [задача] - Добавить задачу\n/delete [id] - Удалить задачу\nОтправь голосовое сообщение для извлечения задач из аудио'
 			)
+		})
+
+		// Обработка команды /tasks
+		this.bot.onText(/\/tasks/, async msg => {
+			const chatId = msg.chat.id
+			try {
+				const tasks = await taskService.getTasksByUser(chatId)
+				if (tasks.length === 0) {
+					this.sendMessage(chatId, 'У вас нет задач')
+				} else {
+					let response = 'Ваши задачи:\n'
+					tasks.forEach((task, index) => {
+						response += `\n${index + 1}. ${task.title}\n`
+						response += `   Описание: ${task.description}\n`
+						response += `   Приоритет: ${this.translatePriority(task.priority)}\n`
+						if (task.deadline) {
+							response += `   Срок: ${task.deadline}\n`
+						}
+						response += `   ID: ${task.id}\n`
+					})
+					this.sendMessage(chatId, response)
+				}
+			} catch (error) {
+				console.error('Ошибка получения задач:', error)
+				this.sendMessage(chatId, 'Ошибка получения задач')
+			}
+		})
+
+		// Обработка команды /add
+		this.bot.onText(/\/add (.+)/, async msg => {
+			const chatId = msg.chat.id
+			const taskText = msg.text!.replace('/add ', '')
+			try {
+				await taskService.createTask({
+					title: taskText,
+					description: taskText,
+					priority: 'medium',
+					deadline: null,
+					userId: chatId
+				})
+				this.sendMessage(chatId, `Задача "${taskText}" добавлена`)
+			} catch (error) {
+				console.error('Ошибка добавления задачи:', error)
+				this.sendMessage(chatId, 'Ошибка добавления задачи')
+			}
+		})
+
+		// Обработка команды /delete
+		this.bot.onText(/\/delete (\d+)/, async msg => {
+			const chatId = msg.chat.id
+			const taskId = parseInt(msg.text!.replace('/delete ', ''))
+			try {
+				const deleted = await taskService.deleteTask(taskId, chatId)
+				if (deleted) {
+					this.sendMessage(chatId, `Задача ${taskId} удалена`)
+				} else {
+					this.sendMessage(chatId, `Задача ${taskId} не найдена`)
+				}
+			} catch (error) {
+				console.error('Ошибка удаления задачи:', error)
+				this.sendMessage(chatId, 'Ошибка удаления задачи')
+			}
 		})
 
 		// Handle voice messages
@@ -152,10 +199,6 @@ class TelegramBotController {
 					throw new Error(`OGG file not found at ${oggPath}`)
 				}
 
-				this.sendMessage(
-					chatId,
-					'Voice message downloaded. Converting to MP3...'
-				)
 
 				// Convert to MP3
 				await this.convertOggToMp3(oggPath, mp3Path)
@@ -165,16 +208,44 @@ class TelegramBotController {
 					throw new Error(`MP3 file not created at ${mp3Path}`)
 				}
 
-				this.sendMessage(
-					chatId,
-					'MP3 conversion complete. Processing with Gemini AI...'
-				)
-
 				// Process with Gemini
-				const geminiResponse = await this.processWithGemini(mp3Path)
+				const geminiResponse = this.geminiService ? await this.geminiService.processAudio(mp3Path) : 'Gemini AI is not configured'
+
+				// Format response for user
+				let formattedResponse: string
+				if (typeof geminiResponse === 'string') {
+					formattedResponse = geminiResponse
+				} else {
+					formattedResponse = 'Найденные задачи:\n'
+					
+					if (geminiResponse.tasks.length === 0) {
+						formattedResponse += 'Задач не найдено'
+					} else {
+						// Сохраняем задачи в БД
+						for (const task of geminiResponse.tasks) {
+							try {
+								await taskService.createTask({
+									...task,
+									userId: chatId
+								})
+							} catch (dbError) {
+								console.error('Ошибка сохранения задачи в БД:', dbError)
+							}
+						}
+
+						geminiResponse.tasks.forEach((task, index) => {
+							formattedResponse += `\n${index + 1}. ${task.title}\n`
+							formattedResponse += `   Описание: ${task.description}\n`
+							formattedResponse += `   Приоритет: ${this.translatePriority(task.priority)}\n`
+							if (task.deadline) {
+								formattedResponse += `   Срок: ${task.deadline}\n`
+							}
+						})
+					}
+				}
 
 				// Send response back to user
-				this.sendMessage(chatId, `Gemini AI Response:\n${geminiResponse}`)
+				this.sendMessage(chatId, formattedResponse)
 
 				// Clean up files
 				if (fs.existsSync(oggPath)) {
