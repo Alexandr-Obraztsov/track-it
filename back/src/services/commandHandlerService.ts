@@ -287,7 +287,7 @@ export class CommandHandlerService {
             }
 
             // Назначаем роль
-            const success = await this.chatService.assignRoleToUser(chatId, targetMember.userId, role.id)
+            const success = await this.chatService.setRoleForMember(chatId, targetMember.userId, role.id)
             if (success) {
                 bot.sendMessage(chatId, `✅ Роль "${roleName}" назначена пользователю @${username}`)
             } else {
@@ -336,7 +336,7 @@ export class CommandHandlerService {
             }
 
             // Удаляем роль
-            const success = await this.chatService.removeRoleFromUser(chatId, targetMember.userId)
+            const success = await this.chatService.setRoleForMember(chatId, targetMember.userId, undefined)
             if (success) {
                 bot.sendMessage(chatId, `✅ Роль удалена у пользователя @${username}`)
             } else {

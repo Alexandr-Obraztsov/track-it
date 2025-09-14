@@ -1,12 +1,16 @@
 import { DataSource, Repository } from 'typeorm'
 import { TaskEntity } from '../entities/Task'
+import { ChatEntity } from '../entities/Chat'
+import { MessageFormatterService } from './messageFormatterService'
 
 // Сервис для управления задачами в базе данных
 export class TaskService {
     private taskRepository: Repository<TaskEntity>
+    private chatRepository: Repository<ChatEntity>
 
     constructor(dataSource: DataSource) {
         this.taskRepository = dataSource.getRepository(TaskEntity)
+        this.chatRepository = dataSource.getRepository(ChatEntity)
     }
 
     // Создание новой личной задачи
@@ -21,7 +25,11 @@ export class TaskService {
             ...taskData,
             type: 'personal'
         })
-        return await this.taskRepository.save(task)
+        const savedTask = await this.taskRepository.save(task)
+        
+        // Генерируем читаемый ID для личных задач
+        savedTask.readableId = `PSN-${savedTask.id}` // Personal task
+        return await this.taskRepository.save(savedTask)
     }
 
     // Создание новой групповой задачи
@@ -38,7 +46,14 @@ export class TaskService {
             ...taskData,
             type: 'group'
         })
-        return await this.taskRepository.save(task)
+        const savedTask = await this.taskRepository.save(task)
+        
+        // Получаем название чата для генерации читаемого ID
+        const chat = await this.chatRepository.findOne({ where: { chatId: taskData.chatId } })
+        const chatTitle = chat?.title || 'Unknown'
+        savedTask.readableId = MessageFormatterService.createTaskId(chatTitle, savedTask.id)
+        
+        return await this.taskRepository.save(savedTask)
     }
 
     // Получение всех личных задач пользователя
@@ -61,6 +76,7 @@ export class TaskService {
     async getTasksByChat(chatId: string): Promise<TaskEntity[]> {
         return await this.taskRepository.find({
             where: { chatId, type: 'group' },
+            relations: ['chat', 'assignedToRole'],
             order: { createdAt: 'DESC' }
         })
     }
@@ -69,6 +85,7 @@ export class TaskService {
     async getTasksAssignedTo(chatId: string, assignedToUserId: string): Promise<TaskEntity[]> {
         return await this.taskRepository.find({
             where: { chatId, type: 'group', assignedToUserId },
+            relations: ['chat', 'assignedToRole'],
             order: { createdAt: 'DESC' }
         })
     }
@@ -84,6 +101,13 @@ export class TaskService {
     async getGroupTaskById(id: number): Promise<TaskEntity | null> {
         return await this.taskRepository.findOne({
             where: { id, type: 'group' }
+        })
+    }
+
+    // Получение задачи по читаемому ID
+    async getTaskByReadableId(readableId: string): Promise<TaskEntity | null> {
+        return await this.taskRepository.findOne({
+            where: { readableId }
         })
     }
 
@@ -155,13 +179,26 @@ export class TaskService {
             assignedToRoleId: taskData.assignedToRoleId,
             type: taskData.chatId ? 'group' : 'personal'
         })
-        return await this.taskRepository.save(task)
+        
+        const savedTask = await this.taskRepository.save(task)
+        
+        // Генерируем читаемый ID
+        if (taskData.chatId) {
+            const chat = await this.chatRepository.findOne({ where: { chatId: taskData.chatId } })
+            const chatTitle = chat?.title || 'Unknown'
+            savedTask.readableId = MessageFormatterService.createTaskId(chatTitle, savedTask.id)
+        } else {
+            savedTask.readableId = `PSN-${savedTask.id}`
+        }
+        
+        return await this.taskRepository.save(savedTask)
     }
 
     // Получение задач, назначенных на роль
     async getTasksByRole(chatId: string, roleId: number): Promise<TaskEntity[]> {
         return await this.taskRepository.find({
             where: { chatId, type: 'group', assignedToRoleId: roleId },
+            relations: ['chat', 'assignedToRole'],
             order: { createdAt: 'DESC' }
         })
     }

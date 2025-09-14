@@ -14,6 +14,9 @@ export class TaskEntity {
     @Column({ type: 'text' })
     description!: string // Описание задачи
 
+    @Column({ type: 'varchar', nullable: true })
+    readableId!: string | null // Читаемый ID задачи (например: CHT-123)
+
     @Column({
         type: 'enum',
         enum: ['high', 'medium', 'low'],

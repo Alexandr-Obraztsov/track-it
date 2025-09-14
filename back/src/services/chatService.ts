@@ -45,6 +45,7 @@ export class ChatService {
     async getChatMembers(chatId: string): Promise<ChatMemberEntity[]> {
         return await this.memberRepository.find({
             where: { chatId },
+            relations: ['role'],
             order: { joinedAt: 'ASC' }
         })
     }
@@ -76,43 +77,29 @@ export class ChatService {
         return chat?.warningMessageId || null
     }
 
-    // Получение ID приветственного сообщения
+    /**
+     * Получение ID приветственного сообщения
+     */
     async getWelcomeMessageId(chatId: string): Promise<number | null> {
         const chat = await this.chatRepository.findOne({ where: { chatId } })
         return chat?.welcomeMessageId || null
     }
 
-    // Назначение роли пользователю
-    async assignRoleToUser(chatId: string, userId: string, roleId: number): Promise<boolean> {
+    /**
+     * Назначение роли участнику
+     */
+    async setRoleForMember(chatId: string, userId: string, roleId: number | undefined): Promise<boolean> {
         try {
             const member = await this.memberRepository.findOne({ where: { chatId, userId } })
             if (!member) {
                 return false
             }
-            
+
             member.roleId = roleId
             await this.memberRepository.save(member)
             return true
         } catch (error) {
-            console.error('Ошибка при назначении роли пользователю:', error)
-            return false
-        }
-    }
-
-    // Удаление роли у пользователя (назначение роли member по умолчанию)
-    async removeRoleFromUser(chatId: string, userId: string): Promise<boolean> {
-        try {
-            const member = await this.memberRepository.findOne({ where: { chatId, userId } })
-            if (!member) {
-                return false
-            }
-            
-            // Назначаем роль member по умолчанию
-            member.roleId = undefined
-            await this.memberRepository.save(member)
-            return true
-        } catch (error) {
-            console.error('Ошибка при удалении роли у пользователя:', error)
+            console.error('Ошибка при назначении роли участнику:', error)
             return false
         }
     }

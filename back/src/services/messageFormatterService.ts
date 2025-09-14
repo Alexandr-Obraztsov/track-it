@@ -1,4 +1,4 @@
-import { AudioTranscriptionResponse, TaskOperation, RoleOperation } from './geminiService'
+import { TaskOperation, RoleOperation } from './geminiService'
 
 // Сервис для форматирования сообщений
 export class MessageFormatterService {
@@ -12,11 +12,6 @@ export class MessageFormatterService {
     static parseTaskId(taskIdStr: string): number | null {
         const match = taskIdStr.match(/^[A-Z]{3}-(\d+)$/)
         return match ? parseInt(match[1]) : null
-    }
-
-    // Форматирование имени пользователя с тегом (УСТАРЕЛ - используйте formatUserTag)
-    static formatUserName(member: any): string {
-        return this.formatUserTag(member)
     }
 
     // Единое форматирование пользователя через тег
@@ -70,10 +65,10 @@ export class MessageFormatterService {
     // Форматирование результата создания задачи
     static formatTaskCreation(
         task: any, 
-        taskId: string, 
         userName: string,
         assignedUserName?: string, 
     ): string {
+        const taskId = task.readableId || `#${task.id}`
         let result = `✅ Создана задача ${taskId}\n\n`
         result += `📝 Название: ${task.title}\n`
         result += `📋 Описание: ${task.description}\n`
@@ -260,10 +255,11 @@ export class MessageFormatterService {
             const priorityEmoji = task.priority === 'high' ? '🔴' : 
                                  task.priority === 'medium' ? '🟡' : '🟢'
             const statusEmoji = task.isCompleted ? '✅' : '⏳'
+            const taskId = task.readableId || `#${task.id}`
             const assignedInfo = task.assignedUser ? ` → ${this.formatUserTag(task.assignedUser)}` : ''
             const deadlineInfo = task.deadline ? ` (до ${new Date(task.deadline).toLocaleDateString('ru-RU')})` : ''
             
-            response += `\n${index + 1}. ${statusEmoji} ${priorityEmoji} ${task.title}${assignedInfo}${deadlineInfo}`
+            response += `\n${taskId} ${statusEmoji} ${priorityEmoji} ${task.title}${assignedInfo}${deadlineInfo}`
             if (task.description && task.description !== task.title) {
                 response += `\n   ${task.description}`
             }
@@ -287,28 +283,5 @@ export class MessageFormatterService {
             }
         })
         return response
-    }
-
-    // Главный метод форматирования ответа от Gemini
-    static formatGeminiResponse(
-        geminiResponse: AudioTranscriptionResponse,
-        createdRoles: { [name: string]: number },
-        chatTitle: string,
-        members: any[]
-    ): { response: string, hasChanges: boolean } {
-        let formattedResponse = ''
-        let hasChanges = false
-
-        // Создание ролей
-        if (geminiResponse.roles && geminiResponse.roles.length > 0) {
-            geminiResponse.roles.forEach(roleData => {
-                const success = createdRoles[roleData.name] !== undefined
-                formattedResponse += this.formatRoleCreation(roleData.name, success, roleData) + '\n'
-                if (success) hasChanges = true
-            })
-            if (geminiResponse.roles.length > 0) formattedResponse += '\n'
-        }
-
-        return { response: formattedResponse, hasChanges }
     }
 }

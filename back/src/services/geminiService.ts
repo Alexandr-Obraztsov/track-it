@@ -58,6 +58,7 @@ export interface ExistingRole {
 // Интерфейс существующей задачи для передачи в Gemini
 export interface ExistingTask {
     id: number
+    readableId?: string | null
     title: string
     description: string
     priority: 'high' | 'medium' | 'low'
@@ -114,7 +115,7 @@ export class GeminiService {
             
             const tasksString = existingTasks.length > 0
                 ? existingTasks.map(t => 
-                    `ID: ${t.id}, Название: ${t.title}, Описание: ${t.description}, Приоритет: ${t.priority}, ` +
+                    `ID: ${t.readableId || t.id}, Название: ${t.title}, Описание: ${t.description}, Приоритет: ${t.priority}, ` +
                     `Дедлайн: ${t.deadline || 'не указан'}, Назначена: ${t.assignedToUser || t.assignedToRole || 'не назначена'}, ` +
                     `Выполнена: ${t.isCompleted ? 'да' : 'нет'}`
                   ).join('\n')

@@ -186,7 +186,6 @@ export class VoiceHandlerService {
                     geminiResponse, 
                     chatId, 
                     userId, 
-                    msg.chat.title || 'Chat', 
                     isGroup, 
                     members
                 )
@@ -231,7 +230,6 @@ export class VoiceHandlerService {
         geminiResponse: any,
         chatId: string,
         userId: string,
-        chatTitle: string,
         isGroup: boolean,
         members: GroupMember[]
     ): Promise<string> {
@@ -285,7 +283,6 @@ export class VoiceHandlerService {
                     let createdTask: any
 
                     if (isGroup) {
-                        const chat = await this.chatService.getOrCreateChat(chatId, chatTitle, undefined)
                         createdTask = await this.taskService.createTaskWithAssignment({
                             title: task.title,
                             description: task.description,
@@ -312,10 +309,8 @@ export class VoiceHandlerService {
                     }
 
                     // Используем полное форматирование задачи
-                    const taskId = MessageFormatterService.createTaskId(chatTitle, createdTask.id)
                     formattedResponse += MessageFormatterService.formatTaskCreation(
                         createdTask,
-                        taskId,
                         creatorUsername || userId,
                         task.assignedToUser,
                     ) + '\n'
@@ -356,28 +351,50 @@ export class VoiceHandlerService {
         
         for (const operation of operations) {
             try {
-                const taskId = parseInt(operation.taskId)
+                // Пытаемся найти задачу по readableId или по обычному ID
+                let task: any = null
+                const taskIdStr = operation.taskId.toString()
+                
+                // Сначала ищем по readableId
+                task = await this.taskService.getTaskByReadableId(taskIdStr)
+                
+                // Если не нашли по readableId, пытаемся как числовой ID
+                if (!task) {
+                    const numericId = parseInt(taskIdStr)
+                    if (!isNaN(numericId)) {
+                        task = isGroup ? 
+                            await this.taskService.getGroupTaskById(numericId) :
+                            await this.taskService.getTaskById(numericId, userId)
+                    }
+                }
+                
+                if (!task) {
+                    response += `❌ Задача ${taskIdStr} не найдена\n`
+                    continue
+                }
+                
+                const taskDisplayId = task.readableId || `#${task.id}`
                 
                 switch (operation.operation) {
                     case 'delete':
                         const deleteSuccess = isGroup ? 
-                            await this.taskService.deleteGroupTask(taskId) :
-                            await this.taskService.deleteTask(taskId, userId)
+                            await this.taskService.deleteGroupTask(task.id) :
+                            await this.taskService.deleteTask(task.id, userId)
                         
                         response += deleteSuccess ? 
-                            `✅ Задача #${taskId} удалена\n` : 
-                            `❌ Не удалось удалить задачу #${taskId}\n`
+                            `✅ Задача ${taskDisplayId} удалена\n` : 
+                            `❌ Не удалось удалить задачу ${taskDisplayId}\n`
                         break
 
                     case 'complete':
                         const updateData = { isCompleted: true }
                         const completeTask = isGroup ?
-                            await this.taskService.updateGroupTask(taskId, updateData) :
-                            await this.taskService.updateTask(taskId, userId, updateData)
+                            await this.taskService.updateGroupTask(task.id, updateData) :
+                            await this.taskService.updateTask(task.id, userId, updateData)
                         
                         response += completeTask ? 
-                            `✅ Задача #${taskId} отмечена как выполненная\n` : 
-                            `❌ Не удалось отметить задачу #${taskId} как выполненную\n`
+                            `✅ Задача ${taskDisplayId} отмечена как выполненная\n` : 
+                            `❌ Не удалось отметить задачу ${taskDisplayId} как выполненную\n`
                         break
 
                     case 'update':
@@ -391,18 +408,18 @@ export class VoiceHandlerService {
                             if (operation.updateData.isCompleted !== undefined) updateData.isCompleted = operation.updateData.isCompleted
 
                             const updatedTask = isGroup ?
-                                await this.taskService.updateGroupTask(taskId, updateData) :
-                                await this.taskService.updateTask(taskId, userId, updateData)
+                                await this.taskService.updateGroupTask(task.id, updateData) :
+                                await this.taskService.updateTask(task.id, userId, updateData)
                             
                             response += updatedTask ? 
-                                `✅ Задача #${taskId} обновлена\n` : 
-                                `❌ Не удалось обновить задачу #${taskId}\n`
+                                `✅ Задача ${taskDisplayId} обновлена\n` : 
+                                `❌ Не удалось обновить задачу ${taskDisplayId}\n`
                         }
                         break
                 }
             } catch (operationError) {
                 console.error('Ошибка при выполнении операции с задачей:', operationError)
-                response += `❌ Ошибка при выполнении операции с задачей #${operation.taskId}\n`
+                response += `❌ Ошибка при выполнении операции с задачей ${operation.taskId}\n`
             }
         }
         
