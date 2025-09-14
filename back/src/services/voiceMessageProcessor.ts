@@ -120,7 +120,6 @@ export class VoiceMessageProcessor {
                         taskId, 
                         'Пользователь', // Можно передать имя создателя, если нужно
                         assignedUserName, 
-                        assignedUserTag
                     ) + '\n'
                     
                     if (savedTask) hasChanges = true

@@ -11,6 +11,18 @@ import { ChatMemberEntity } from './entities/ChatMember'
 import { ChatEntity } from './entities/Chat'
 import { RoleEntity } from './entities/Role'
 
+// Глобальная обработка необработанных промисов
+process.on('unhandledRejection', (reason, promise) => {
+    console.error('Unhandled Rejection at:', promise, 'reason:', reason)
+    // Логируем ошибку, но не завершаем процесс
+})
+
+process.on('uncaughtException', (error) => {
+    console.error('Uncaught Exception:', error)
+    // В критических случаях можно завершить процесс
+    // process.exit(1)
+})
+
 // Глобальные переменные для работы с БД
 export let dataSource: DataSource
 export let taskService: TaskService

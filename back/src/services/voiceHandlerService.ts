@@ -88,6 +88,17 @@ export class VoiceHandlerService {
         try {
             console.log(`Processing voice message with fileId: ${fileId}`)
 
+            // Ставим реакцию думающего смайлика для индикации обработки
+            try {
+                await bot.setMessageReaction(chatId, msg.message_id, {
+                    reaction: [{ type: 'emoji', emoji: '🤔' as any }],
+                    is_big: false
+                })
+            } catch (reactionError) {
+                console.warn('Не удалось поставить реакцию:', reactionError)
+                // Продолжаем обработку даже если реакция не сработала
+            }
+
             // Скачиваем файл
             const fileInfo = await bot.getFile(fileId)
             console.log(`File info:`, fileInfo)
@@ -184,12 +195,33 @@ export class VoiceHandlerService {
             // Отправляем ответ пользователю
             bot.sendMessage(chatId, formattedResponse)
 
+            // Ставим реакцию галочки после успешной обработки
+            try {
+                await bot.setMessageReaction(chatId, msg.message_id, {
+                    reaction: [{ type: 'emoji', emoji: '✅' as any }],
+                    is_big: false
+                })
+            } catch (reactionError) {
+                console.warn('Не удалось поставить финальную реакцию:', reactionError)
+            }
+
             // Очищаем файлы
             this.cleanupFiles(oggPath, mp3Path)
 
             console.log(`Voice message processed successfully: ${mp3FileName}`)
         } catch (error) {
             console.error('Error processing voice message:', error)
+            
+            // Ставим реакцию ошибки при неудачной обработке
+            try {
+                await bot.setMessageReaction(chatId, msg.message_id, {
+                    reaction: [{ type: 'emoji', emoji: '❌' as any }],
+                    is_big: false
+                })
+            } catch (reactionError) {
+                console.warn('Не удалось поставить реакцию ошибки:', reactionError)
+            }
+            
             this.handleVoiceError(bot, chatId, error, oggPath, mp3Path)
         }
     }
@@ -271,14 +303,21 @@ export class VoiceHandlerService {
                         })
                     }
 
+                    // Получаем информацию о создателе задачи
+                    let creatorUsername: string | undefined
+                    if (isGroup) {
+                        const chatMembers = await this.chatService.getChatMembers(chatId)
+                        const creator = chatMembers.find(member => member.userId === userId)
+                        creatorUsername = creator?.username
+                    }
+
                     // Используем полное форматирование задачи
                     const taskId = MessageFormatterService.createTaskId(chatTitle, createdTask.id)
                     formattedResponse += MessageFormatterService.formatTaskCreation(
                         createdTask,
                         taskId,
-                        'Голосовое сообщение',
+                        creatorUsername || userId,
                         task.assignedToUser,
-                        task.assignedToUser ? `@${task.assignedToUser}` : undefined
                     ) + '\n'
 
                 } catch (dbError) {

@@ -14,14 +14,21 @@ export class MessageFormatterService {
         return match ? parseInt(match[1]) : null
     }
 
-    // Форматирование имени пользователя с тегом
+    // Форматирование имени пользователя с тегом (УСТАРЕЛ - используйте formatUserTag)
     static formatUserName(member: any): string {
-        const name = member.firstName ? 
-            `${member.firstName}${member.lastName ? ' ' + member.lastName : ''}` : 
-            (member.username || 'Неизвестный')
-        
-        const tag = member.username ? ` (@${member.username})` : ''
-        return `${name}${tag}`
+        return this.formatUserTag(member)
+    }
+
+    // Единое форматирование пользователя через тег
+    static formatUserTag(member: any): string {
+        if (member.username) {
+            return `@${member.username}`
+        } else if (member.firstName) {
+            const fullName = `${member.firstName}${member.lastName ? ' ' + member.lastName : ''}`
+            return fullName
+        } else {
+            return 'Неизвестный пользователь'
+        }
     }
 
     // Создание тега пользователя для уведомлений
@@ -66,33 +73,28 @@ export class MessageFormatterService {
         taskId: string, 
         userName: string,
         assignedUserName?: string, 
-        assignedUserTag?: string
     ): string {
         let result = `✅ Создана задача ${taskId}\n\n`
         result += `📝 Название: ${task.title}\n`
         result += `📋 Описание: ${task.description}\n`
         result += `🔥 Приоритет: ${this.translatePriority(task.priority)}\n`
-        result += `👤 Создатель: ${userName}\n`
-        result += `📊 Тип: ${task.type === 'group' ? 'Групповая' : 'Личная'}\n`
-        result += `� Создана: ${new Date().toLocaleString('ru-RU')}\n`
-        result += `✨ Статус: ${task.isCompleted ? 'Выполнена' : 'Активна'}\n`
+        
+        // Формируем тег создателя
+        const creatorTag = userName.startsWith('@') ? userName : this.createUserTag(userName)
+        result += `👤 Создатель: ${creatorTag}\n`
         
         if (task.deadline) {
             result += `⏰ Срок выполнения: ${task.deadline}\n`
         }
         
         if (assignedUserName) {
-            result += `� Назначена на: ${assignedUserName} ${assignedUserTag || ''}\n`
+            result += `✨ Назначена на: ${assignedUserName}\n`
         } else if (task.assignedToUserId) {
             result += `👥 Назначена на: ID ${task.assignedToUserId}\n`
         } else if (task.assignedToRoleId) {
             result += `👥 Назначена на роль: ID ${task.assignedToRoleId}\n`
         } else {
             result += `👥 Исполнитель: Не назначен\n`
-        }
-        
-        if (task.chatId) {
-            result += `💬 Чат: ${task.chatId}\n`
         }
         
         return result
@@ -240,9 +242,9 @@ export class MessageFormatterService {
 
         let response = '👥 Участники группы:\n'
         members.forEach((member, index) => {
-            const memberName = this.formatUserName(member)
+            const memberTag = this.formatUserTag(member)
             const roleName = member.role?.name ? ` [${member.role.name}]` : ''
-            response += `\n${index + 1}. ${memberName}${roleName}`
+            response += `\n${index + 1}. ${memberTag}${roleName}`
         })
         return response
     }
@@ -256,8 +258,10 @@ export class MessageFormatterService {
         let response = '🎭 Роли в группе:\n'
         roles.forEach((role, index) => {
             response += `\n${index + 1}. ${role.name} (${role.membersCount} участников)`
-            if (role.members.length > 0) {
-                response += `\n   Участники: ${role.members.join(', ')}`
+            if (role.members && role.members.length > 0) {
+                // Форматируем участников через теги
+                const memberTags = role.members.map((member: any) => this.formatUserTag(member))
+                response += `\n   Участники: ${memberTags.join(', ')}`
             }
         })
         return response

@@ -33,7 +33,7 @@ export class CallbackHandlerService {
         }
     }
 
-    // Обработка callback регистрации
+    // Обработка callback регистрации (информационная, так как регистрация автоматическая)
     private async handleRegisterCallback(
         bot: TelegramBot, 
         callbackQuery: TelegramBot.CallbackQuery,
@@ -45,13 +45,13 @@ export class CallbackHandlerService {
         const isGroup = msg.chat.type === 'group' || msg.chat.type === 'supergroup'
 
         if (!isGroup) {
-            bot.answerCallbackQuery(callbackQuery.id, { text: 'Регистрация доступна только в групповых чатах' })
+            bot.answerCallbackQuery(callbackQuery.id, { text: 'В личных сообщениях регистрация не требуется!' })
             return
         }
 
         try {
             // Создаем или получаем чат
-            const chat = await this.chatService.getOrCreateChat(
+            await this.chatService.getOrCreateChat(
                 chatId,
                 msg.chat.title || 'Unknown Group',
                 msg.chat.username
@@ -77,17 +77,14 @@ export class CallbackHandlerService {
             )
 
             bot.answerCallbackQuery(callbackQuery.id, { 
-                text: `✅ ${member.firstName || member.username} успешно зарегистрирован!`, 
+                text: `✅ ${member.firstName || member.username} зарегистрирован!\n\nℹ️ В дальнейшем регистрация происходит автоматически.`, 
                 show_alert: true 
             })
-
-            // Отправляем сообщение в чат
-            bot.sendMessage(chatId, `✅ ${member.firstName || member.username} зарегистрировался в группе!`)
 
         } catch (error) {
             console.error('Ошибка регистрации через callback:', error)
             bot.answerCallbackQuery(callbackQuery.id, { 
-                text: 'Произошла ошибка при регистрации', 
+                text: 'Произошла ошибка. Попробуйте отправить любое сообщение для автоматической регистрации.', 
                 show_alert: true 
             })
         }
