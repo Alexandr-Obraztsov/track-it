@@ -45,29 +45,24 @@ export class CallbackHandlerService {
         const isGroup = msg.chat.type === 'group' || msg.chat.type === 'supergroup'
 
         if (!isGroup) {
-            bot.answerCallbackQuery(callbackQuery.id, { text: 'В личных сообщениях регистрация не требуется!' })
+            bot.answerCallbackQuery(callbackQuery.id, { 
+                text: 'В личных сообщениях регистрация не требуется! Просто отправьте голосовое сообщение.' 
+            })
             return
         }
 
         try {
-            // Создаем или получаем чат
-            await this.chatService.getOrCreateChat(
-                chatId,
-                msg.chat.title || 'Unknown Group',
-                msg.chat.username
-            )
-
             // Проверяем, зарегистрирован ли уже пользователь
             const existingMember = await this.chatService.getMemberById(chatId, userId)
             if (existingMember) {
                 bot.answerCallbackQuery(callbackQuery.id, { 
-                    text: `${user.first_name || user.username}, вы уже зарегистрированы!`, 
+                    text: `✅ ${user.first_name || user.username}, вы уже зарегистрированы!\n\n🎙️ Отправьте голосовое сообщение для управления задачами.`, 
                     show_alert: true 
                 })
                 return
             }
 
-            // Регистрируем пользователя
+            // Автоматически регистрируем пользователя
             const member = await this.chatService.registerMember(
                 chatId,
                 userId,
@@ -77,14 +72,14 @@ export class CallbackHandlerService {
             )
 
             bot.answerCallbackQuery(callbackQuery.id, { 
-                text: `✅ ${member.firstName || member.username} зарегистрирован!\n\nℹ️ В дальнейшем регистрация происходит автоматически.`, 
+                text: `✅ ${member.firstName || member.username} зарегистрирован!\n\n🎙️ Отправьте голосовое сообщение для управления задачами.\n\n💡 В дальнейшем регистрация происходит автоматически.`, 
                 show_alert: true 
             })
 
         } catch (error) {
             console.error('Ошибка регистрации через callback:', error)
             bot.answerCallbackQuery(callbackQuery.id, { 
-                text: 'Произошла ошибка. Попробуйте отправить любое сообщение для автоматической регистрации.', 
+                text: '✅ Регистрация происходит автоматически!\n\n🎙️ Просто отправьте голосовое сообщение для управления задачами.', 
                 show_alert: true 
             })
         }

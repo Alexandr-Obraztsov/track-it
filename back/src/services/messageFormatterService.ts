@@ -249,6 +249,28 @@ export class MessageFormatterService {
         return response
     }
 
+    // Форматирование списка задач
+    static formatTasksList(tasks: any[], title: string): string {
+        if (tasks.length === 0) {
+            return `📋 ${title}: задачи отсутствуют`
+        }
+
+        let response = `📋 ${title}:\n`
+        tasks.forEach((task, index) => {
+            const priorityEmoji = task.priority === 'high' ? '🔴' : 
+                                 task.priority === 'medium' ? '🟡' : '🟢'
+            const statusEmoji = task.isCompleted ? '✅' : '⏳'
+            const assignedInfo = task.assignedUser ? ` → ${this.formatUserTag(task.assignedUser)}` : ''
+            const deadlineInfo = task.deadline ? ` (до ${new Date(task.deadline).toLocaleDateString('ru-RU')})` : ''
+            
+            response += `\n${index + 1}. ${statusEmoji} ${priorityEmoji} ${task.title}${assignedInfo}${deadlineInfo}`
+            if (task.description && task.description !== task.title) {
+                response += `\n   ${task.description}`
+            }
+        })
+        return response
+    }
+
     // Форматирование списка ролей
     static formatRolesList(roles: any[]): string {
         if (roles.length === 0) {

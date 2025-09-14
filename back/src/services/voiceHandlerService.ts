@@ -341,6 +341,12 @@ export class VoiceHandlerService {
             formattedResponse += await this.processRoleOperations(geminiResponse.roleOperations, chatId, members)
         }
 
+        // Обрабатываем запросы на просмотр информации
+        if (geminiResponse.viewRequests && geminiResponse.viewRequests.length > 0) {
+            formattedResponse += '\n📊 Информация:\n'
+            formattedResponse += await this.processViewRequests(geminiResponse.viewRequests, chatId, userId, isGroup)
+        }
+
         return formattedResponse
     }
 
@@ -486,6 +492,64 @@ export class VoiceHandlerService {
             } catch (operationError) {
                 console.error('Ошибка при выполнении операции с ролью:', operationError)
                 response += `❌ Ошибка при выполнении операции с ролью "${operation.roleName}"\n`
+            }
+        }
+        
+        return response
+    }
+
+    // Обработка запросов на просмотр информации
+    private async processViewRequests(requests: any[], chatId: string, userId: string, isGroup: boolean): Promise<string> {
+        let response = ''
+        
+        for (const request of requests) {
+            try {
+                switch (request.type) {
+                    case 'tasks':
+                        if (isGroup) {
+                            const tasks = await this.taskService.getTasksByChat(chatId)
+                            response += MessageFormatterService.formatTasksList(tasks, 'Все задачи группы') + '\n'
+                        } else {
+                            const tasks = await this.taskService.getPersonalTasks(userId)
+                            response += MessageFormatterService.formatTasksList(tasks, 'Ваши персональные задачи') + '\n'
+                        }
+                        break
+
+                    case 'members':
+                        if (isGroup) {
+                            const chatMembers = await this.chatService.getChatMembers(chatId)
+                            response += MessageFormatterService.formatMembersList(chatMembers) + '\n'
+                        } else {
+                            response += '❌ Команда показа участников доступна только в группах\n'
+                        }
+                        break
+
+                    case 'roles':
+                        if (isGroup) {
+                            const rolesWithMembers = await this.chatService.getChatRolesWithMembers(chatId)
+                            response += MessageFormatterService.formatRolesList(rolesWithMembers) + '\n'
+                        } else {
+                            response += '❌ Команда показа ролей доступна только в группах\n'
+                        }
+                        break
+
+                    case 'userTasks':
+                        if (isGroup) {
+                            const tasks = await this.taskService.getTasksByChat(chatId)
+                            const userTasks = tasks.filter(task => task.assignedToUserId === userId)
+                            response += MessageFormatterService.formatTasksList(userTasks, 'Ваши задачи в группе') + '\n'
+                        } else {
+                            const tasks = await this.taskService.getPersonalTasks(userId)
+                            response += MessageFormatterService.formatTasksList(tasks, 'Ваши персональные задачи') + '\n'
+                        }
+                        break
+
+                    default:
+                        response += `❌ Неизвестный тип запроса: ${request.type}\n`
+                }
+            } catch (error) {
+                console.error(`Ошибка при обработке запроса ${request.type}:`, error)
+                response += `❌ Ошибка при получении информации ${request.type}\n`
             }
         }
         
