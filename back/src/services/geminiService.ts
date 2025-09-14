@@ -21,6 +21,7 @@ export interface Task {
 export interface GroupMember {
     name: string
     username?: string
+    userId: string
 }
 
 // Интерфейс операции с задачей
