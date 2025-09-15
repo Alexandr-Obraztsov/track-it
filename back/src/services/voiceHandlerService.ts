@@ -311,8 +311,6 @@ export class VoiceHandlerService {
                     // Используем полное форматирование задачи
                     formattedResponse += MessageFormatterService.formatTaskCreation(
                         createdTask,
-                        creatorUsername || userId,
-                        task.assignedToUser,
                     ) + '\n'
 
                 } catch (dbError) {
@@ -525,10 +523,10 @@ export class VoiceHandlerService {
                     case 'tasks':
                         if (isGroup) {
                             const tasks = await this.taskService.getTasksByChat(chatId)
-                            response += MessageFormatterService.formatTasksList(tasks, 'Все задачи группы') + '\n'
+                            response += MessageFormatterService.formatTasksList(tasks) + '\n'
                         } else {
                             const tasks = await this.taskService.getPersonalTasks(userId)
-                            response += MessageFormatterService.formatTasksList(tasks, 'Ваши персональные задачи') + '\n'
+                            response += MessageFormatterService.formatTasksList(tasks) + '\n'
                         }
                         break
 
@@ -552,12 +550,11 @@ export class VoiceHandlerService {
 
                     case 'userTasks':
                         if (isGroup) {
-                            const tasks = await this.taskService.getTasksByChat(chatId)
-                            const userTasks = tasks.filter(task => task.assignedToUserId === userId)
-                            response += MessageFormatterService.formatTasksList(userTasks, 'Ваши задачи в группе') + '\n'
+                            const tasks = await this.taskService.getTasksAssignedTo(chatId, userId)
+                            response += MessageFormatterService.formatTasksList(tasks) + '\n'
                         } else {
                             const tasks = await this.taskService.getPersonalTasks(userId)
-                            response += MessageFormatterService.formatTasksList(tasks, 'Ваши персональные задачи') + '\n'
+                            response += MessageFormatterService.formatTasksList(tasks) + '\n'
                         }
                         break
 

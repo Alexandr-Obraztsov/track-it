@@ -1,0 +1,73 @@
+┌─────────────────────────────────────────────────────────────────────┐
+│                      СХЕМА БАЗЫ ДАННЫХ TRACK-IT                    │
+└─────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────┐    1:N    ┌─────────────────┐    N:1    ┌─────────────────┐
+│     CHATS       │──────────▶│  CHAT_MEMBERS   │◀──────────│     ROLES       │
+├─────────────────┤           ├─────────────────┤           ├─────────────────┤
+│ id (PK)         │           │ id (PK)         │           │ id (PK)         │
+│ chatId (UK)     │           │ chatId (FK)     │           │ name            │
+│ title           │           │ userId          │           │ chatId (FK)     │
+│ username        │           │ username        │           │ createdAt       │
+│ welcomeMessageId│           │ firstName       │           └─────────────────┘
+│ warningMessageId│           │ lastName        │                    │
+└─────────────────┘           │ joinedAt        │                    │
+        │                     │ roleId (FK)     │                    │
+        │                     └─────────────────┘                    │
+        │                              ▲                             │
+        │                              │                             │
+        │ 1:N                          │                             │ 1:N
+        ▼                              │                             ▼
+┌─────────────────┐                    │                   ┌─────────────────┐
+│     TASKS       │                    │                   │   TASKS (role)  │
+├─────────────────┤                    │                   ├─────────────────┤
+│ id (PK)         │                    │                   │ assignedToRoleId│
+│ title           │                    │                   │ (FK to roles.id)│
+│ description     │────────────────────┘                   └─────────────────┘
+│ readableId      │ Связь через составной ключ:
+│ priority        │ (authorUserId + chatId) → chat_members
+│ deadline        │ (assignedToUserId + chatId) → chat_members
+│ createdAt       │
+│ type            │
+│ userId          │
+│ authorUserId    │ ───┐
+│ chatId (FK)     │    │ Составной FK
+│ assignedToUserId│ ───┘ к chat_members
+│ assignedToRoleId│ ─────────────────────────┐
+│ isCompleted     │                          │ FK к roles
+└─────────────────┘                          ▼
+
+
+ТИПЫ СВЯЗЕЙ В ЗАДАЧАХ:
+
+1. АВТОР ЗАДАЧИ:
+   ┌─────────────┐    составной ключ    ┌─────────────┐
+   │    TASKS    │ ────────────────────▶ │CHAT_MEMBERS │
+   │authorUserId │                      │   userId    │
+   │   chatId    │                      │   chatId    │
+   └─────────────┘                      └─────────────┘
+
+2. НАЗНАЧЕНИЕ ПОЛЬЗОВАТЕЛЮ:
+   ┌─────────────┐    составной ключ    ┌─────────────┐
+   │    TASKS    │ ────────────────────▶ │CHAT_MEMBERS │
+   │assignedToUserId                    │   userId    │
+   │   chatId    │                      │   chatId    │
+   └─────────────┘                      └─────────────┘
+
+3. НАЗНАЧЕНИЕ РОЛИ:
+   ┌─────────────┐    простой FK        ┌─────────────┐
+   │    TASKS    │ ────────────────────▶ │    ROLES    │
+   │assignedToRoleId                    │     id      │
+   └─────────────┘                      └─────────────┘
+
+
+ИНДЕКСЫ для производительности:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+• chats(chatId) - уникальный
+• chat_members(chatId, userId) - составной
+• chat_members(roleId) - простой
+• roles(chatId) - простой
+• tasks(chatId) - простой
+• tasks(authorUserId, chatId) - составной
+• tasks(assignedToUserId, chatId) - составной
+• tasks(assignedToRoleId) - простой

@@ -1,6 +1,12 @@
-import { TaskOperation, RoleOperation } from './geminiService'
+import { TaskEntity } from '../entities/Task'
+import { ChatMemberEntity } from '../entities/ChatMember'
+import { TaskOperation, RoleOperation, Role, GroupMember } from './geminiService'
+import { RoleEntity } from '../entities/Role'
 
-// Сервис для форматирования сообщений
+/**
+ * Сервис для форматирования сообщений
+ * Обрабатывает как типизированные объекты, так и Entity из базы данных
+ */
 export class MessageFormatterService {
     // Создание читаемого ID задачи
     static createTaskId(chatTitle: string, taskDbId: number): string {
@@ -8,27 +14,9 @@ export class MessageFormatterService {
         return `${prefix}-${taskDbId}`
     }
 
-    // Парсинг ID задачи из читаемого формата
-    static parseTaskId(taskIdStr: string): number | null {
-        const match = taskIdStr.match(/^[A-Z]{3}-(\d+)$/)
-        return match ? parseInt(match[1]) : null
-    }
-
     // Единое форматирование пользователя через тег
-    static formatUserTag(member: any): string {
-        if (member.username) {
-            return `@${member.username}`
-        } else if (member.firstName) {
-            const fullName = `${member.firstName}${member.lastName ? ' ' + member.lastName : ''}`
-            return fullName
-        } else {
-            return 'Неизвестный пользователь'
-        }
-    }
-
-    // Создание тега пользователя для уведомлений
-    static createUserTag(username?: string): string {
-        return username ? `@${username}` : ''
+    static getTag(member: ChatMemberEntity): string {
+        return `@${member.username}`
     }
 
     // Перевод приоритета на русский
@@ -41,53 +29,25 @@ export class MessageFormatterService {
         }
     }
 
-    // Форматирование результата создания роли
-    static formatRoleCreation(roleName: string, success: boolean, roleData?: any): string {
-        if (success && roleData) {
-            let result = `✅ Создана роль "${roleName}"\n\n`
-            result += `🎭 Название: ${roleData.name}\n`
-            result += `🏢 Чат: ${roleData.chatId}\n`
-            result += `📅 Создана: ${new Date().toLocaleString('ru-RU')}\n`
-            result += `👥 Участников: ${roleData.membersCount || 0}\n`
-            
-            if (roleData.description) {
-                result += `📝 Описание: ${roleData.description}\n`
-            }
-            
-            return result
-        } else if (success) {
-            return `✅ Создана роль "${roleName}"`
-        } else {
-            return `❌ Ошибка создания роли "${roleName}"`
-        }
-    }
-
     // Форматирование результата создания задачи
     static formatTaskCreation(
-        task: any, 
-        userName: string,
-        assignedUserName?: string, 
+        task: TaskEntity, 
     ): string {
-        const taskId = task.readableId || `#${task.id}`
-        let result = `✅ Создана задача ${taskId}\n\n`
+        let result = `✅ Создана задача ${task.readableId}\n\n`
         result += `📝 Название: ${task.title}\n`
         result += `📋 Описание: ${task.description}\n`
         result += `🔥 Приоритет: ${this.translatePriority(task.priority)}\n`
-        
-        // Формируем тег создателя
-        const creatorTag = userName.startsWith('@') ? userName : this.createUserTag(userName)
-        result += `👤 Создатель: ${creatorTag}\n`
+
+        result += `👤 Создатель: ${this.getTag(task.author)}\n`
         
         if (task.deadline) {
             result += `⏰ Срок выполнения: ${task.deadline}\n`
         }
         
-        if (assignedUserName) {
-            result += `✨ Назначена на: ${assignedUserName}\n`
-        } else if (task.assignedToUserId) {
-            result += `👥 Назначена на: ID ${task.assignedToUserId}\n`
-        } else if (task.assignedToRoleId) {
-            result += `👥 Назначена на роль: ID ${task.assignedToRoleId}\n`
+        if (task.assignedToMember) {
+            result += `✨ Назначена на: ${this.getTag(task.assignedToMember)}\n`
+        } else if (task.assignedToRole) {
+            result += `👥 Назначена на роль: ${task.assignedToRole.name}\n`
         } else {
             result += `👥 Исполнитель: Не назначен\n`
         }
@@ -96,192 +56,136 @@ export class MessageFormatterService {
     }
 
     // Форматирование результата операции с задачей
-    static formatTaskOperation(operation: TaskOperation, success: boolean, chatTitle: string, taskData?: any): string {
-        const taskReadableId = this.createTaskId(chatTitle, parseInt(operation.taskId))
-        
+    static formatTaskOperation(operation: TaskOperation, success: boolean, task: TaskEntity): string {
+        const taskTitle = `${task.readableId}: ${task.title}`
+
         switch (operation.operation) {
             case 'delete':
                 return success ? 
-                    `🗑️ Удалена задача ${taskReadableId}` : 
-                    `❌ Не удалось удалить задачу ${taskReadableId}`
-            
-            case 'complete':
-                if (success && taskData) {
-                    let result = `✅ Задача ${taskReadableId} отмечена как выполненная\n\n`
-                    result += `📝 Название: ${taskData.title}\n`
-                    result += `📋 Описание: ${taskData.description}\n`
-                    result += `🔥 Приоритет: ${this.translatePriority(taskData.priority)}\n`
-                    result += `✨ Статус: Выполнена\n`
-                    result += `📅 Завершена: ${new Date().toLocaleString('ru-RU')}\n`
-                    return result
-                } else {
-                    return success ? 
-                        `✅ Задача ${taskReadableId} отмечена как выполненная` : 
-                        `❌ Не удалось отметить задачу ${taskReadableId} как выполненную`
-                }
+                    `🗑️ Удалена задача "${taskTitle}"` : 
+                    `❌ Не удалось удалить задачу "${taskTitle}"`
             
             case 'update':
                 if (success) {
-                    let result = `🔄 Обновлена задача ${taskReadableId}\n\n`
+                    let result = `🔄 Обновлена задача ${taskTitle}\n`
+
+                    result += "\n" + this.formatTask(task)
                     
-                    if (taskData) {
-                        result += `📝 Название: ${taskData.title}\n`
-                        result += `📋 Описание: ${taskData.description}\n`
-                        result += `🔥 Приоритет: ${this.translatePriority(taskData.priority)}\n`
-                        result += `✨ Статус: ${taskData.isCompleted ? 'Выполнена' : 'Активна'}\n`
-                        result += `📅 Обновлена: ${new Date().toLocaleString('ru-RU')}\n`
-                        
-                        if (taskData.deadline) {
-                            result += `⏰ Срок выполнения: ${taskData.deadline}\n`
-                        }
-                        
-                        if (taskData.assignedToUserId) {
-                            result += `👥 Назначена на: ID ${taskData.assignedToUserId}\n`
-                        } else if (taskData.assignedToRoleId) {
-                            result += `👥 Назначена на роль: ID ${taskData.assignedToRoleId}\n`
-                        }
-                    }
-                    
-                    if (operation.updateData) {
-                        const changes = []
-                        if (operation.updateData.title) changes.push(`название: "${operation.updateData.title}"`)
-                        if (operation.updateData.description) changes.push(`описание: "${operation.updateData.description}"`)
-                        if (operation.updateData.priority) changes.push(`приоритет: ${this.translatePriority(operation.updateData.priority)}`)
-                        if (operation.updateData.deadline) changes.push(`срок: ${operation.updateData.deadline}`)
-                        if (operation.updateData.assignedToUser) changes.push(`исполнитель: ${operation.updateData.assignedToUser}`)
-                        if (operation.updateData.assignedToRole) changes.push(`роль: ${operation.updateData.assignedToRole}`)
-                        if (operation.updateData.isCompleted !== undefined) {
-                            changes.push(`статус: ${operation.updateData.isCompleted ? 'выполнена' : 'активна'}`)
-                        }
-                        
-                        if (changes.length > 0) {
-                            result += `\n📝 Изменения: ${changes.join(', ')}`
-                        }
-                    }
                     return result
                 } else {
-                    return `❌ Не удалось обновить задачу ${taskReadableId}`
+                    return `❌ Не удалось обновить задачу ${taskTitle}`
                 }
             
             default:
-                return `❓ Неизвестная операция с задачей ${taskReadableId}`
+                return `❓ Неизвестная операция с задачей ${taskTitle}`
         }
     }
 
     // Форматирование результата операции с ролью
-    static formatRoleOperation(operation: RoleOperation, success: boolean, roleData?: any): string {
+    static formatRoleOperation(operation: RoleOperation, success: boolean, role: RoleEntity): string {
         switch (operation.operation) {
             case 'create':
-                if (success && roleData) {
-                    let result = `✅ Создана роль "${operation.roleName}"\n\n`
-                    result += `🎭 Название: ${roleData.name}\n`
-                    result += `🏢 Чат: ${roleData.chatId}\n`
-                    result += `📅 Создана: ${new Date().toLocaleString('ru-RU')}\n`
-                    result += `👥 Участников: ${roleData.membersCount || 0}\n`
-                    return result
-                } else {
-                    return success ? 
-                        `✅ Создана роль "${operation.roleName}"` : 
-                        `❌ Не удалось создать роль "${operation.roleName}"`
-                }
+                return success ?
+                    `✅ Создана роль "${role.name}"`
+                    : `❌ Не удалось создать роль "${role.name}"`
             
             case 'delete':
                 return success ? 
-                    `🗑️ Удалена роль "${operation.roleName}"` : 
-                    `❌ Не удалось удалить роль "${operation.roleName}"`
+                    `🗑️ Удалена роль "${role.name}"` : 
+                    `❌ Не удалось удалить роль "${role.name}"`
             
             case 'update':
-                if (success && roleData) {
+                if (success) {
                     let result = `🔄 Роль обновлена\n\n`
-                    result += `🎭 Старое название: "${operation.roleName}"\n`
+                    result += `🎭 Старое название: "${role.name}"\n`
                     result += `🎭 Новое название: "${operation.newRoleName}"\n`
-                    result += `🏢 Чат: ${roleData.chatId}\n`
-                    result += `👥 Участников: ${roleData.membersCount || 0}\n`
-                    result += `📅 Обновлена: ${new Date().toLocaleString('ru-RU')}\n`
                     return result
                 } else {
-                    return success ? 
-                        `🔄 Роль "${operation.roleName}" переименована в "${operation.newRoleName}"` : 
-                        `❌ Не удалось переименовать роль "${operation.roleName}"`
+                    return `❌ Не удалось переименовать роль "${role.name}"`
                 }
             
             case 'assign':
-                if (success && roleData) {
+                if (success) {
                     let result = `👤 Роль назначена пользователю\n\n`
-                    result += `🎭 Роль: "${operation.roleName}"\n`
+                    result += `🎭 Роль: "${role.name}"\n`
                     result += `👤 Пользователь: ${operation.targetUser}\n`
-                    result += `🏢 Чат: ${roleData.chatId}\n`
-                    result += `📅 Назначена: ${new Date().toLocaleString('ru-RU')}\n`
                     return result
                 } else {
-                    return success ? 
-                        `👤 Роль "${operation.roleName}" назначена пользователю ${operation.targetUser}` : 
-                        `❌ Не удалось назначить роль "${operation.roleName}" пользователю ${operation.targetUser}`
+                    return `❌ Не удалось назначить роль "${role.name}" пользователю ${operation.targetUser}`
                 }
             
             case 'unassign':
                 return success ? 
-                    `👤 Роль "${operation.roleName}" снята с пользователя ${operation.targetUser}` : 
-                    `❌ Не удалось снять роль "${operation.roleName}" с пользователя ${operation.targetUser}`
+                    `👤 Роль "${role.name}" снята с пользователя ${operation.targetUser}` : 
+                    `❌ Не удалось снять роль "${role.name}" с пользователя ${operation.targetUser}`
             
             default:
-                return `❓ Неизвестная операция с ролью "${operation.roleName}"`
+                return `❓ Неизвестная операция с ролью "${role.name}"`
         }
     }
 
     // Форматирование списка участников
-    static formatMembersList(members: any[]): string {
+    static formatMembersList(members: ChatMemberEntity[]): string {
         if (members.length === 0) {
             return '👥 Участники группы отсутствуют'
         }
 
         let response = '👥 Участники группы:\n'
         members.forEach((member, index) => {
-            const memberTag = this.formatUserTag(member)
-            const roleName = member.role?.name ? ` [${member.role.name}]` : ''
-            response += `\n${index + 1}. ${memberTag}${roleName}`
+            const memberTag = this.getTag(member)
+            response += `\n${index + 1}. ${member.firstName} ${member.lastName} (${memberTag}) - ${member.role?.name || 'без роли'}`
         })
         return response
     }
 
-    // Форматирование списка задач
-    static formatTasksList(tasks: any[], title: string): string {
+    static formatTasksList(
+        tasks: TaskEntity[], 
+        members: GroupMember[] = [], 
+        roles: Role[] = []
+    ): string {
         if (tasks.length === 0) {
-            return `📋 ${title}: задачи отсутствуют`
+            return `📋 Задач пока нет`
         }
 
-        let response = `📋 ${title}:\n`
-        tasks.forEach((task, index) => {
-            const priorityEmoji = task.priority === 'high' ? '🔴' : 
-                                 task.priority === 'medium' ? '🟡' : '🟢'
-            const statusEmoji = task.isCompleted ? '✅' : '⏳'
-            const taskId = task.readableId || `#${task.id}`
-            const assignedInfo = task.assignedUser ? ` → ${this.formatUserTag(task.assignedUser)}` : ''
-            const deadlineInfo = task.deadline ? ` (до ${new Date(task.deadline).toLocaleDateString('ru-RU')})` : ''
-            
-            response += `\n${taskId} ${statusEmoji} ${priorityEmoji} ${task.title}${assignedInfo}${deadlineInfo}`
-            if (task.description && task.description !== task.title) {
-                response += `\n   ${task.description}`
-            }
+
+        let response = `📋 Список задач:\n`
+        tasks.forEach((task) => {
+            response += `\n${this.formatTask(task)}`
         })
         return response
     }
 
     // Форматирование списка ролей
-    static formatRolesList(roles: any[]): string {
+    static formatRolesList(roles: Role[]): string {
         if (roles.length === 0) {
             return '🎭 Роли в группе отсутствуют'
         }
 
         let response = '🎭 Роли в группе:\n'
         roles.forEach((role, index) => {
-            response += `\n${index + 1}. ${role.name} (${role.membersCount} участников)`
-            if (role.members && role.members.length > 0) {
-                // Форматируем участников через теги
-                const memberTags = role.members.map((member: any) => this.formatUserTag(member))
-                response += `\n   Участники: ${memberTags.join(', ')}`
-            }
+            response += `\n${index + 1}. ${role.name}`
         })
         return response
+    }
+
+
+    static formatTask(task: TaskEntity): string {
+        let result = `🏎️ Тег: ${task.readableId}\n`
+        result += `📝 Название: ${task.title}\n`
+        result += `📋 Описание: ${task.description}\n`
+        result += `🔥 Приоритет: ${this.translatePriority(task.priority)}\n`
+        result += `✨ Статус: ${task.isCompleted ? 'Выполнена' : 'Активна'}\n`
+
+        if (task.deadline) {
+            result += `⏰ Срок выполнения: ${task.deadline}\n`
+        }
+
+        if (task.assignedToMember) {
+            result += `👥 Назначена на: ${this.getTag(task.assignedToMember)}\n`
+        } else if (task.assignedToRole) {
+            result += `👥 Назначена на роль: ${task.assignedToRole.name}\n`
+        }
+
+        return result
     }
 }

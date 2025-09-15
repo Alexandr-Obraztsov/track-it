@@ -1,6 +1,7 @@
 import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, JoinColumn } from 'typeorm'
 import { ChatEntity } from './Chat'
 import { RoleEntity } from './Role'
+import { ChatMemberEntity } from './ChatMember'
 
 // Сущность задачи для хранения в базе данных
 @Entity('tasks')
@@ -14,8 +15,8 @@ export class TaskEntity {
     @Column({ type: 'text' })
     description!: string // Описание задачи
 
-    @Column({ type: 'varchar', nullable: true })
-    readableId!: string | null // Читаемый ID задачи (например: CHT-123)
+    @Column({ type: 'varchar' })
+    readableId!: string // Читаемый ID задачи (например: CHT-123)
 
     @Column({
         type: 'enum',
@@ -39,6 +40,9 @@ export class TaskEntity {
     @Column({ type: 'bigint', unsigned: true, nullable: true })
     userId!: string | null // ID пользователя Telegram (для личных задач)
 
+    @Column({ type: 'bigint', unsigned: true })
+    authorUserId!: string // ID пользователя, который создал задачу
+
     @Column({ type: 'varchar', nullable: true })
     chatId!: string | null // ID группы (для групповых задач) - ссылается на chatId в chats
 
@@ -55,7 +59,24 @@ export class TaskEntity {
     @JoinColumn({ name: 'chatId', referencedColumnName: 'chatId' })
     chat?: ChatEntity
 
-    @ManyToOne(() => RoleEntity, role => role.tasks)
+    // Автор задачи - ищем участника чата по authorUserId и chatId
+    @ManyToOne(() => ChatMemberEntity, { nullable: true })
+    @JoinColumn([
+        { name: 'authorUserId', referencedColumnName: 'userId' },
+        { name: 'chatId', referencedColumnName: 'chatId' }
+    ])
+    author!: ChatMemberEntity
+
+    // Пользователь, которому назначена задача
+    @ManyToOne(() => ChatMemberEntity, { nullable: true })
+    @JoinColumn([
+        { name: 'assignedToUserId', referencedColumnName: 'userId' },
+        { name: 'chatId', referencedColumnName: 'chatId' }
+    ])
+    assignedToMember?: ChatMemberEntity
+
+    // Роль, которой назначена задача
+    @ManyToOne(() => RoleEntity, role => role.tasks, { nullable: true })
     @JoinColumn({ name: 'assignedToRoleId' })
     assignedToRole?: RoleEntity
 }

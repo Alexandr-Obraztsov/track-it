@@ -1,5 +1,7 @@
 import { Entity, PrimaryGeneratedColumn, Column, OneToMany } from 'typeorm'
 import { TaskEntity } from './Task'
+import { ChatMemberEntity } from './ChatMember'
+import { RoleEntity } from './Role'
 
 // Сущность беседы для хранения в базе данных
 @Entity('chats')
@@ -24,4 +26,10 @@ export class ChatEntity {
 
     @OneToMany(() => TaskEntity, task => task.chat, { cascade: true })
     tasks?: TaskEntity[] // Задачи беседы
+
+    @OneToMany(() => ChatMemberEntity, member => member.chat, { cascade: true })
+    members?: ChatMemberEntity[] // Все участники беседы
+
+    @OneToMany(() => RoleEntity, role => role.chat, { cascade: true })
+    roles?: RoleEntity[] // Все роли беседы
 }

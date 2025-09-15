@@ -2,6 +2,7 @@ import { DataSource, Repository } from 'typeorm'
 import { ChatEntity } from '../entities/Chat'
 import { ChatMemberEntity } from '../entities/ChatMember'
 import { RoleService } from './roleService'
+import { Role } from '../shared/types'
 
 // Сервис для управления беседами и участниками
 export class ChatService {
@@ -113,28 +114,33 @@ export class ChatService {
     }
 
     // Получение ролей чата с информацией о пользователях
-    async getChatRolesWithMembers(chatId: string): Promise<Array<{
-        id: number
-        name: string
-        membersCount: number
-        members: string[]
-    }>> {
+    async getChatRoles(chatId: string): Promise<Role[]> {
         const roles = await this.roleService.getChatRoles(chatId)
-        const result = []
+        const result : Role[] = []
 
         for (const role of roles) {
-            const members = await this.memberRepository.find({
-                where: { chatId, roleId: role.id }
-            })
-
             result.push({
                 id: role.id,
                 name: role.name,
-                membersCount: members.length,
-                members: members.map(member => member.firstName || member.username || 'Неизвестный')
+                createdAt: role.createdAt
             })
         }
 
         return result
+    }
+
+    // Назначение роли пользователю
+    async assignRoleToUser(chatId: string, userId: string, roleId: number): Promise<boolean> {
+        return await this.setRoleForMember(chatId, userId, roleId)
+    }
+
+    // Снятие роли с пользователя
+    async removeRoleFromUser(chatId: string, userId: string): Promise<boolean> {
+        return await this.setRoleForMember(chatId, userId, undefined)
+    }
+
+    // Получение ролей чата с участниками
+    async getChatRolesWithMembers(chatId: string): Promise<Role[]> {
+        return await this.getChatRoles(chatId)
     }
 }

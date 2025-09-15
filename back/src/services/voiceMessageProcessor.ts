@@ -42,7 +42,7 @@ export class VoiceMessageProcessor {
                         chatId: chatId
                     })
                     createdRoles[roleData.name] = role.id
-                    response += MessageFormatterService.formatRoleCreation(roleData.name, true, { ...roleData, ...role }) + '\n'
+                    response += MessageFormatterService.formatRoleOperation({'operation': 'create'},roleData.name, true, { ...roleData, ...role }) + '\n'
                     hasChanges = true
                 } catch (dbError) {
                     console.error('Ошибка создания роли:', dbError)

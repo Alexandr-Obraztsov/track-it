@@ -5,7 +5,6 @@ import { ChatService } from '../services/chatService'
 import { RoleService } from '../services/roleService'
 import { VoiceMessageProcessor } from '../services/voiceMessageProcessor'
 import { CommandHandlerService } from '../services/commandHandlerService'
-import { TextCommandService } from '../services/textCommandService'
 import { CallbackHandlerService } from '../services/callbackHandlerService'
 import { VoiceHandlerService } from '../services/voiceHandlerService'
 import { dataSource } from '../server'
@@ -20,7 +19,6 @@ class TelegramBotController {
 	private roleService: RoleService
 	private voiceProcessor: VoiceMessageProcessor
   private commandHandler!: CommandHandlerService
-  private textCommandHandler!: TextCommandService
   private callbackHandler!: CallbackHandlerService
   private voiceHandler!: VoiceHandlerService
 
@@ -31,7 +29,6 @@ class TelegramBotController {
 		
 		// Инициализируем сервисы обработки
 		this.commandHandler = new CommandHandlerService(taskService, chatService, this.roleService)
-		this.textCommandHandler = new TextCommandService(taskService, chatService)
 		this.callbackHandler = new CallbackHandlerService(taskService, chatService)
 		this.voiceProcessor = new VoiceMessageProcessor(taskService, chatService, this.roleService)
 		
