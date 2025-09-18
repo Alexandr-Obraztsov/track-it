@@ -1,39 +1,39 @@
-import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, JoinColumn } from 'typeorm'
+import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, JoinColumn, Unique } from 'typeorm'
 import { ChatEntity } from './Chat'
+import { UserEntity } from './User'
 import { RoleEntity } from './Role'
 
-// Сущность участника беседы для хранения в базе данных
+// Сущность участника чата (связующая таблица)
 @Entity('chat_members')
+@Unique(['chatId', 'userId']) // Уникальная связь пользователь-чат
 export class ChatMemberEntity {
     @PrimaryGeneratedColumn()
     id!: number
 
-    @Column({ type: 'varchar' })
-    chatId!: string // ID беседы (ссылается на chatId из таблицы chats)
+    @Column({ type: 'bigint' })
+    chatId!: string // ID чата
 
-    @Column({ type: 'bigint', unsigned: true })
-    userId!: string // ID пользователя в Telegram
-
-    @Column({ type: 'varchar', nullable: true })
-    username?: string // Username пользователя
-
-    @Column({ type: 'varchar', nullable: true })
-    firstName?: string // Имя пользователя
-
-    @Column({ type: 'varchar', nullable: true })
-    lastName?: string // Фамилия пользователя
-
-    @Column({ type: 'timestamp', default: () => 'CURRENT_TIMESTAMP' })
-    joinedAt!: Date // Дата регистрации в беседе
+    @Column({ type: 'bigint' })
+    userId!: string // ID пользователя
 
     @Column({ type: 'integer', nullable: true })
-    roleId?: number // ID роли (может быть null, если роли нет)
+    roleId?: number // ID роли (может быть null)
 
-    @ManyToOne(() => ChatEntity)
-    @JoinColumn({ name: 'chatId', referencedColumnName: 'chatId' })
-    chat?: ChatEntity
+    @Column({ type: 'timestamp', default: () => 'CURRENT_TIMESTAMP' })
+    joinedAt!: Date // Дата присоединения к чату
 
-    @ManyToOne(() => RoleEntity, role => role.members, { nullable: true })
+    @Column({ type: 'timestamp', default: () => 'CURRENT_TIMESTAMP', onUpdate: 'CURRENT_TIMESTAMP' })
+    updatedAt!: Date // Дата последнего обновления
+
+    @ManyToOne(() => ChatEntity, chat => chat.members, { onDelete: 'CASCADE' })
+    @JoinColumn({ name: 'chatId' })
+    chat!: ChatEntity
+
+    @ManyToOne(() => UserEntity, user => user.chatMemberships, { onDelete: 'CASCADE' })
+    @JoinColumn({ name: 'userId' })
+    user!: UserEntity
+
+    @ManyToOne(() => RoleEntity, role => role.members, { nullable: true, onDelete: 'SET NULL' })
     @JoinColumn({ name: 'roleId' })
     role?: RoleEntity
 }

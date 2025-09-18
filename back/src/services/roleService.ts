@@ -1,136 +1,187 @@
 import { DataSource, Repository } from 'typeorm'
 import { RoleEntity } from '../entities/Role'
+import { ChatEntity } from '../entities/Chat'
+import { ChatMemberEntity } from '../entities/ChatMember'
+
+// Интерфейс для создания роли
+export interface CreateRoleDto {
+    name: string
+    chatId: string
+}
+
+// Интерфейс для обновления роли
+export interface UpdateRoleDto {
+    name?: string
+}
 
 // Сервис для управления ролями
 export class RoleService {
     private roleRepository: Repository<RoleEntity>
+    private chatRepository: Repository<ChatEntity>
+    private memberRepository: Repository<ChatMemberEntity>
 
     constructor(dataSource: DataSource) {
         this.roleRepository = dataSource.getRepository(RoleEntity)
+        this.chatRepository = dataSource.getRepository(ChatEntity)
+        this.memberRepository = dataSource.getRepository(ChatMemberEntity)
     }
 
-    // Создание новой роли
-    async createRole(roleData: {
-        name: string
-        chatId: string
-    }): Promise<RoleEntity> {
-        // Проверяем, не существует ли роль с таким именем в этом чате
-        const existingRole = await this.roleRepository.findOne({
-            where: { name: roleData.name, chatId: roleData.chatId }
+    // Создание роли
+    async createRole(data: CreateRoleDto): Promise<RoleEntity> {
+        // Проверяем существование чата
+        const chat = await this.chatRepository.findOne({
+            where: { telegramId: data.chatId }
         })
-
-        if (existingRole) {
-            return existingRole
+        if (!chat) {
+            throw new Error('Чат не найден')
         }
 
-        const role = this.roleRepository.create({
-            name: roleData.name,
-            chatId: roleData.chatId
+        // Проверяем уникальность имени роли в чате
+        const existingRole = await this.roleRepository.findOne({
+            where: { name: data.name, chatId: data.chatId }
         })
-        
+        if (existingRole) {
+            throw new Error('Роль с таким именем уже существует в этом чате')
+        }
+
+        const role = this.roleRepository.create(data)
         return await this.roleRepository.save(role)
     }
 
-    // Получение всех ролей в чате
+    // Получение роли по ID
+    async getRoleById(id: number): Promise<RoleEntity | null> {
+        return await this.roleRepository.findOne({
+            where: { id },
+            relations: ['chat', 'members', 'members.user', 'assignedTasks']
+        })
+    }
+
+    // Получение роли по имени в чате
+    async getRoleByName(chatId: string, name: string): Promise<RoleEntity | null> {
+        return await this.roleRepository.findOne({
+            where: { chatId, name },
+            relations: ['chat', 'members', 'members.user', 'assignedTasks']
+        })
+    }
+
+    // Получение всех ролей чата
     async getChatRoles(chatId: string): Promise<RoleEntity[]> {
         return await this.roleRepository.find({
             where: { chatId },
+            relations: ['members', 'members.user'],
             order: { createdAt: 'ASC' }
         })
     }
 
-    // Получение роли по имени и чату
-    async getRoleByName(chatId: string, roleName: string): Promise<RoleEntity | null> {
-        return await this.roleRepository.findOne({
-            where: { name: roleName, chatId }
+    // Получение всех ролей
+    async getAllRoles(): Promise<RoleEntity[]> {
+        return await this.roleRepository.find({
+            relations: ['chat', 'members'],
+            order: { createdAt: 'DESC' }
         })
-    }
-
-    // Получение роли по ID
-    async getRoleById(roleId: number): Promise<RoleEntity | null> {
-        return await this.roleRepository.findOne({
-            where: { id: roleId }
-        })
-    }
-
-    // Удаление роли
-    async deleteRole(roleId: number): Promise<boolean> {
-        const result = await this.roleRepository.delete({ id: roleId })
-        return (result.affected ?? 0) > 0
-    }
-
-    // Удаление роли по имени
-    async deleteRoleByName(chatId: string, roleName: string): Promise<boolean> {
-        const role = await this.getRoleByName(chatId, roleName)
-        if (!role) return false
-        
-        return await this.deleteRole(role.id)
     }
 
     // Обновление роли
-    async updateRole(roleId: number, updateData: Partial<{
-        name: string
-    }>): Promise<RoleEntity | null> {
-        const role = await this.getRoleById(roleId)
-        if (!role) return null
+    async updateRole(id: number, data: UpdateRoleDto): Promise<RoleEntity | null> {
+        const role = await this.roleRepository.findOne({ where: { id } })
+        if (!role) {
+            return null
+        }
 
-        Object.assign(role, updateData)
+        // Проверяем уникальность нового имени в чате
+        if (data.name && data.name !== role.name) {
+            const existingRole = await this.roleRepository.findOne({
+                where: { name: data.name, chatId: role.chatId }
+            })
+            if (existingRole) {
+                throw new Error('Роль с таким именем уже существует в этом чате')
+            }
+        }
+
+        Object.assign(role, data)
         return await this.roleRepository.save(role)
     }
 
-    // Обновление роли по имени
-    async updateRoleByName(chatId: string, oldRoleName: string, newRoleName: string): Promise<RoleEntity | null> {
-        const role = await this.getRoleByName(chatId, oldRoleName)
-        if (!role) return null
+    // Удаление роли
+    async deleteRole(id: number): Promise<boolean> {
+        // Сначала снимаем роль со всех участников
+        await this.memberRepository.update(
+            { roleId: id },
+            { roleId: undefined }
+        )
 
-        // Проверяем, не занято ли новое имя
-        const existingRole = await this.getRoleByName(chatId, newRoleName)
-        if (existingRole && existingRole.id !== role.id) {
-            return null // Имя уже занято
-        }
-
-        role.name = newRoleName
-        return await this.roleRepository.save(role)
+        const result = await this.roleRepository.delete(id)
+        return (result.affected || 0) > 0
     }
 
-    // Создание ролей по умолчанию для нового чата
-    async createDefaultRoles(chatId: string): Promise<RoleEntity[]> {
-        const defaultRoles = [
-            { name: 'member', chatId },
-            { name: 'moderator', chatId },
-            { name: 'admin', chatId }
-        ]
-
-        const createdRoles: RoleEntity[] = []
-
-        for (const roleData of defaultRoles) {
-            const role = await this.createRole(roleData)
-            createdRoles.push(role)
-        }
-
-        return createdRoles
-    }
-
-    // Назначение роли пользователю
-    async assignRoleToUser(chatId: string, userId: string, roleName: string): Promise<boolean> {
-        try {
-            // Используем ChatService для получения участника и обновления его роли
-            // Этот метод будет вызывать ChatService через контроллер
-            return true
-        } catch (error) {
-            console.error('Ошибка при назначении роли:', error)
+    // Удаление роли по имени в чате
+    async deleteRoleByName(chatId: string, name: string): Promise<boolean> {
+        const role = await this.getRoleByName(chatId, name)
+        if (!role) {
             return false
         }
+        return await this.deleteRole(role.id)
     }
 
-    // Удаление роли у пользователя
-    async removeRoleFromUser(chatId: string, userId: string): Promise<boolean> {
-        try {
-            // Этот метод будет вызывать ChatService через контроллер
-            return true
-        } catch (error) {
-            console.error('Ошибка при удалении роли:', error)
+    // Получение участников роли
+    async getRoleMembers(roleId: number): Promise<ChatMemberEntity[]> {
+        return await this.memberRepository.find({
+            where: { roleId },
+            relations: ['user', 'chat']
+        })
+    }
+
+    // Назначение роли участнику
+    async assignRoleToMember(chatId: string, userId: string, roleId: number): Promise<boolean> {
+        // Проверяем существование роли
+        const role = await this.roleRepository.findOne({
+            where: { id: roleId, chatId }
+        })
+        if (!role) {
             return false
         }
+
+        // Проверяем существование участника
+        const member = await this.memberRepository.findOne({
+            where: { chatId, userId }
+        })
+        if (!member) {
+            return false
+        }
+
+        // Назначаем роль
+        member.roleId = roleId
+        await this.memberRepository.save(member)
+        return true
+    }
+
+    // Снятие роли с участника
+    async removeRoleFromMember(chatId: string, userId: string): Promise<boolean> {
+        const member = await this.memberRepository.findOne({
+            where: { chatId, userId }
+        })
+        if (!member) {
+            return false
+        }
+
+        member.roleId = undefined
+        await this.memberRepository.save(member)
+        return true
+    }
+
+    // Получение количества участников роли
+    async getRoleMemberCount(roleId: number): Promise<number> {
+        return await this.memberRepository.count({
+            where: { roleId }
+        })
+    }
+
+    // Получение количества задач, назначенных роли
+    async getRoleTaskCount(roleId: number): Promise<number> {
+        const role = await this.roleRepository.findOne({
+            where: { id: roleId },
+            relations: ['assignedTasks']
+        })
+        return role?.assignedTasks?.length || 0
     }
 }

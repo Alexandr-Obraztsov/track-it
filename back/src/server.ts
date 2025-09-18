@@ -3,6 +3,7 @@ import 'reflect-metadata'
 import express, { Application } from 'express'
 import { DataSource } from 'typeorm'
 import { TaskEntity } from './entities/Task'
+import { UserEntity } from './entities/User'
 import { TaskService } from './services/taskService'
 import { TelegramBotController } from './controllers/telegramBotController'
 import logger from './middleware/logger'
@@ -10,6 +11,9 @@ import { ChatService } from './services/chatService'
 import { ChatMemberEntity } from './entities/ChatMember'
 import { ChatEntity } from './entities/Chat'
 import { RoleEntity } from './entities/Role'
+import { UserService } from './services/userService'
+import { RoleService } from './services/roleService'
+import { GeminiService } from './services/geminiService'
 
 // Глобальная обработка необработанных промисов
 process.on('unhandledRejection', (reason, promise) => {
@@ -27,6 +31,9 @@ process.on('uncaughtException', (error) => {
 export let dataSource: DataSource
 export let taskService: TaskService
 export let chatService: ChatService
+export let userService: UserService
+export let roleService: RoleService
+export let geminiService: GeminiService
 export let telegramBotController: TelegramBotController
 
 // Класс сервера
@@ -51,7 +58,7 @@ class Server {
 			username: process.env.DB_USER || 'user',
 			password: process.env.DB_PASSWORD || 'password',
 			database: process.env.DB_NAME || 'trackit',
-			entities: [TaskEntity, ChatEntity, ChatMemberEntity, RoleEntity],
+			entities: [TaskEntity, UserEntity, ChatEntity, ChatMemberEntity, RoleEntity],
 			synchronize: true, // В продакшене использовать миграции
 			logging: false,
 			dropSchema: true,
@@ -61,8 +68,11 @@ class Server {
 			await dataSource.initialize()
 			taskService = new TaskService(dataSource)
 			chatService = new ChatService(dataSource)
+			userService = new UserService(dataSource)
+			roleService = new RoleService(dataSource)
+			geminiService = new GeminiService(process.env.GEMINI_API_KEY || '')
 			// Инициализируем Telegram бота после подключения к БД
-			telegramBotController = new TelegramBotController(taskService, chatService)
+			telegramBotController = new TelegramBotController(taskService, chatService, roleService, geminiService, userService)
 			console.log('База данных подключена успешно')
 		} catch (error) {
 			console.error('Ошибка подключения к базе данных:', error)

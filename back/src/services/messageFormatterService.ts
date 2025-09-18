@@ -1,7 +1,8 @@
 import { TaskEntity } from '../entities/Task'
 import { ChatMemberEntity } from '../entities/ChatMember'
-import { TaskOperation, RoleOperation, Role, GroupMember } from './geminiService'
+import { TaskOperation, RoleOperation, Role } from '../types'
 import { RoleEntity } from '../entities/Role'
+import { UserEntity } from '../entities/User'
 
 /**
  * Сервис для форматирования сообщений
@@ -15,8 +16,11 @@ export class MessageFormatterService {
     }
 
     // Единое форматирование пользователя через тег
-    static getTag(member: ChatMemberEntity): string {
-        return `@${member.username}`
+    static getTag(member: UserEntity | undefined): string {
+        if (!member) {
+            return 'Неизвестный пользователь'
+        }
+        return `@${member.username || member.firstName || 'unknown'}`
     }
 
     // Перевод приоритета на русский
@@ -44,10 +48,10 @@ export class MessageFormatterService {
             result += `⏰ Срок выполнения: ${task.deadline}\n`
         }
         
-        if (task.assignedToMember) {
-            result += `✨ Назначена на: ${this.getTag(task.assignedToMember)}\n`
-        } else if (task.assignedToRole) {
-            result += `👥 Назначена на роль: ${task.assignedToRole.name}\n`
+        if (task.assignedUser) {
+            result += `✨ Назначена на: ${this.getTag(task.assignedUser)}\n`
+        } else if (task.assignedRole) {
+            result += `👥 Назначена на роль: ${task.assignedRole.name}\n`
         } else {
             result += `👥 Исполнитель: Не назначен\n`
         }
@@ -108,16 +112,16 @@ export class MessageFormatterService {
                 if (success) {
                     let result = `👤 Роль назначена пользователю\n\n`
                     result += `🎭 Роль: "${role.name}"\n`
-                    result += `👤 Пользователь: ${operation.targetUser}\n`
+                    result += `👤 Пользователь: ${operation.targetUserId}\n`
                     return result
                 } else {
-                    return `❌ Не удалось назначить роль "${role.name}" пользователю ${operation.targetUser}`
+                    return `❌ Не удалось назначить роль "${role.name}" пользователю ${operation.targetUserId}`
                 }
             
             case 'unassign':
                 return success ? 
-                    `👤 Роль "${role.name}" снята с пользователя ${operation.targetUser}` : 
-                    `❌ Не удалось снять роль "${role.name}" с пользователя ${operation.targetUser}`
+                    `👤 Роль "${role.name}" снята с пользователя ${operation.targetUserId}` : 
+                    `❌ Не удалось снять роль "${role.name}" с пользователя ${operation.targetUserId}`
             
             default:
                 return `❓ Неизвестная операция с ролью "${role.name}"`
@@ -132,16 +136,14 @@ export class MessageFormatterService {
 
         let response = '👥 Участники группы:\n'
         members.forEach((member, index) => {
-            const memberTag = this.getTag(member)
-            response += `\n${index + 1}. ${member.firstName} ${member.lastName} (${memberTag}) - ${member.role?.name || 'без роли'}`
+            const memberTag = this.getTag(member.user)
+            response += `\n${index + 1}. ${member.user.firstName} ${member.user.lastName || ''} (${memberTag}) - ${member.role?.name || 'без роли'}`
         })
         return response
     }
 
     static formatTasksList(
         tasks: TaskEntity[], 
-        members: GroupMember[] = [], 
-        roles: Role[] = []
     ): string {
         if (tasks.length === 0) {
             return `📋 Задач пока нет`
@@ -180,10 +182,10 @@ export class MessageFormatterService {
             result += `⏰ Срок выполнения: ${task.deadline}\n`
         }
 
-        if (task.assignedToMember) {
-            result += `👥 Назначена на: ${this.getTag(task.assignedToMember)}\n`
-        } else if (task.assignedToRole) {
-            result += `👥 Назначена на роль: ${task.assignedToRole.name}\n`
+        if (task.assignedUser) {
+            result += `👥 Назначена на: ${this.getTag(task.assignedUser)}\n`
+        } else if (task.assignedRole) {
+            result += `👥 Назначена на роль: ${task.assignedRole.name}\n`
         }
 
         return result

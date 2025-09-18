@@ -1,204 +1,231 @@
 import { DataSource, Repository } from 'typeorm'
 import { TaskEntity } from '../entities/Task'
 import { ChatEntity } from '../entities/Chat'
+import { UserEntity } from '../entities/User'
+import { RoleEntity } from '../entities/Role'
 import { MessageFormatterService } from './messageFormatterService'
 
-// Сервис для управления задачами в базе данных
+// Интерфейс для создания задачи
+export interface CreateTaskDto {
+    title: string
+    description: string
+    priority?: 'high' | 'medium' | 'low'
+    deadline?: Date
+    authorId: string // ID автора
+    type?: 'personal' | 'group'
+    chatId?: string // Для групповых задач
+    assignedUserId?: string // Назначение пользователю
+    assignedRoleId?: number // Назначение роли
+}
+
+// Интерфейс для обновления задачи
+export interface UpdateTaskDto {
+    title?: string
+    description?: string
+    priority?: 'high' | 'medium' | 'low'
+    deadline?: Date | null
+    assignedUserId?: string | null
+    assignedRoleId?: number | null
+    isCompleted?: boolean
+}
+
+// Объединенный сервис для всех типов задач
 export class TaskService {
     private taskRepository: Repository<TaskEntity>
     private chatRepository: Repository<ChatEntity>
+    private userRepository: Repository<UserEntity>
+    private roleRepository: Repository<RoleEntity>
 
     constructor(dataSource: DataSource) {
         this.taskRepository = dataSource.getRepository(TaskEntity)
         this.chatRepository = dataSource.getRepository(ChatEntity)
+        this.userRepository = dataSource.getRepository(UserEntity)
+        this.roleRepository = dataSource.getRepository(RoleEntity)
     }
 
-    // Создание новой личной задачи
-    async createPersonalTask(taskData: {
-        title: string
-        description: string
-        priority: 'high' | 'medium' | 'low'
-        deadline: string | null
-        userId: string
-    }): Promise<TaskEntity> {
-        const task = this.taskRepository.create({
-            ...taskData,
-            type: 'personal'
-        })
-        const savedTask = await this.taskRepository.save(task)
+    // Создание задачи (личной или групповой)
+    async createTask(data: CreateTaskDto): Promise<TaskEntity> {
+        // Определяем тип задачи
+        const type = data.chatId ? 'group' : 'personal'
         
-        // Генерируем читаемый ID для личных задач
-        savedTask.readableId = `PSN-${savedTask.id}` // Personal task
-        return await this.taskRepository.save(savedTask)
+        // Проверяем существование автора
+        const author = await this.userRepository.findOne({
+            where: { telegramId: data.authorId }
+        })
+        if (!author) {
+            throw new Error('Автор задачи не найден')
+        }
+
+        // Для групповых задач проверяем существование чата
+        if (type === 'group' && data.chatId) {
+            const chat = await this.chatRepository.findOne({
+                where: { telegramId: data.chatId }
+            })
+            if (!chat) {
+                throw new Error('Чат не найден')
+            }
+        }
+
+        // Создаем задачу
+        const task = this.taskRepository.create({
+            title: data.title,
+            description: data.description,
+            priority: data.priority || 'medium',
+            deadline: data.deadline,
+            authorId: data.authorId,
+            type,
+            chatId: data.chatId,
+            assignedUserId: data.assignedUserId,
+            assignedRoleId: data.assignedRoleId
+        })
+
+        const savedTask = await this.taskRepository.save(task)
+
+        // Генерируем читаемый ID с помощью MessageFormatterService
+        if (type === 'personal') {
+            savedTask.readableId = MessageFormatterService.createTaskId('Personal', savedTask.id)
+        } else {
+            const chat = await this.chatRepository.findOne({
+                where: { telegramId: data.chatId! }
+            })
+            const chatTitle = chat?.title || 'Group'
+            savedTask.readableId = MessageFormatterService.createTaskId(chatTitle, savedTask.id)
+        }
+
+        const updatedTask = await this.taskRepository.save(savedTask)
+
+        // Загружаем задачу со всеми связями для корректного форматирования
+        return await this.taskRepository.findOne({
+            where: { id: updatedTask.id },
+            relations: ['author', 'chat', 'assignedUser', 'assignedRole']
+        }) || updatedTask
     }
 
-    // Создание новой групповой задачи
-    async createGroupTask(taskData: {
-        title: string
-        description: string
-        priority: 'high' | 'medium' | 'low'
-        deadline: string | null
-        userId: string
-        chatId: string
-        assignedToUserId?: string
-    }): Promise<TaskEntity> {
-        const task = this.taskRepository.create({
-            ...taskData,
-            type: 'group'
+    // Получение задачи по ID
+    async getTaskById(id: number): Promise<TaskEntity | null> {
+        return await this.taskRepository.findOne({
+            where: { id },
+            relations: ['author', 'chat', 'assignedUser', 'assignedRole']
         })
-        const savedTask = await this.taskRepository.save(task)
-        
-        // Получаем название чата для генерации читаемого ID
-        const chat = await this.chatRepository.findOne({ where: { chatId: taskData.chatId } })
-        const chatTitle = chat?.title || 'Unknown'
-        savedTask.readableId = MessageFormatterService.createTaskId(chatTitle, savedTask.id)
-        
-        return await this.taskRepository.save(savedTask)
     }
 
     // Получение всех личных задач пользователя
     async getPersonalTasks(userId: string): Promise<TaskEntity[]> {
         return await this.taskRepository.find({
-            where: { userId, type: 'personal' },
+            where: { 
+                authorId: userId,
+                type: 'personal'
+            },
+            relations: ['author'],
             order: { createdAt: 'DESC' }
         })
     }
 
-    // Получение всех групповых задач пользователя
-    async getGroupTasks(userId: string): Promise<TaskEntity[]> {
+    // Получение всех групповых задач чата
+    async getGroupTasks(chatId: string): Promise<TaskEntity[]> {
         return await this.taskRepository.find({
-            where: { userId, type: 'group' },
+            where: { 
+                chatId,
+                type: 'group'
+            },
+            relations: ['author', 'chat', 'assignedUser', 'assignedRole'],
             order: { createdAt: 'DESC' }
         })
     }
 
-    // Получение всех задач группы
-    async getTasksByChat(chatId: string): Promise<TaskEntity[]> {
+    // Получение задач, назначенных пользователю
+    async getAssignedTasks(userId: string, chatId?: string): Promise<TaskEntity[]> {
+        const where: any = {
+            assignedUserId: userId
+        }
+        
+        if (chatId) {
+            where.chatId = chatId
+        }
+
         return await this.taskRepository.find({
-            where: { chatId, type: 'group' },
-            relations: ['chat', 'assignedToRole'],
+            where,
+            relations: ['author', 'chat', 'assignedUser', 'assignedRole'],
             order: { createdAt: 'DESC' }
         })
     }
 
-    // Получение задач, назначенных конкретному участнику в группе
-    async getTasksAssignedTo(chatId: string, assignedToUserId: string): Promise<TaskEntity[]> {
+    // Получение задач, назначенных роли
+    async getTasksByRole(roleId: number): Promise<TaskEntity[]> {
         return await this.taskRepository.find({
-            where: { chatId, type: 'group', assignedToUserId },
-            relations: ['chat', 'assignedToRole'],
+            where: { assignedRoleId: roleId },
+            relations: ['author', 'chat', 'assignedUser', 'assignedRole'],
             order: { createdAt: 'DESC' }
-        })
-    }
-
-    // Получение задачи по ID для конкретного пользователя
-    async getTaskById(id: number, userId: string): Promise<TaskEntity | null> {
-        return await this.taskRepository.findOne({
-            where: { id, userId }
-        })
-    }
-
-    // Получение групповой задачи по ID (без проверки пользователя)
-    async getGroupTaskById(id: number): Promise<TaskEntity | null> {
-        return await this.taskRepository.findOne({
-            where: { id, type: 'group' }
-        })
-    }
-
-    // Получение задачи по читаемому ID
-    async getTaskByReadableId(readableId: string): Promise<TaskEntity | null> {
-        return await this.taskRepository.findOne({
-            where: { readableId }
         })
     }
 
     // Обновление задачи
-    async updateTask(id: number, userId: string, updateData: Partial<{
-        title: string
-        description: string
-        priority: 'high' | 'medium' | 'low'
-        deadline: string | null
-        assignedToUserId?: string
-        assignedToRoleId?: number
-        isCompleted?: boolean
-    }>): Promise<TaskEntity | null> {
-        const task = await this.getTaskById(id, userId)
-        if (!task) return null
+    async updateTask(id: number, data: UpdateTaskDto): Promise<TaskEntity | null> {
+        const task = await this.taskRepository.findOne({ where: { id } })
+        if (!task) {
+            return null
+        }
 
-        Object.assign(task, updateData)
-        return await this.taskRepository.save(task)
-    }
-
-    // Обновление групповой задачи (без проверки пользователя)
-    async updateGroupTask(id: number, updateData: Partial<{
-        title: string
-        description: string
-        priority: 'high' | 'medium' | 'low'
-        deadline: string | null
-        assignedToUserId?: string
-        assignedToRoleId?: number
-        isCompleted?: boolean
-    }>): Promise<TaskEntity | null> {
-        const task = await this.getGroupTaskById(id)
-        if (!task) return null
-
-        Object.assign(task, updateData)
+        // Применяем обновления
+        Object.assign(task, data)
+        
         return await this.taskRepository.save(task)
     }
 
     // Удаление задачи
-    async deleteTask(id: number, userId: string): Promise<boolean> {
-        const result = await this.taskRepository.delete({ id, userId })
-        return (result.affected ?? 0) > 0
+    async deleteTask(id: number): Promise<boolean> {
+        const result = await this.taskRepository.delete(id)
+        return (result.affected || 0) > 0
     }
 
-    // Удаление групповой задачи (без проверки пользователя)
-    async deleteGroupTask(id: number): Promise<boolean> {
-        const result = await this.taskRepository.delete({ id, type: 'group' })
-        return (result.affected ?? 0) > 0
-    }
-
-    // Создание задачи с возможностью назначения на роль
-    async createTaskWithAssignment(taskData: {
-        title: string
-        description: string
-        priority: 'high' | 'medium' | 'low'
-        deadline?: Date
-        userId: string
-        chatId?: string
-        assignedToUserId?: string
-        assignedToRoleId?: number
-    }): Promise<TaskEntity> {
-        const task = this.taskRepository.create({
-            title: taskData.title,
-            description: taskData.description,
-            priority: taskData.priority,
-            deadline: taskData.deadline?.toISOString() || null,
-            userId: taskData.userId,
-            chatId: taskData.chatId,
-            assignedToUserId: taskData.assignedToUserId,
-            assignedToRoleId: taskData.assignedToRoleId,
-            type: taskData.chatId ? 'group' : 'personal'
-        })
-        
-        const savedTask = await this.taskRepository.save(task)
-        
-        // Генерируем читаемый ID
-        if (taskData.chatId) {
-            const chat = await this.chatRepository.findOne({ where: { chatId: taskData.chatId } })
-            const chatTitle = chat?.title || 'Unknown'
-            savedTask.readableId = MessageFormatterService.createTaskId(chatTitle, savedTask.id)
-        } else {
-            savedTask.readableId = `PSN-${savedTask.id}`
+    // Отметить задачу как выполненную/невыполненную
+    async toggleTaskCompletion(id: number): Promise<TaskEntity | null> {
+        const task = await this.taskRepository.findOne({ where: { id } })
+        if (!task) {
+            return null
         }
-        
-        return await this.taskRepository.save(savedTask)
+
+        task.isCompleted = !task.isCompleted
+        return await this.taskRepository.save(task)
     }
 
-    // Получение задач, назначенных на роль
-    async getTasksByRole(chatId: string, roleId: number): Promise<TaskEntity[]> {
+    // Назначить задачу пользователю
+    async assignToUser(taskId: number, userId: string): Promise<TaskEntity | null> {
+        return await this.updateTask(taskId, {
+            assignedUserId: userId,
+            assignedRoleId: null // Очищаем назначение роли
+        })
+    }
+
+    // Назначить задачу роли
+    async assignToRole(taskId: number, roleId: number): Promise<TaskEntity | null> {
+        return await this.updateTask(taskId, {
+            assignedRoleId: roleId,
+            assignedUserId: null // Очищаем назначение пользователю
+        })
+    }
+
+    // Снять назначение задачи
+    async unassignTask(taskId: number): Promise<TaskEntity | null> {
+        return await this.updateTask(taskId, {
+            assignedUserId: null,
+            assignedRoleId: null
+        })
+    }
+
+    // Получение всех задач с фильтрацией
+    async getTasks(filters: {
+        type?: 'personal' | 'group'
+        authorId?: string
+        chatId?: string
+        assignedUserId?: string
+        assignedRoleId?: number
+        isCompleted?: boolean
+        priority?: 'high' | 'medium' | 'low'
+    } = {}): Promise<TaskEntity[]> {
         return await this.taskRepository.find({
-            where: { chatId, type: 'group', assignedToRoleId: roleId },
-            relations: ['chat', 'assignedToRole'],
+            where: filters,
+            relations: ['author', 'chat', 'assignedUser', 'assignedRole'],
             order: { createdAt: 'DESC' }
         })
     }

@@ -3,7 +3,7 @@ import { ChatEntity } from './Chat'
 import { ChatMemberEntity } from './ChatMember'
 import { TaskEntity } from './Task'
 
-// Сущность роли для хранения в базе данных
+// Сущность роли в чате
 @Entity('roles')
 export class RoleEntity {
     @PrimaryGeneratedColumn()
@@ -12,19 +12,22 @@ export class RoleEntity {
     @Column({ type: 'varchar' })
     name!: string // Название роли
 
-    @Column({ type: 'varchar' })
-    chatId!: string // ID беседы (ссылается на chatId из таблицы chats)
+    @Column({ type: 'bigint' })
+    chatId!: string // ID чата
 
     @Column({ type: 'timestamp', default: () => 'CURRENT_TIMESTAMP' })
-    createdAt!: Date // Дата создания роли
+    createdAt!: Date // Дата создания
 
-    @ManyToOne(() => ChatEntity)
-    @JoinColumn({ name: 'chatId', referencedColumnName: 'chatId' })
-    chat?: ChatEntity
+    @Column({ type: 'timestamp', default: () => 'CURRENT_TIMESTAMP', onUpdate: 'CURRENT_TIMESTAMP' })
+    updatedAt!: Date // Дата последнего обновления
 
-    @OneToMany(() => ChatMemberEntity, member => member.role)
+    @ManyToOne(() => ChatEntity, chat => chat.roles, { onDelete: 'CASCADE' })
+    @JoinColumn({ name: 'chatId' })
+    chat!: ChatEntity
+
+    @OneToMany(() => ChatMemberEntity, membership => membership.role)
     members?: ChatMemberEntity[] // Участники с этой ролью
 
-    @OneToMany(() => TaskEntity, task => task.assignedToRole)
-    tasks?: TaskEntity[] // Задачи, назначенные на эту роль
+    @OneToMany(() => TaskEntity, task => task.assignedRole)
+    assignedTasks?: TaskEntity[] // Задачи, назначенные на эту роль
 }

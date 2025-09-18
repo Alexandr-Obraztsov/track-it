@@ -2,28 +2,42 @@ import TelegramBot from 'node-telegram-bot-api'
 import * as fs from 'fs'
 import * as path from 'path'
 import ffmpeg from 'fluent-ffmpeg'
-import { GeminiService, GroupMember } from './geminiService'
+import { GeminiService } from './geminiService'
 import { TaskService } from './taskService'
 import { ChatService } from './chatService'
 import { RoleService } from './roleService'
+import { UserService } from './userService'
 import { MessageFormatterService } from './messageFormatterService'
+import {
+    GeminiUser,
+    GeminiRole,
+    GeminiTask,
+    GeminiChatMember,
+    TaskOperation,
+    RoleOperation,
+    AudioTranscriptionResponse,
+    ViewRequest,
+} from '../types'
 
 // Сервис для обработки голосовых сообщений
 export class VoiceHandlerService {
     private taskService: TaskService
     private chatService: ChatService
     private roleService: RoleService
+    private userService: UserService
     private geminiService?: GeminiService
 
     constructor(
         taskService: TaskService,
         chatService: ChatService,
         roleService: RoleService,
+        userService: UserService,
         geminiService?: GeminiService
     ) {
         this.taskService = taskService
         this.chatService = chatService
         this.roleService = roleService
+        this.userService = userService
         this.geminiService = geminiService
         this.ensureDownloadsDirectory()
     }
@@ -47,34 +61,8 @@ export class VoiceHandlerService {
         })
     }
 
-    // Функция для перевода приоритета на русский
-    private translatePriority(priority: 'high' | 'medium' | 'low'): string {
-        switch (priority) {
-            case 'high': return 'высокий'
-            case 'medium': return 'средний'
-            case 'low': return 'низкий'
-            default: return priority
-        }
-    }
-
-    // Функция для получения эмодзи роли
-    private getRoleIcon(roleName?: string): string {
-        if (!roleName) return '🎭'
-        
-        switch (roleName.toLowerCase()) {
-            case 'admin': 
-            case 'administrator': 
-                return '👑'
-            case 'moderator': 
-            case 'mod': 
-                return '🛡️'
-            default: 
-                return '🎭'
-        }
-    }
-
     // Основной метод обработки голосового сообщения
-    async handleVoiceMessage(bot: TelegramBot, msg: any): Promise<void> {
+    async handleVoiceMessage(bot: TelegramBot, msg: TelegramBot.Message): Promise<void> {
         const chatId = msg.chat.id.toString()
         const userId = msg.from!.id.toString()
         const isGroup = msg.chat.type === 'group' || msg.chat.type === 'supergroup'
@@ -91,8 +79,7 @@ export class VoiceHandlerService {
             // Ставим реакцию думающего смайлика для индикации обработки
             try {
                 await bot.setMessageReaction(chatId, msg.message_id, {
-                    reaction: [{ type: 'emoji', emoji: '🤔' as any }],
-                    is_big: false
+                    reaction: [{ type: 'emoji', emoji: '🤔' }],
                 })
             } catch (reactionError) {
                 console.warn('Не удалось поставить реакцию:', reactionError)
@@ -134,41 +121,157 @@ export class VoiceHandlerService {
                 throw new Error(`MP3 file not created at ${mp3Path}`)
             }
 
-            // Получаем контекст для Gemini
-            let members: GroupMember[] = []
-            let existingTasks: any[] = []
-            let existingRoles: any[] = []
-            let userRole: string | null = null
+            // Получаем контекст для Gemini (полноценная схема БД)
+            let users: GeminiUser[] = []
+            let roles: GeminiRole[] = []
+            let tasks: GeminiTask[] = []
+            let members: GeminiChatMember[] = []
+            let currentUserRole: GeminiRole | null = null
+            
+            // Создаем объект автора запроса
+            const author: GeminiUser = {
+                telegramId: userId,
+                username: msg.from?.username || userId,
+                firstName: msg.from?.first_name || 'Неизвестный',
+                lastName: msg.from?.last_name
+            }
             
             if (isGroup) {
                 try {
+                    // Обеспечиваем существование пользователя и чата
+                    await this.userService.createOrGetUser({
+                        telegramId: userId,
+                        firstName: msg.from?.first_name || 'Неизвестный',
+                        lastName: msg.from?.last_name,
+                        username: msg.from?.username || userId
+                    })
+                    
+                    await this.chatService.createOrGetChat({
+                        telegramId: chatId,
+                        title: msg.chat.title || 'Неизвестный чат',
+                        username: msg.chat.username
+                    })
+                    
+                    // Получаем всех участников с полной информацией
                     const chatMembers = await this.chatService.getChatMembers(chatId)
-                    members = chatMembers.map(member => ({
-                        name: member.firstName || member.username || 'Неизвестный',
-                        username: member.username,
-                        userId: member.userId
+                    
+                    // Формируем списки для Gemini
+                    users = chatMembers.map(member => ({
+                        telegramId: member.user?.telegramId || member.userId,
+                        username: member.user?.username || '',
+                        firstName: member.user?.firstName || 'Неизвестный',
+                        lastName: member.user?.lastName
                     }))
                     
-                    existingTasks = await this.taskService.getTasksByChat(chatId)
-                    existingRoles = await this.chatService.getChatRolesWithMembers(chatId)
+                    members = chatMembers.map(member => ({
+                        userId: member.userId,
+                        username: member.user?.username || '',
+                        firstName: member.user?.firstName || 'Неизвестный',
+                        lastName: member.user?.lastName,
+                        roleId: member.roleId,
+                        roleName: member.role?.name
+                    }))
                     
-                    const currentMember = await this.chatService.getMemberWithRole(chatId, userId)
-                    userRole = currentMember?.role?.name || null
+                    // Получаем все роли с участниками
+                    const chatRoles = await this.roleService.getChatRoles(chatId)
+                    roles = chatRoles.map(role => ({
+                        id: role.id,
+                        name: role.name,
+                        chatId: role.chatId,
+                        memberIds: role.members?.map(m => m.userId) || []
+                    }))
+                    
+                    // Получаем все задачи с полной информацией
+                    const groupTasks = await this.taskService.getGroupTasks(chatId)
+                    tasks = groupTasks.map(task => ({
+                        id: task.id,
+                        readableId: task.readableId,
+                        title: task.title,
+                        description: task.description,
+                        priority: task.priority,
+                        deadline: task.deadline?.toISOString() || null,
+                        type: task.type,
+                        authorId: task.authorId,
+                        chatId: task.chatId,
+                        assignedUserId: task.assignedUserId,
+                        assignedRoleId: task.assignedRoleId,
+                        isCompleted: task.isCompleted
+                    }))
+                    
+                    // Определяем роль текущего пользователя
+                    const currentMemberRole = await this.chatService.getMemberRole(chatId, userId)
+                    if (currentMemberRole) {
+                        currentUserRole = {
+                            id: currentMemberRole.id,
+                            name: currentMemberRole.name,
+                            chatId: currentMemberRole.chatId,
+                            memberIds: currentMemberRole.members?.map(m => m.userId) || []
+                        }
+                    }
                 } catch (error) {
                     console.error('Ошибка получения контекста группы:', error)
                 }
             } else {
                 try {
-                    existingTasks = await this.taskService.getPersonalTasks(userId)
+                    // Обеспечиваем существование пользователя
+                    const user = await this.userService.createOrGetUser({
+                        telegramId: userId,
+                        firstName: msg.from?.first_name || 'Неизвестный',
+                        lastName: msg.from?.last_name,
+                        username: msg.from?.username || userId
+                    })
+                    
+                    users = [{
+                        telegramId: user.telegramId,
+                        username: user.username,
+                        firstName: user.firstName,
+                        lastName: user.lastName
+                    }]
+                    
+                    // Получаем личные задачи
+                    const personalTasks = await this.taskService.getPersonalTasks(userId)
+                    tasks = personalTasks.map(task => ({
+                        id: task.id,
+                        readableId: task.readableId,
+                        title: task.title,
+                        description: task.description,
+                        priority: task.priority,
+                        deadline: task.deadline?.toISOString() || null,
+                        type: task.type,
+                        authorId: task.authorId,
+                        chatId: task.chatId,
+                        assignedUserId: task.assignedUserId,
+                        assignedRoleId: task.assignedRoleId,
+                        isCompleted: task.isCompleted
+                    }))
                 } catch (error) {
                     console.error('Ошибка получения персональных задач:', error)
                 }
             }
 
-            // Обрабатываем с помощью Gemini
-            const geminiResponse = this.geminiService ? 
-                await this.geminiService.processAudio(mp3Path, members, existingTasks, userRole, existingRoles) : 
-                'Gemini AI is not configured'
+
+            const geminiResult = this.geminiService ? 
+                await this.geminiService.processAudio(
+                    mp3Path,
+                    author,
+                    users,
+                    tasks,
+                    roles
+                ) : 
+                null
+
+            // Проверяем что получили валидный ответ
+            if (!geminiResult) {
+                await bot.sendMessage(chatId, 'Ошибка: сервис Gemini недоступен')
+                return
+            }
+
+            if (typeof geminiResult === 'string') {
+                await bot.sendMessage(chatId, geminiResult)
+                return
+            }
+
+            const geminiResponse = geminiResult as AudioTranscriptionResponse
 
             // Выводим сырой ответ нейронки в среде разработки
             if (process.env.NODE_ENV === 'development') {
@@ -178,18 +281,13 @@ export class VoiceHandlerService {
             }
 
             // Формируем ответ пользователю
-            let formattedResponse: string
-            if (typeof geminiResponse === 'string') {
-                formattedResponse = geminiResponse
-            } else {
-                formattedResponse = await this.processGeminiResponse(
-                    geminiResponse, 
-                    chatId, 
-                    userId, 
-                    isGroup, 
-                    members
-                )
-            }
+            const formattedResponse = await this.processGeminiResponse(
+                geminiResponse, 
+                chatId, 
+                userId, 
+                isGroup, 
+                members
+            )
 
             // Отправляем ответ пользователю
             bot.sendMessage(chatId, formattedResponse)
@@ -197,7 +295,7 @@ export class VoiceHandlerService {
             // Ставим реакцию галочки после успешной обработки
             try {
                 await bot.setMessageReaction(chatId, msg.message_id, {
-                    reaction: [{ type: 'emoji', emoji: '✅' as any }],
+                    reaction: [{ type: 'emoji', emoji: '🍓' }],
                     is_big: false
                 })
             } catch (reactionError) {
@@ -214,7 +312,7 @@ export class VoiceHandlerService {
             // Ставим реакцию ошибки при неудачной обработке
             try {
                 await bot.setMessageReaction(chatId, msg.message_id, {
-                    reaction: [{ type: 'emoji', emoji: '❌' as any }],
+                    reaction: [{ type: 'emoji', emoji: '💔' }],
                     is_big: false
                 })
             } catch (reactionError) {
@@ -227,11 +325,11 @@ export class VoiceHandlerService {
 
     // Обработка ответа от Gemini
     private async processGeminiResponse(
-        geminiResponse: any,
+        geminiResponse: AudioTranscriptionResponse,
         chatId: string,
         userId: string,
         isGroup: boolean,
-        members: GroupMember[]
+        members: GeminiChatMember[]
     ): Promise<string> {
         let formattedResponse = ''
         
@@ -261,52 +359,29 @@ export class VoiceHandlerService {
             
             for (const task of geminiResponse.tasks) {
                 try {
-                    let assignedToUserId: string | undefined = undefined
-                    let assignedToRoleId: number | undefined = undefined
+                    let assignedUserId: string | undefined = undefined
+                    let assignedRoleId: number | undefined = undefined
 
-                    // Определяем назначение задачи
-                    if (task.assignedToUser && isGroup) {
-                        const chatMembers = await this.chatService.getChatMembers(chatId)
-                        const assignedMember = chatMembers.find(member => 
-                            (member.firstName && member.firstName.toLowerCase().includes(task.assignedToUser!.toLowerCase())) ||
-                            (member.username && member.username.toLowerCase().includes(task.assignedToUser!.toLowerCase()))
-                        )
-                        if (assignedMember) {
-                            assignedToUserId = assignedMember.userId
-                        }
+                    // Используем ID напрямую из ответа Gemini
+                    if (task.assignedUserId) {
+                        assignedUserId = task.assignedUserId
                     }
 
-                    if (task.assignedToRole && createdRoles[task.assignedToRole]) {
-                        assignedToRoleId = createdRoles[task.assignedToRole]
+                    if (task.assignedRoleId) {
+                        assignedRoleId = task.assignedRoleId
                     }
 
-                    let createdTask: any
-
-                    if (isGroup) {
-                        createdTask = await this.taskService.createTaskWithAssignment({
-                            title: task.title,
-                            description: task.description,
-                            priority: task.priority,
-                            deadline: task.deadline ? new Date(task.deadline) : undefined,
-                            userId: userId,
-                            chatId: chatId,
-                            assignedToUserId,
-                            assignedToRoleId
-                        })
-                    } else {
-                        createdTask = await this.taskService.createPersonalTask({
-                            ...task,
-                            userId: userId
-                        })
-                    }
-
-                    // Получаем информацию о создателе задачи
-                    let creatorUsername: string | undefined
-                    if (isGroup) {
-                        const chatMembers = await this.chatService.getChatMembers(chatId)
-                        const creator = chatMembers.find(member => member.userId === userId)
-                        creatorUsername = creator?.username
-                    }
+                    // Создаем задачу через новый API
+                    const createdTask = await this.taskService.createTask({
+                        title: task.title,
+                        description: task.description,
+                        priority: task.priority,
+                        deadline: task.deadline ? new Date(task.deadline) : undefined,
+                        authorId: userId,
+                        chatId: isGroup ? chatId : undefined,
+                        assignedUserId,
+                        assignedRoleId
+                    })
 
                     // Используем полное форматирование задачи
                     formattedResponse += MessageFormatterService.formatTaskCreation(
@@ -318,10 +393,7 @@ export class VoiceHandlerService {
                     formattedResponse += `❌ Ошибка создания задачи "${task.title}"\n`
                 }
             }
-        } else {
-            formattedResponse += 'Новых задач не найдено\n'
         }
-
         // Обрабатываем операции с задачами
         if (geminiResponse.taskOperations && geminiResponse.taskOperations.length > 0) {
             formattedResponse += '\n🔄 Операции с задачами:\n'
@@ -336,38 +408,29 @@ export class VoiceHandlerService {
 
         // Обрабатываем запросы на просмотр информации
         if (geminiResponse.viewRequests && geminiResponse.viewRequests.length > 0) {
-            formattedResponse += '\n📊 Информация:\n'
-            formattedResponse += await this.processViewRequests(geminiResponse.viewRequests, chatId, userId, isGroup)
+            formattedResponse += await this.processViewRequests(geminiResponse.viewRequests, chatId, userId, isGroup) + '\n'
         }
 
         return formattedResponse
     }
 
     // Обработка операций с задачами
-    private async processTaskOperations(operations: any[], chatId: string, userId: string, isGroup: boolean): Promise<string> {
+    private async processTaskOperations(operations: TaskOperation[], chatId: string, userId: string, isGroup: boolean): Promise<string> {
         let response = ''
         
         for (const operation of operations) {
             try {
-                // Пытаемся найти задачу по readableId или по обычному ID
-                let task: any = null
-                const taskIdStr = operation.taskId.toString()
+                // Получаем задачу по ID (теперь числовой)
+                const task = await this.taskService.getTaskById(operation.taskId)
                 
-                // Сначала ищем по readableId
-                task = await this.taskService.getTaskByReadableId(taskIdStr)
-                
-                // Если не нашли по readableId, пытаемся как числовой ID
                 if (!task) {
-                    const numericId = parseInt(taskIdStr)
-                    if (!isNaN(numericId)) {
-                        task = isGroup ? 
-                            await this.taskService.getGroupTaskById(numericId) :
-                            await this.taskService.getTaskById(numericId, userId)
-                    }
+                    response += `❌ Задача #${operation.taskId} не найдена\n`
+                    continue
                 }
                 
-                if (!task) {
-                    response += `❌ Задача ${taskIdStr} не найдена\n`
+                // Проверяем права доступа (только автор может модифицировать)
+                if (task.authorId !== userId) {
+                    response += `❌ Нет прав для изменения задачи ${task.readableId || `#${task.id}`}\n`
                     continue
                 }
                 
@@ -375,21 +438,14 @@ export class VoiceHandlerService {
                 
                 switch (operation.operation) {
                     case 'delete':
-                        const deleteSuccess = isGroup ? 
-                            await this.taskService.deleteGroupTask(task.id) :
-                            await this.taskService.deleteTask(task.id, userId)
-                        
+                        const deleteSuccess = await this.taskService.deleteTask(task.id)
                         response += deleteSuccess ? 
                             `✅ Задача ${taskDisplayId} удалена\n` : 
                             `❌ Не удалось удалить задачу ${taskDisplayId}\n`
                         break
 
                     case 'complete':
-                        const updateData = { isCompleted: true }
-                        const completeTask = isGroup ?
-                            await this.taskService.updateGroupTask(task.id, updateData) :
-                            await this.taskService.updateTask(task.id, userId, updateData)
-                        
+                        const completeTask = await this.taskService.updateTask(task.id, { isCompleted: true })
                         response += completeTask ? 
                             `✅ Задача ${taskDisplayId} отмечена как выполненная\n` : 
                             `❌ Не удалось отметить задачу ${taskDisplayId} как выполненную\n`
@@ -397,18 +453,12 @@ export class VoiceHandlerService {
 
                     case 'update':
                         if (operation.updateData) {
-                            const updateData: any = {}
-                            
-                            if (operation.updateData.title) updateData.title = operation.updateData.title
-                            if (operation.updateData.description) updateData.description = operation.updateData.description
-                            if (operation.updateData.priority) updateData.priority = operation.updateData.priority
-                            if (operation.updateData.deadline) updateData.deadline = operation.updateData.deadline
-                            if (operation.updateData.isCompleted !== undefined) updateData.isCompleted = operation.updateData.isCompleted
+                            const updateData = {
+                                ...operation.updateData,
+                                deadline: operation.updateData.deadline ? new Date(operation.updateData.deadline) : undefined
+                            }
 
-                            const updatedTask = isGroup ?
-                                await this.taskService.updateGroupTask(task.id, updateData) :
-                                await this.taskService.updateTask(task.id, userId, updateData)
-                            
+                            const updatedTask = await this.taskService.updateTask(task.id, updateData)
                             response += updatedTask ? 
                                 `✅ Задача ${taskDisplayId} обновлена\n` : 
                                 `❌ Не удалось обновить задачу ${taskDisplayId}\n`
@@ -417,7 +467,7 @@ export class VoiceHandlerService {
                 }
             } catch (operationError) {
                 console.error('Ошибка при выполнении операции с задачей:', operationError)
-                response += `❌ Ошибка при выполнении операции с задачей ${operation.taskId}\n`
+                response += `❌ Ошибка при выполнении операции с задачей #${operation.taskId}\n`
             }
         }
         
@@ -425,88 +475,69 @@ export class VoiceHandlerService {
     }
 
     // Обработка операций с ролями
-    private async processRoleOperations(operations: any[], chatId: string, members: GroupMember[]): Promise<string> {
+    private async processRoleOperations(operations: RoleOperation[], chatId: string, members: GeminiChatMember[]): Promise<string> {
         let response = ''
         
         for (const operation of operations) {
             try {
                 switch (operation.operation) {
                     case 'create':
-                        try {
-                            await this.roleService.createRole({
-                                name: operation.roleName,
-                                chatId: chatId
-                            })
-                            response += `✅ Роль "${operation.roleName}" создана\n`
-                        } catch (error) {
-                            response += `❌ Ошибка создания роли "${operation.roleName}"\n`
+                        if (operation.roleName) {
+                            try {
+                                await this.roleService.createRole({
+                                    name: operation.roleName,
+                                    chatId: chatId
+                                })
+                                response += `✅ Роль "${operation.roleName}" создана\n`
+                            } catch (error) {
+                                response += `❌ Ошибка создания роли "${operation.roleName}"\n`
+                            }
                         }
                         break
 
                     case 'delete':
-                        const deleteSuccess = await this.roleService.deleteRoleByName(chatId, operation.roleName)
-                        response += deleteSuccess ? 
-                            `✅ Роль "${operation.roleName}" удалена\n` : 
-                            `❌ Не удалось удалить роль "${operation.roleName}"\n`
+                        if (operation.roleId) {
+                            const deleteSuccess = await this.roleService.deleteRole(operation.roleId)
+                            response += deleteSuccess ? 
+                                `✅ Роль удалена\n` : 
+                                `❌ Не удалось удалить роль\n`
+                        }
                         break
 
                     case 'update':
-                        if (operation.newRoleName) {
-                            const updatedRole = await this.roleService.updateRoleByName(
-                                chatId, 
-                                operation.roleName, 
-                                operation.newRoleName
-                            )
+                        if (operation.roleId && operation.newRoleName) {
+                            const updatedRole = await this.roleService.updateRole(operation.roleId, { name: operation.newRoleName })
                             response += updatedRole ? 
-                                `✅ Роль "${operation.roleName}" переименована в "${operation.newRoleName}"\n` : 
-                                `❌ Не удалось переименовать роль "${operation.roleName}"\n`
+                                `✅ Роль переименована в "${operation.newRoleName}"\n` : 
+                                `❌ Не удалось переименовать роль\n`
                         }
                         break
 
                     case 'assign':
-                        if (operation.targetUser) {
-                            const targetMember = members.find(member => 
-                                (member.name && member.name.toLowerCase().includes(operation.targetUser!.toLowerCase())) ||
-                                (member.username && member.username.toLowerCase().includes(operation.targetUser!.toLowerCase()))
-                            )
-                            
-                            if (targetMember && targetMember.username) {
-                                const role = await this.roleService.getRoleByName(chatId, operation.roleName)
-                                if (role) {
-                                    const success = await this.chatService.assignRoleToUser(chatId, targetMember.userId, role.id)
-                                    response += success ? 
-                                        `✅ Роль "${operation.roleName}" назначена пользователю ${operation.targetUser}\n` : 
-                                        `❌ Не удалось назначить роль "${operation.roleName}" пользователю ${operation.targetUser}\n`
-                                } else {
-                                    response += `❌ Роль "${operation.roleName}" не найдена\n`
-                                }
-                            } else {
-                                response += `❌ Пользователь ${operation.targetUser} не найден\n`
-                            }
+                        if (operation.roleId && operation.targetUserId) {
+                            const success = await this.roleService.assignRoleToMember(chatId, operation.targetUserId, operation.roleId)
+                            const targetUser = await this.userService.getUserById(operation.targetUserId)
+                            if (!targetUser) break
+                            response += success ? 
+                                `✅ Роль назначена пользователю ${MessageFormatterService.getTag(targetUser)}\n` : 
+                                `❌ Не удалось назначить роль пользователю ${MessageFormatterService.getTag(targetUser)}\n`
                         }
                         break
 
                     case 'unassign':
-                        if (operation.targetUser) {
-                            const targetMember = members.find(member => 
-                                (member.name && member.name.toLowerCase().includes(operation.targetUser!.toLowerCase())) ||
-                                (member.username && member.username.toLowerCase().includes(operation.targetUser!.toLowerCase()))
-                            )
-                            
-                            if (targetMember && targetMember.username) {
-                                const success = await this.chatService.removeRoleFromUser(chatId, targetMember.userId)
-                                response += success ? 
-                                    `✅ Роль снята с пользователя ${operation.targetUser}\n` : 
-                                    `❌ Не удалось снять роль с пользователя ${operation.targetUser}\n`
-                            } else {
-                                response += `❌ Пользователь ${operation.targetUser} не найден\n`
-                            }
+                        if (operation.targetUserId) {
+                            const success = await this.roleService.removeRoleFromMember(chatId, operation.targetUserId)
+                            const targetUser = members.find(m => m.userId === operation.targetUserId)
+                            const userName = targetUser ? (targetUser.firstName || targetUser.username) : operation.targetUserId
+                            response += success ? 
+                                `✅ Роль снята с пользователя ${userName}\n` : 
+                                `❌ Не удалось снять роль с пользователя ${userName}\n`
                         }
                         break
                 }
             } catch (operationError) {
                 console.error('Ошибка при выполнении операции с ролью:', operationError)
-                response += `❌ Ошибка при выполнении операции с ролью "${operation.roleName}"\n`
+                response += `❌ Ошибка при выполнении операции с ролью\n`
             }
         }
         
@@ -514,7 +545,7 @@ export class VoiceHandlerService {
     }
 
     // Обработка запросов на просмотр информации
-    private async processViewRequests(requests: any[], chatId: string, userId: string, isGroup: boolean): Promise<string> {
+    private async processViewRequests(requests: ViewRequest[], chatId: string, userId: string, isGroup: boolean): Promise<string> {
         let response = ''
         
         for (const request of requests) {
@@ -522,7 +553,7 @@ export class VoiceHandlerService {
                 switch (request.type) {
                     case 'tasks':
                         if (isGroup) {
-                            const tasks = await this.taskService.getTasksByChat(chatId)
+                            const tasks = await this.taskService.getGroupTasks(chatId)
                             response += MessageFormatterService.formatTasksList(tasks) + '\n'
                         } else {
                             const tasks = await this.taskService.getPersonalTasks(userId)
@@ -541,8 +572,8 @@ export class VoiceHandlerService {
 
                     case 'roles':
                         if (isGroup) {
-                            const rolesWithMembers = await this.chatService.getChatRolesWithMembers(chatId)
-                            response += MessageFormatterService.formatRolesList(rolesWithMembers) + '\n'
+                            const roles = await this.roleService.getChatRoles(chatId)
+                            response += MessageFormatterService.formatRolesList(roles) + '\n'
                         } else {
                             response += '❌ Команда показа ролей доступна только в группах\n'
                         }
@@ -550,7 +581,7 @@ export class VoiceHandlerService {
 
                     case 'userTasks':
                         if (isGroup) {
-                            const tasks = await this.taskService.getTasksAssignedTo(chatId, userId)
+                            const tasks = await this.taskService.getAssignedTasks(userId, chatId)
                             response += MessageFormatterService.formatTasksList(tasks) + '\n'
                         } else {
                             const tasks = await this.taskService.getPersonalTasks(userId)

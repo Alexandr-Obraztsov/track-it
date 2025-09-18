@@ -1,15 +1,18 @@
 import TelegramBot = require('node-telegram-bot-api')
 import { TaskService } from './taskService'
 import { ChatService } from './chatService'
+import { UserService } from './userService'
 
 // Сервис для обработки callback query
 export class CallbackHandlerService {
     private taskService: TaskService
     private chatService: ChatService
+    private userService: UserService
 
-    constructor(taskService: TaskService, chatService: ChatService) {
+    constructor(taskService: TaskService, chatService: ChatService, userService: UserService) {
         this.taskService = taskService
         this.chatService = chatService
+        this.userService = userService
     }
 
     // Обработка callback query
@@ -53,7 +56,7 @@ export class CallbackHandlerService {
 
         try {
             // Проверяем, зарегистрирован ли уже пользователь
-            const existingMember = await this.chatService.getMemberById(chatId, userId)
+            const existingMember = await this.chatService.isMember(chatId, userId)
             if (existingMember) {
                 bot.answerCallbackQuery(callbackQuery.id, { 
                     text: `✅ ${user.first_name || user.username}, вы уже зарегистрированы!\n\n🎙️ Отправьте голосовое сообщение для управления задачами.`, 
@@ -63,12 +66,16 @@ export class CallbackHandlerService {
             }
 
             // Автоматически регистрируем пользователя
-            const member = await this.chatService.registerMember(
+            const member = await this.userService.createOrGetUser({
+                telegramId: userId,
+                username: user.username || '',
+                firstName: user.first_name || '',
+                lastName: user.last_name || ''
+            })
+
+            await this.chatService.addMember(
                 chatId,
                 userId,
-                user.username || '',
-                user.first_name || '',
-                user.last_name || ''
             )
 
             bot.answerCallbackQuery(callbackQuery.id, { 
