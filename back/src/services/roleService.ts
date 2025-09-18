@@ -105,10 +105,14 @@ export class RoleService {
     // Удаление роли
     async deleteRole(id: number): Promise<boolean> {
         // Сначала снимаем роль со всех участников
-        await this.memberRepository.update(
-            { roleId: id },
-            { roleId: undefined }
-        )
+        const membersWithRole = await this.memberRepository.find({
+            where: { roleId: id }
+        })
+        
+        for (const member of membersWithRole) {
+            member.roleId = undefined
+            await this.memberRepository.save(member)
+        }
 
         const result = await this.roleRepository.delete(id)
         return (result.affected || 0) > 0
