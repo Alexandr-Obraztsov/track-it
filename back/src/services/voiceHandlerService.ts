@@ -428,13 +428,7 @@ export class VoiceHandlerService {
                     continue
                 }
                 
-                // Проверяем права доступа (только автор может модифицировать)
-                if (task.authorId !== userId) {
-                    response += `❌ Нет прав для изменения задачи ${task.readableId || `#${task.id}`}\n`
-                    continue
-                }
-                
-                const taskDisplayId = task.readableId || `#${task.id}`
+                const taskDisplayId = task.readableId
                 
                 switch (operation.operation) {
                     case 'delete':
@@ -497,9 +491,10 @@ export class VoiceHandlerService {
 
                     case 'delete':
                         if (operation.roleId) {
+                            const role = await this.roleService.getRoleById(operation.roleId)
                             const deleteSuccess = await this.roleService.deleteRole(operation.roleId)
                             response += deleteSuccess ? 
-                                `✅ Роль удалена\n` : 
+                                `✅ Роль "${role?.name}" удалена\n` : 
                                 `❌ Не удалось удалить роль\n`
                         }
                         break
