@@ -37,30 +37,6 @@ export class MessageFormatterService {
 		}
 	}
 
-	// Форматирование результата создания задачи
-	static formatTaskCreation(task: TaskEntity): string {
-		let result = `✅ Создана задача ${task.readableId}\n\n`
-		result += `📝 Название: ${task.title}\n`
-		result += `📋 Описание: ${task.description}\n`
-		result += `🔥 Приоритет: ${this.translatePriority(task.priority)}\n`
-
-		result += `👤 Создатель: ${this.getTag(task.author)}\n`
-
-		if (task.deadline) {
-			result += `⏰ Срок выполнения: ${task.deadline}\n`
-		}
-
-		if (task.assignedUser) {
-			result += `✨ Назначена на: ${this.getTag(task.assignedUser)}\n`
-		} else if (task.assignedRole) {
-			result += `👥 Назначена на роль: ${task.assignedRole.name}\n`
-		} else {
-			result += `👥 Исполнитель: Не назначен\n`
-		}
-
-		return result
-	}
-
 	// Форматирование результата операции с задачей
 	static formatTaskOperation(operation: TaskOperation, success: boolean, task: TaskEntity): string {
 		const taskTitle = `${task.readableId}: ${task.title}`
@@ -130,10 +106,10 @@ export class MessageFormatterService {
 			return '👥 Участники группы отсутствуют'
 		}
 
-		let response = '👥 Участники группы:\n'
+		let response = '\n👥 Участники группы:\n'
 		members.forEach((member, index) => {
 			const memberTag = this.getTag(member.user)
-			response += `\n${index + 1}. ${member.user.firstName} ${member.user.lastName || ''} (${memberTag}) - ${member.role?.name || 'без роли'}`
+			response += `${index + 1}. ${member.user.firstName} ${member.user.lastName || ''} (${memberTag}) - ${member.role?.name || 'без роли'}\n`
 		})
 		return response
 	}
@@ -143,9 +119,9 @@ export class MessageFormatterService {
 			return `📋 Задач пока нет`
 		}
 
-		let response = `📋 Список задач:\n`
+		let response = `\n📋 Список задач:\n\n`
 		tasks.forEach(task => {
-			response += `\n${this.formatTask(task)}`
+			response += `${this.formatTask(task)}\n`
 		})
 		return response
 	}
@@ -156,22 +132,22 @@ export class MessageFormatterService {
 			return '🎭 Роли в группе отсутствуют'
 		}
 
-		let response = '🎭 Роли в группе:\n'
+		let response = '\n🎭 Роли в группе:\n'
 		roles.forEach((role, index) => {
-			response += `\n${index + 1}. ${role.name}`
+			response += `${index + 1}. ${role.name}\n`
 		})
 		return response
 	}
 
 	static formatTask(task: TaskEntity): string {
-		let result = `🏎️ Тег: ${task.readableId}\n`
+		let result = `${task.readableId}\n`
 		result += `📝 Название: ${task.title}\n`
 		result += `📋 Описание: ${task.description}\n`
 		result += `🔥 Приоритет: ${this.translatePriority(task.priority)}\n`
 		result += `✨ Статус: ${task.isCompleted ? 'Выполнена' : 'Активна'}\n`
 
 		if (task.deadline) {
-			result += `⏰ Срок выполнения: ${task.deadline}\n`
+			result += `⏰ Дедлайн: ${new Date(task.deadline).toLocaleString('ru-RU')}\n`
 		}
 
 		if (task.assignedUser) {

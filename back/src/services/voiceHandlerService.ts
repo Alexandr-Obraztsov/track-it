@@ -189,7 +189,7 @@ export class VoiceHandlerService {
 						title: task.title,
 						description: task.description,
 						priority: task.priority,
-						deadline: task.deadline?.toISOString() || null,
+						deadline: task.deadline ? String(task.deadline) : null,
 						type: task.type,
 						authorId: task.authorId,
 						chatId: task.chatId,
@@ -238,7 +238,7 @@ export class VoiceHandlerService {
 						title: task.title,
 						description: task.description,
 						priority: task.priority,
-						deadline: task.deadline?.toISOString() || null,
+						deadline: task.deadline ? String(task.deadline) : null,
 						type: task.type,
 						authorId: task.authorId,
 						chatId: task.chatId,
@@ -267,13 +267,6 @@ export class VoiceHandlerService {
 			}
 
 			const geminiResponse = geminiResult as AudioTranscriptionResponse
-
-			// Выводим сырой ответ нейронки в среде разработки
-			if (process.env.NODE_ENV === 'development') {
-				console.log('=== RAW GEMINI RESPONSE ===')
-				console.log(JSON.stringify(geminiResponse, null, 2))
-				console.log('=== END GEMINI RESPONSE ===')
-			}
 
 			// Формируем ответ пользователю
 			const formattedResponse = await this.processGeminiResponse(geminiResponse, chatId, userId, isGroup, members)
@@ -352,7 +345,7 @@ export class VoiceHandlerService {
 
 		// Создаем задачи
 		if (geminiResponse.tasks && geminiResponse.tasks.length > 0) {
-			formattedResponse += 'Найденные задачи:\n'
+			formattedResponse += 'Добавлены задачи:\n'
 
 			for (const task of geminiResponse.tasks) {
 				try {
@@ -381,7 +374,7 @@ export class VoiceHandlerService {
 					})
 
 					// Используем полное форматирование задачи
-					formattedResponse += MessageFormatterService.formatTaskCreation(createdTask) + '\n'
+					formattedResponse += MessageFormatterService.formatTask(createdTask) + '\n'
 				} catch (dbError) {
 					console.error('Ошибка сохранения задачи в БД:', dbError)
 					formattedResponse += `❌ Ошибка создания задачи "${task.title}"\n`

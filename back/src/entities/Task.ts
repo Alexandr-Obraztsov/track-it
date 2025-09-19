@@ -28,8 +28,8 @@ export class TaskEntity {
 	})
 	priority!: 'high' | 'medium' | 'low' // Приоритет задачи
 
-	@Column({ type: 'date', nullable: true })
-	deadline?: Date // Срок выполнения
+	@Column({ type: 'timestamp', nullable: true })
+	deadline?: Date // Срок выполнения с датой и временем
 
 	@Column({ type: 'boolean', default: false })
 	isCompleted!: boolean // Статус выполнения

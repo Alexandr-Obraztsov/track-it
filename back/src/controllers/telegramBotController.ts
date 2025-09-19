@@ -82,53 +82,24 @@ class TelegramBotController {
 			}
 		})
 
+		// Обработка команды /check
+		this.bot.onText(/\/check/, async msg => {
+			try {
+				await this.handleCheckCommand(this.bot!, msg)
+			} catch (error) {
+				console.error('Ошибка в обработке сообщения:', error)
+			}
+		})
+
 		// Обработка голосовых сообщений
 		this.bot.on('voice', async msg => {
 			try {
 				const isMentioned = await BotMentionUtils.isBotMentioned(this.bot!, msg)
-				// Проверяем упоминание бота в групповых чатах
-				if (!isMentioned) {
-					console.log(`Голосовое сообщение проигнорировано - бот не упомянут`)
-					return
-				}
+				if (!isMentioned) return
 
 				await this.voiceHandler.handleVoiceMessage(this.bot!, msg)
 			} catch (error) {
 				console.error('Ошибка в обработке голосового сообщения:', error)
-			}
-		})
-
-		this.bot.on('message', async msg => {
-			try {
-				const isMentioned = await BotMentionUtils.isBotMentioned(this.bot!, msg)
-				// Проверяем упоминание бота в групповых чатах
-				if (!isMentioned) {
-					console.log(`Сообщение проигнорировано - бот не упомянут`)
-					return
-				}
-
-				if (msg.reply_to_message && msg.reply_to_message.voice)
-					await this.voiceHandler.handleVoiceMessage(this.bot!, msg.reply_to_message)
-				else
-					this.bot!.sendMessage(msg.chat.id, 'Не нашел голосовое сообщение 🤷‍♂️', {
-						reply_to_message_id: msg.message_id,
-					})
-			} catch (error) {
-				console.error('Ошибка в обработке сообщения:', error)
-			}
-		})
-
-		// Обработка команды /check
-		this.bot.onText(/\/check/, async msg => {
-			try {
-				if (msg.reply_to_message && msg.reply_to_message.voice)
-					await this.voiceHandler.handleVoiceMessage(this.bot!, msg.reply_to_message)
-				else
-					this.bot!.sendMessage(msg.chat.id, 'Не нашел голосовое сообщение 🤷‍♂️', {
-						reply_to_message_id: msg.message_id,
-					})
-			} catch (error) {
-				console.error('Ошибка в обработке сообщения:', error)
 			}
 		})
 
@@ -220,6 +191,15 @@ class TelegramBotController {
 		const isGroup = msg.chat.type === 'group' || msg.chat.type === 'supergroup'
 		const messageText = msg.text || msg.caption || '[системное сообщение]'
 
+		try {
+			const isMentioned = await BotMentionUtils.isBotMentioned(this.bot!, msg)
+			// Если бот упомянут и сообщение является ответом на голосовое сообщение
+			if (isMentioned && msg.reply_to_message && msg.reply_to_message.voice)
+				await this.voiceHandler.handleVoiceMessage(this.bot!, msg.reply_to_message)
+		} catch (error) {
+			console.error('Ошибка в обработке сообщения:', error)
+		}
+
 		// Автоматическая регистрация в групповых чатах
 		if (isGroup && user && !user.is_bot) {
 			console.log(`Received message: ${messageText} from ${user?.username!}`)
@@ -269,6 +249,14 @@ class TelegramBotController {
 		}
 	}
 
+	private async handleCheckCommand(bot: TelegramBot, msg: TelegramBot.Message): Promise<void> {
+		if (msg.reply_to_message && msg.reply_to_message.voice)
+			await this.voiceHandler.handleVoiceMessage(this.bot!, msg.reply_to_message)
+		else
+			this.bot!.sendMessage(msg.chat.id, 'Не нашел голосовое сообщение 🤷‍♂️', {
+				reply_to_message_id: msg.message_id,
+			})
+	}
 	// Обработка изменения статуса бота в чате (добавление/удаление)
 	private async handleMyChatMember(bot: TelegramBot, msg: TelegramBot.ChatMemberUpdated): Promise<void> {
 		const chat = msg.chat
@@ -313,9 +301,6 @@ class TelegramBotController {
 			title: chat.title || 'Unknown Group',
 			username: chat.username || '',
 		})
-
-		// Пытаемся зарегистрировать существующих участников, если есть доступ к сообщениям
-		await this.registerExistingMembers(bot, chat.id.toString())
 
 		// Отправляем приветственное сообщение
 		const welcomeMessage =
@@ -384,37 +369,6 @@ class TelegramBotController {
 		} catch (error) {
 			console.error('Ошибка при обработке получения прав администратора:', error)
 			bot.sendMessage(chatId, '🎉 Спасибо за права администратора!')
-		}
-	}
-
-	// Регистрация существующих участников (если есть доступ к сообщениям)
-	private async registerExistingMembers(bot: TelegramBot, chatId: string): Promise<void> {
-		try {
-			// Пытаемся получить администраторов чата
-			const chatAdministrators = await bot.getChatAdministrators(chatId)
-
-			let registeredCount = 0
-			for (const admin of chatAdministrators) {
-				if (admin.user.is_bot) continue // Пропускаем ботов
-
-				const isRegistered = await this.chatService.isMember(chatId, admin.user.id.toString())
-				if (!isRegistered) {
-					const member = await this.userService.createOrGetUser({
-						telegramId: admin.user.id.toString(),
-						username: admin.user.username || '',
-						firstName: admin.user.first_name || '',
-						lastName: admin.user.last_name || '',
-					})
-					await this.chatService.addMember(chatId, admin.user.id.toString())
-					registeredCount++
-				}
-			}
-
-			if (registeredCount > 0) {
-				console.log(`Автоматически зарегистрировано ${registeredCount} администраторов в группе ${chatId}`)
-			}
-		} catch (error) {
-			console.warn('Не удалось получить список администраторов для автоматической регистрации:', error)
 		}
 	}
 

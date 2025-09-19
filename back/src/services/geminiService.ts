@@ -25,7 +25,7 @@ export class GeminiService {
 			const base64Audio = audioData.toString('base64')
 
 			// Подставляем текущее время, автора, список пользователей, роли и задачи в промпт
-			const currentTime = new Date().toLocaleString('ru-RU')
+			const currentTime = new Date().toString()
 
 			// Форматируем автора запроса
 			const authorString = `ID: ${author.telegramId}, Имя: ${author.firstName} ${author.lastName || ''}, Username: @${author.username}`

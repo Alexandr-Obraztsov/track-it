@@ -3,7 +3,7 @@ import TelegramBot = require('node-telegram-bot-api')
 // Сервис для обработки команд Telegram
 export class CommandHandlerService {
 	// Обработка команды /start
-	async handleStart(bot: TelegramBot, msg: any): Promise<void> {
+	async handleStart(bot: TelegramBot, msg: TelegramBot.Message): Promise<void> {
 		const chatId = msg.chat.id.toString()
 		const isGroup = msg.chat.type === 'group' || msg.chat.type === 'supergroup'
 
