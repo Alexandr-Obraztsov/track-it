@@ -290,7 +290,10 @@ export class VoiceHandlerService {
             )
 
             // Отправляем ответ пользователю
-            bot.sendMessage(chatId, formattedResponse)
+            await bot.sendMessage(chatId, formattedResponse, {
+                reply_to_message_id: msg.message_id,
+                parse_mode: 'HTML'
+            })
 
             // Ставим реакцию галочки после успешной обработки
             try {
@@ -331,6 +334,11 @@ export class VoiceHandlerService {
         isGroup: boolean,
         members: GeminiChatMember[]
     ): Promise<string> {
+        // Проверяем есть ли кастомное сообщение (когда нет действий)
+        if (geminiResponse.customMessage) {
+            return geminiResponse.customMessage
+        }
+
         let formattedResponse = ''
         
         // Сначала создаем роли
@@ -397,7 +405,7 @@ export class VoiceHandlerService {
         // Обрабатываем операции с задачами
         if (geminiResponse.taskOperations && geminiResponse.taskOperations.length > 0) {
             formattedResponse += '\n🔄 Операции с задачами:\n'
-            formattedResponse += await this.processTaskOperations(geminiResponse.taskOperations, chatId, userId, isGroup)
+            formattedResponse += await this.processTaskOperations(geminiResponse.taskOperations)
         }
 
         // Обрабатываем операции с ролями
@@ -415,7 +423,7 @@ export class VoiceHandlerService {
     }
 
     // Обработка операций с задачами
-    private async processTaskOperations(operations: TaskOperation[], chatId: string, userId: string, isGroup: boolean): Promise<string> {
+    private async processTaskOperations(operations: TaskOperation[]): Promise<string> {
         let response = ''
         
         for (const operation of operations) {

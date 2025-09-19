@@ -92,6 +92,7 @@ export interface BotCommand {
 
 // Интерфейс ответа от Gemini
 export interface AudioTranscriptionResponse {
+    customMessage?: string // Кастомное сообщение когда нет действий
     roles: Role[]
     tasks: Task[]
     taskOperations?: TaskOperation[]
