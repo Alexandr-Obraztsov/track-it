@@ -6,73 +6,76 @@ import { RoleEntity } from './Role'
 // Сущность задачи
 @Entity('tasks')
 export class TaskEntity {
-    @PrimaryGeneratedColumn()
-    id!: number
+	@PrimaryGeneratedColumn()
+	id!: number
 
-    @Column({ type: 'varchar' })
-    title!: string // Название задачи
+	@Column({ type: 'varchar' })
+	title!: string // Название задачи
 
-    @Column({ type: 'text' })
-    description!: string // Описание задачи
+	@Column({ type: 'text' })
+	description!: string // Описание задачи
 
-    @Column({ type: 'varchar', nullable: true })
-    readableId!: string // Читаемый ID задачи (например: CHT-123 или PSN-456)
+	@Column({ type: 'varchar' })
+	readableId!: string // Читаемый ID задачи (например: CHT-123 или PSN-456)
 
-    @Column({
-        type: 'enum',
-        enum: ['high', 'medium', 'low'],
-        default: 'medium'
-    })
-    priority!: 'high' | 'medium' | 'low' // Приоритет задачи
+	@Column({ type: 'integer' })
+	localId!: number // Локальный ID задачи в рамках чата или пользователя (начинается с 1)
 
-    @Column({ type: 'date', nullable: true })
-    deadline?: Date // Срок выполнения
+	@Column({
+		type: 'enum',
+		enum: ['high', 'medium', 'low'],
+		default: 'medium',
+	})
+	priority!: 'high' | 'medium' | 'low' // Приоритет задачи
 
-    @Column({ type: 'boolean', default: false })
-    isCompleted!: boolean // Статус выполнения
+	@Column({ type: 'date', nullable: true })
+	deadline?: Date // Срок выполнения
 
-    @Column({
-        type: 'enum',
-        enum: ['personal', 'group'],
-        default: 'personal'
-    })
-    type!: 'personal' | 'group' // Тип задачи
+	@Column({ type: 'boolean', default: false })
+	isCompleted!: boolean // Статус выполнения
 
-    @Column({ type: 'bigint' })
-    authorId!: string // ID автора задачи
+	@Column({
+		type: 'enum',
+		enum: ['personal', 'group'],
+		default: 'personal',
+	})
+	type!: 'personal' | 'group' // Тип задачи
 
-    @Column({ type: 'bigint', nullable: true })
-    chatId?: string // ID чата для групповых задач
+	@Column({ type: 'bigint' })
+	authorId!: string // ID автора задачи
 
-    @Column({ type: 'bigint', nullable: true })
-    assignedUserId?: string // ID назначенного пользователя
+	@Column({ type: 'bigint', nullable: true })
+	chatId?: string // ID чата для групповых задач
 
-    @Column({ type: 'integer', nullable: true })
-    assignedRoleId?: number // ID назначенной роли
+	@Column({ type: 'bigint', nullable: true })
+	assignedUserId?: string // ID назначенного пользователя
 
-    @Column({ type: 'timestamp', default: () => 'CURRENT_TIMESTAMP' })
-    createdAt!: Date // Дата создания
+	@Column({ type: 'integer', nullable: true })
+	assignedRoleId?: number // ID назначенной роли
 
-    @Column({ type: 'timestamp', default: () => 'CURRENT_TIMESTAMP', onUpdate: 'CURRENT_TIMESTAMP' })
-    updatedAt!: Date // Дата последнего обновления
+	@Column({ type: 'timestamp', default: () => 'CURRENT_TIMESTAMP' })
+	createdAt!: Date // Дата создания
 
-    // Автор задачи
-    @ManyToOne(() => UserEntity, user => user.createdTasks, { onDelete: 'CASCADE' })
-    @JoinColumn({ name: 'authorId' })
-    author!: UserEntity
+	@Column({ type: 'timestamp', default: () => 'CURRENT_TIMESTAMP', onUpdate: 'CURRENT_TIMESTAMP' })
+	updatedAt!: Date // Дата последнего обновления
 
-    // Чат для групповых задач
-    @ManyToOne(() => ChatEntity, chat => chat.tasks, { nullable: true, onDelete: 'CASCADE' })
-    @JoinColumn({ name: 'chatId' })
-    chat?: ChatEntity
+	// Автор задачи
+	@ManyToOne(() => UserEntity, user => user.createdTasks, { onDelete: 'CASCADE' })
+	@JoinColumn({ name: 'authorId' })
+	author!: UserEntity
 
-    // Назначенный пользователь
-    @ManyToOne(() => UserEntity, user => user.assignedTasks, { nullable: true, onDelete: 'SET NULL' })
-    @JoinColumn({ name: 'assignedUserId' })
-    assignedUser?: UserEntity
+	// Чат для групповых задач
+	@ManyToOne(() => ChatEntity, chat => chat.tasks, { nullable: true, onDelete: 'CASCADE' })
+	@JoinColumn({ name: 'chatId' })
+	chat?: ChatEntity
 
-    // Назначенная роль
-    @ManyToOne(() => RoleEntity, role => role.assignedTasks, { nullable: true, onDelete: 'SET NULL' })
-    @JoinColumn({ name: 'assignedRoleId' })
-    assignedRole?: RoleEntity
+	// Назначенный пользователь
+	@ManyToOne(() => UserEntity, user => user.assignedTasks, { nullable: true, onDelete: 'SET NULL' })
+	@JoinColumn({ name: 'assignedUserId' })
+	assignedUser?: UserEntity
+
+	// Назначенная роль
+	@ManyToOne(() => RoleEntity, role => role.assignedTasks, { nullable: true, onDelete: 'SET NULL' })
+	@JoinColumn({ name: 'assignedRoleId' })
+	assignedRole?: RoleEntity
 }

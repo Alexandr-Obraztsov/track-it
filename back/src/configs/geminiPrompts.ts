@@ -1,6 +1,6 @@
 // Промпты для взаимодействия с Gemini AI
 export const GEMINI_PROMPTS = {
-    AUDIO_TRANSCRIPTION: `Текущее время: {currentTime}. 
+	AUDIO_TRANSCRIPTION: `Текущее время: {currentTime}. 
 
 АВТОР ДАННОГО ЗАПРОСА:
 {author}
@@ -125,8 +125,8 @@ export const GEMINI_PROMPTS = {
   ],
   "tasks": [
     {
-      "title": "краткое название задачи",
-      "description": "подробное описание задачи", 
+      "title": "краткое название задачи, not null",
+      "description": "подробное описание задачи, not null", 
       "priority": "high/medium/low",
       "deadline": "YYYY-MM-DD или null",
       "assignedUserId": "telegramId пользователя или null",
@@ -152,7 +152,7 @@ export const GEMINI_PROMPTS = {
     {
       "operation": "create/update/delete/assign/unassign",
       "roleId": "числовой ID роли (для операций с существующими ролями)",
-      "roleName": "название роли (для create)",
+      "roleName": "название роли (для create) или для назначения роли, если у нее еще нет ID",
       "newRoleName": "новое название (для update)",
       "targetUserId": "telegramId пользователя (для assign/unassign)"
     }
@@ -170,4 +170,4 @@ export const GEMINI_PROMPTS = {
 ✅ Все массивы должны быть заполнены или пусты (никогда null)
 ✅ Максимальная точность анализа голосового сообщения
 ✅ Выполнение ВСЕХ упомянутых действий`,
-} as const;
+} as const

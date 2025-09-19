@@ -5,30 +5,30 @@ import { ChatMemberEntity } from './ChatMember'
 // Сущность пользователя Telegram
 @Entity('users')
 export class UserEntity {
-    @PrimaryColumn({ type: 'bigint' })
-    telegramId!: string // ID пользователя в Telegram как первичный ключ
+	@PrimaryColumn({ type: 'bigint' })
+	telegramId!: string // ID пользователя в Telegram как первичный ключ
 
-    @Column({ type: 'varchar' })
-    username!: string // Username пользователя
+	@Column({ type: 'varchar' })
+	username!: string // Username пользователя
 
-    @Column({ type: 'varchar' })
-    firstName!: string // Имя пользователя
+	@Column({ type: 'varchar' })
+	firstName!: string // Имя пользователя
 
-    @Column({ type: 'varchar', nullable: true })
-    lastName?: string // Фамилия пользователя
+	@Column({ type: 'varchar', nullable: true })
+	lastName?: string // Фамилия пользователя
 
-    @Column({ type: 'timestamp', default: () => 'CURRENT_TIMESTAMP' })
-    createdAt!: Date // Дата регистрации
+	@Column({ type: 'timestamp', default: () => 'CURRENT_TIMESTAMP' })
+	createdAt!: Date // Дата регистрации
 
-    @Column({ type: 'timestamp', default: () => 'CURRENT_TIMESTAMP', onUpdate: 'CURRENT_TIMESTAMP' })
-    updatedAt!: Date // Дата последнего обновления
+	@Column({ type: 'timestamp', default: () => 'CURRENT_TIMESTAMP', onUpdate: 'CURRENT_TIMESTAMP' })
+	updatedAt!: Date // Дата последнего обновления
 
-    @OneToMany(() => TaskEntity, task => task.author)
-    createdTasks?: TaskEntity[] // Задачи, созданные пользователем
+	@OneToMany(() => TaskEntity, task => task.author)
+	createdTasks?: TaskEntity[] // Задачи, созданные пользователем
 
-    @OneToMany(() => TaskEntity, task => task.assignedUser)
-    assignedTasks?: TaskEntity[] // Задачи, назначенные пользователю
+	@OneToMany(() => TaskEntity, task => task.assignedUser)
+	assignedTasks?: TaskEntity[] // Задачи, назначенные пользователю
 
-    @OneToMany(() => ChatMemberEntity, membership => membership.user)
-    chatMemberships?: ChatMemberEntity[] // Участие в чатах
+	@OneToMany(() => ChatMemberEntity, membership => membership.user)
+	chatMemberships?: ChatMemberEntity[] // Участие в чатах
 }

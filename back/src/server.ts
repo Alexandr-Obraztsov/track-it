@@ -17,14 +17,14 @@ import { GeminiService } from './services/geminiService'
 
 // Глобальная обработка необработанных промисов
 process.on('unhandledRejection', (reason, promise) => {
-    console.error('Unhandled Rejection at:', promise, 'reason:', reason)
-    // Логируем ошибку, но не завершаем процесс
+	console.error('Unhandled Rejection at:', promise, 'reason:', reason)
+	// Логируем ошибку, но не завершаем процесс
 })
 
-process.on('uncaughtException', (error) => {
-    console.error('Uncaught Exception:', error)
-    // В критических случаях можно завершить процесс
-    // process.exit(1)
+process.on('uncaughtException', error => {
+	console.error('Uncaught Exception:', error)
+	// В критических случаях можно завершить процесс
+	// process.exit(1)
 })
 
 // Глобальные переменные для работы с БД
@@ -72,7 +72,13 @@ class Server {
 			roleService = new RoleService(dataSource)
 			geminiService = new GeminiService(process.env.GEMINI_API_KEY || '')
 			// Инициализируем Telegram бота после подключения к БД
-			telegramBotController = new TelegramBotController(taskService, chatService, roleService, geminiService, userService)
+			telegramBotController = new TelegramBotController(
+				taskService,
+				chatService,
+				roleService,
+				geminiService,
+				userService
+			)
 			console.log('База данных подключена успешно')
 		} catch (error) {
 			console.error('Ошибка подключения к базе данных:', error)
