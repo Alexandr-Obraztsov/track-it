@@ -5,10 +5,10 @@ import { ChatService } from '../services/chatService'
 import { RoleService } from '../services/roleService'
 import { CommandHandlerService } from '../services/commandHandlerService'
 import { CallbackHandlerService } from '../services/callbackHandlerService'
-import { VoiceHandlerService } from '../services/voiceHandlerService'
 import { UserService } from '../services/userService'
-import { MessageFormatterService } from '../services/messageFormatterService'
+import { Formatter } from '../services/formatter/formatter'
 import { BotMentionUtils } from '../utils/botMentionUtils'
+import { VoiceHandlerService } from '../services/voiceHandlerService'
 
 // Контроллер для Telegram бота
 class TelegramBotController {
@@ -173,7 +173,7 @@ class TelegramBotController {
 			await this.chatService.addMember(chatId, member.telegramId.toString())
 
 			const personalWelcome =
-				`👋 Привет, ${MessageFormatterService.getTag(member)}! Добро пожаловать в группу!\n\n` +
+				`👋 Привет, ${Formatter.getTag(member)}! Добро пожаловать в группу!\n\n` +
 				'✅ Вы автоматически зарегистрированы в системе.\n' +
 				'📌 Обратите внимание на закрепленное сообщение с инструкциями.\n' +
 				'🎙️ Просто отправьте голосовое сообщение с вашей просьбой!'
@@ -225,11 +225,7 @@ class TelegramBotController {
 					// Автоматически регистрируем пользователя
 					await this.chatService.addMember(chat.id.toString(), user.id.toString())
 
-					console.log(
-						`Автоматически зарегистрирован пользователь: ${user.username} (${user.id}) в группе ${chat.id}`
-					)
-
-					const userTag = MessageFormatterService.getTag(member)
+					const userTag = Formatter.getTag(member)
 					const welcomeText = `✅ ${userTag}, вы автоматически зарегистрированы в системе!`
 
 					// Отправляем уведомление, которое самоудалится через 5 секунд
@@ -269,17 +265,14 @@ class TelegramBotController {
 		try {
 			// Если бот был добавлен в группу (стал участником)
 			if (newStatus === 'member' && (oldStatus === 'left' || oldStatus === 'kicked' || !oldStatus)) {
-				console.log(`Бот добавлен в группу: ${msg.chat.title}`)
 				await this.handleBotAddedToGroup(bot, msg, false)
 			}
 			// Если бот стал администратором
 			else if (newStatus === 'administrator' && oldStatus === 'member') {
-				console.log(`Бот получил права администратора в группе: ${msg.chat.title}`)
 				await this.handleBotBecameAdmin(bot, msg)
 			}
 			// Если бот был добавлен сразу как администратор
 			else if (newStatus === 'administrator' && (oldStatus === 'left' || oldStatus === 'kicked' || !oldStatus)) {
-				console.log(`Бот добавлен в группу как администратор: ${msg.chat.title}`)
 				await this.handleBotAddedToGroup(bot, msg, true)
 			}
 		} catch (error) {

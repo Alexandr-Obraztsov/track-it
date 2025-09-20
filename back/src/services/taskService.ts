@@ -3,7 +3,7 @@ import { TaskEntity } from '../entities/Task'
 import { ChatEntity } from '../entities/Chat'
 import { UserEntity } from '../entities/User'
 import { RoleEntity } from '../entities/Role'
-import { MessageFormatterService } from './messageFormatterService'
+import { Formatter } from './formatter/formatter'
 
 // Интерфейс для создания задачи
 export interface CreateTaskDto {
@@ -77,11 +77,11 @@ export class TaskService {
 				where: { telegramId: data.chatId },
 			})
 			const chatTitle = chat?.title || 'Group'
-			readableId = MessageFormatterService.createTaskId(chatTitle, localId)
+			readableId = Formatter.createTaskId(chatTitle, localId)
 		} else {
 			// Для личных задач - localId в рамках пользователя
 			localId = await this.getNextLocalIdForUser(data.authorId)
-			readableId = MessageFormatterService.createTaskId('Personal', localId)
+			readableId = Formatter.createTaskId('Personal', localId)
 		}
 
 		// Создаем задачу

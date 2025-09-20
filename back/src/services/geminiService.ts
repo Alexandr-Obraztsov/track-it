@@ -86,8 +86,6 @@ export class GeminiService {
 
 			const responseText = result.response.text()
 
-			console.log('Запрос в Gemini:', prompt)
-			console.log('Ответ Gemini:', responseText)
 
 			// Очищаем текст от markdown код-блоков перед парсингом JSON
 			const cleanedText = responseText

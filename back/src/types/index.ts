@@ -1,3 +1,6 @@
+import { RoleEntity } from '../entities/Role'
+import { UserEntity } from '../entities/User'
+
 // Интерфейс пользователя для Gemini (с полной информацией)
 export interface GeminiUser {
 	telegramId: string
@@ -53,8 +56,8 @@ export interface Task {
 	description: string
 	priority: 'high' | 'medium' | 'low'
 	deadline: string | null
-	assignedUserId?: string | null // Теперь передаем ID
-	assignedRoleId?: number | null // Теперь передаем ID
+	assignedUserId: string | null // Теперь передаем ID
+	assignedRoleId: number | null // Теперь передаем ID
 }
 
 // === Операции ===
@@ -67,9 +70,9 @@ export interface TaskOperation {
 		title?: string
 		description?: string
 		priority?: 'high' | 'medium' | 'low'
-		deadline?: string | null
-		assignedUserId?: string | null
-		assignedRoleId?: number | null
+		deadline?: Date
+		assignedUser?: UserEntity
+		assignedRole?: RoleEntity
 		isCompleted?: boolean
 	}
 }

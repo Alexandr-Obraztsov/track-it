@@ -137,24 +137,24 @@ export const GEMINI_PROMPTS = {
   ],
   "taskOperations": [
     {
-      "operation": "delete/update/complete",
+      "operation": "delete/update",
       "taskId": "числовой ID существующей задачи",
       "updateData": {
-        "title": "новое название (для update)",
-        "description": "новое описание (для update)",
-        "priority": "новый приоритет (для update)", 
-        "deadline": "новый дедлайн ISO timestamp (для update)",
-        "assignedUserId": "telegramId пользователя (для update)",
-        "assignedRoleId": "числовой ID роли (для update)",
-        "isCompleted": true/false
+        "title"?: "новое название (для update)",
+        "description"?: "новое описание (для update)",
+        "priority"?: "новый приоритет (для update)", 
+        "deadline"?: "новый дедлайн ISO timestamp (для update)",
+        "assignedUserId"?: "telegramId пользователя (для update)",
+        "assignedRoleId"?: "числовой ID роли (для update)",
+        "isCompleted"?: true/false
       }
     }
   ],
   "roleOperations": [
     {
-      "operation": "create/update/delete/assign/unassign",
+      "operation": "update/delete/assign/unassign",
       "roleId": "числовой ID роли (для операций с существующими ролями)",
-      "roleName": "название роли (для create) или для назначения роли, если у нее еще нет ID",
+      "roleName": "название роли для (assign/unassign), если у нее еще нет ID",
       "newRoleName": "новое название (для update)",
       "targetUserId": "telegramId пользователя (для assign/unassign)"
     }
