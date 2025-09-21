@@ -1,6 +1,7 @@
 import { Entity, PrimaryColumn, Column, OneToMany } from 'typeorm'
 import { TaskEntity } from './Task'
 import { ChatMemberEntity } from './ChatMember'
+import { NotificationPresetType, DEFAULT_NOTIFICATION_PRESETS } from '../configs/notificationPresets'
 
 // Сущность пользователя Telegram
 @Entity('users')
@@ -22,6 +23,21 @@ export class UserEntity {
 
 	@Column({ type: 'timestamp', default: () => 'CURRENT_TIMESTAMP', onUpdate: 'CURRENT_TIMESTAMP' })
 	updatedAt!: Date // Дата последнего обновления
+
+	// Настройки уведомлений
+	@Column({ 
+		type: 'enum',
+		enum: ['off', 'minimal', 'standard', 'frequent', 'maximum'],
+		default: DEFAULT_NOTIFICATION_PRESETS.personal
+	})
+	personalNotificationPreset!: NotificationPresetType // Пресет для личных задач
+
+	@Column({ 
+		type: 'enum',
+		enum: ['off', 'minimal', 'standard', 'frequent', 'maximum'],
+		default: DEFAULT_NOTIFICATION_PRESETS.group
+	})
+	groupNotificationPreset!: NotificationPresetType // Пресет для групповых задач
 
 	@OneToMany(() => TaskEntity, task => task.author)
 	createdTasks?: TaskEntity[] // Задачи, созданные пользователем

@@ -14,17 +14,14 @@ import { RoleEntity } from './entities/Role'
 import { UserService } from './services/userService'
 import { RoleService } from './services/roleService'
 import { GeminiService } from './services/geminiService'
+import { NotificationService } from './services/notificationService'
 
-// Глобальная обработка необработанных промисов
 process.on('unhandledRejection', (reason, promise) => {
 	console.error('Unhandled Rejection at:', promise, 'reason:', reason)
-	// Логируем ошибку, но не завершаем процесс
 })
 
 process.on('uncaughtException', error => {
 	console.error('Uncaught Exception:', error)
-	// В критических случаях можно завершить процесс
-	// process.exit(1)
 })
 
 // Глобальные переменные для работы с БД
@@ -35,6 +32,7 @@ export let userService: UserService
 export let roleService: RoleService
 export let geminiService: GeminiService
 export let telegramBotController: TelegramBotController
+export let notificationService: NotificationService
 
 // Класс сервера
 class Server {
@@ -79,6 +77,18 @@ class Server {
 				geminiService,
 				userService
 			)
+			
+			// Инициализируем сервис нотификаций после создания бота
+			const bot = telegramBotController.getBot()
+			if (bot) {
+				notificationService = new NotificationService(dataSource, bot)
+				// Запускаем планировщик уведомлений
+				notificationService.startNotificationScheduler()
+				console.log('✅ Сервис уведомлений запущен')
+			} else {
+				console.error('❌ Ошибка: не удалось получить экземпляр Telegram бота для сервиса уведомлений')
+			}
+			
 			console.log('База данных подключена успешно')
 		} catch (error) {
 			console.error('Ошибка подключения к базе данных:', error)
