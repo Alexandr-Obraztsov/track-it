@@ -23,7 +23,6 @@ export interface GeminiTask {
 	readableId: string
 	title: string
 	description: string
-	priority: 'high' | 'medium' | 'low'
 	deadline: string | null
 	type: 'personal' | 'group'
 	authorId: string
@@ -54,7 +53,6 @@ export interface Role {
 export interface Task {
 	title: string
 	description: string
-	priority: 'high' | 'medium' | 'low'
 	deadline: string | null
 	assignedUserId: string | null // Теперь передаем ID
 	assignedRoleId: number | null // Теперь передаем ID
@@ -69,7 +67,6 @@ export interface TaskOperation {
 	updateData?: {
 		title?: string
 		description?: string
-		priority?: 'high' | 'medium' | 'low'
 		deadline?: Date
 		assignedUser?: UserEntity
 		assignedRole?: RoleEntity

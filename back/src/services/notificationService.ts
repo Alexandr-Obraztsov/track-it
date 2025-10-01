@@ -143,10 +143,9 @@ export class NotificationService {
 		// Форматируем дедлайн в зависимости от типа задачи
 		const deadlineDate = new Date(task.deadline!)
 		const deadlineText = deadlineDate.toLocaleString('ru-RU')
-		const priorityEmoji = this.getPriorityEmoji(task.priority)
 		
 		let message = `🔔 <b>Напоминание о дедлайне</b>\n\n`
-		message += `${priorityEmoji} <b>${task.title}</b>\n`
+		message += `<b>${task.title}</b>\n`
 		message += `📝 ${task.description}\n\n`
 		message += `⏰ До дедлайна осталось: <b>${intervalName}</b>\n`
 		message += `📅 Дедлайн: ${deadlineText}\n`
@@ -168,17 +167,6 @@ export class NotificationService {
 		return message
 	}
 
-	/**
-	 * Возвращает эмодзи для приоритета задачи
-	 */
-	private getPriorityEmoji(priority: string): string {
-		switch (priority) {
-			case 'high': return '🔴'
-			case 'medium': return '🟡'
-			case 'low': return '🟢'
-			default: return '⚪'
-		}
-	}
 	/**
 	 * Запускает периодическую проверку уведомлений
 	 * Вызывается каждую минуту

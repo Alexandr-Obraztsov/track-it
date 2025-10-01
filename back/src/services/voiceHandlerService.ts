@@ -7,16 +7,16 @@ import { UserService } from './userService'
 import { Formatter } from './formatter/formatter'
 import path from 'path'
 import {
-	GeminiUser,
-	GeminiRole,
-	GeminiTask,
-	GeminiChatMember,
-	TaskOperation,
-	RoleOperation,
-	AudioTranscriptionResponse,
-	ViewRequest,
-	Role,
-	Task,
+    GeminiUser,
+    GeminiRole,
+    GeminiTask,
+    GeminiChatMember,
+    TaskOperation,
+    RoleOperation,
+    AudioTranscriptionResponse,
+    ViewRequest,
+    Role,
+    Task,
 } from '../types'
 import { convertOggToMp3, ensureDownloadsDirectory } from '../utils/fileUtils'
 import * as fs from 'fs'
@@ -166,7 +166,6 @@ export class VoiceHandlerService {
 						readableId: task.readableId,
 						title: task.title,
 						description: task.description,
-						priority: task.priority,
 						deadline: task.deadline ? String(task.deadline) : null,
 						type: task.type,
 						authorId: task.authorId,
@@ -197,7 +196,6 @@ export class VoiceHandlerService {
 						readableId: task.readableId,
 						title: task.title,
 						description: task.description,
-						priority: task.priority,
 						deadline: task.deadline ? String(task.deadline) : null,
 						type: task.type,
 						authorId: task.authorId,
@@ -344,7 +342,6 @@ export class VoiceHandlerService {
 					const createdTask = await this.taskService.createTask({
 						title: task.title,
 						description: task.description,
-						priority: task.priority,
 						deadline: task.deadline ? new Date(task.deadline) : undefined,
 						authorId: userId,
 						chatId: isGroup ? chatId : undefined,

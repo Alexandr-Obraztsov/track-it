@@ -9,7 +9,6 @@ import { Formatter } from './formatter/formatter'
 export interface CreateTaskDto {
 	title: string
 	description: string
-	priority?: 'high' | 'medium' | 'low'
 	deadline?: Date
 	authorId: string // ID автора
 	type?: 'personal' | 'group'
@@ -22,7 +21,6 @@ export interface CreateTaskDto {
 export interface UpdateTaskDto {
 	title?: string
 	description?: string
-	priority?: 'high' | 'medium' | 'low'
 	deadline?: Date | null
 	assignedUserId?: string | null
 	assignedRoleId?: number | null
@@ -88,7 +86,6 @@ export class TaskService {
 		const task = this.taskRepository.create({
 			title: data.title,
 			description: data.description,
-			priority: data.priority || 'medium',
 			deadline: data.deadline,
 			authorId: data.authorId,
 			type,
@@ -251,7 +248,6 @@ export class TaskService {
 			assignedUserId?: string
 			assignedRoleId?: number
 			isCompleted?: boolean
-			priority?: 'high' | 'medium' | 'low'
 		} = {}
 	): Promise<TaskEntity[]> {
 		return await this.taskRepository.find({

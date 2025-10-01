@@ -24,20 +24,6 @@ export class Formatter {
 		return `@${member.username || member.firstName || 'unknown'}`
 	}
 
-	// Перевод приоритета на русский
-	static translatePriority(priority: string): string {
-		switch (priority) {
-			case 'high':
-				return 'Высокий'
-			case 'medium':
-				return 'Средний'
-			case 'low':
-				return 'Низкий'
-			default:
-				return priority
-		}
-	}
-
 	// Форматирование результата операции с задачей
 	static formatTaskOperation(operation: TaskOperation, success: boolean, task: TaskEntity): string {
 		switch (operation.operation) {
@@ -125,13 +111,11 @@ export class Formatter {
 	static formatTask(task: Partial<TaskEntity>): string {
 		const result = []
 		if (task.readableId) result.push(`<b>${task.readableId}</b>`)
-		if (task.title) result.push(`📝 Название: ${task.title}`)
-		if (task.description) result.push(`📋 Описание: ${task.description}`)
-		if (task.priority) result.push(`🔥 Приоритет: ${this.translatePriority(task.priority)}`)
-		if (task.isCompleted !== undefined) result.push(`✨ Статус: ${task.isCompleted ? 'Выполнена' : 'Активна'}`)
-		if (task.deadline) result.push(`⏰ Дедлайн: ${new Date(task.deadline).toLocaleString('ru-RU')}`)
-		if (task.assignedUser) result.push(`👥 Назначена на: ${this.getTag(task.assignedUser)}`)
-		if (task.assignedRole) result.push(`👥 Назначена на роль: ${task.assignedRole.name}`)
+		if (task.title) result.push(`<b>${task.title}</b>`)
+		if (task.description) result.push(`<i>${task.description}</i>`)
+		if (task.deadline) result.push(`До: ${new Date(task.deadline).toLocaleString('ru-RU')}!`)
+		if (task.assignedUser) result.push(`${this.getTag(task.assignedUser)}`)
+		if (task.assignedRole) result.push(`${task.assignedRole.name}`)
 
 		return result.join('\n')
 	}

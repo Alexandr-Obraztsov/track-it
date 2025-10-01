@@ -60,7 +60,7 @@ export class GeminiService {
 							.map(
 								t =>
 									`ID: ${t.id}, Читаемый ID: ${t.readableId}, Название: ${t.title}, Описание: ${t.description}, ` +
-									`Приоритет: ${t.priority}, Дедлайн: ${t.deadline || 'не указан'}, ` +
+									`Дедлайн: ${t.deadline || 'не указан'}, ` +
 									`Назначена на пользователя: ${t.assignedUserId || 'не назначена'}, ` +
 									`Назначена на роль: ${t.assignedRoleId || 'не назначена'}, ` +
 									`Выполнена: ${t.isCompleted ? 'да' : 'нет'}`

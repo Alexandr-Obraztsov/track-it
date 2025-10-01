@@ -21,13 +21,6 @@ export class TaskEntity {
 	@Column({ type: 'integer' })
 	localId!: number // Локальный ID задачи в рамках чата или пользователя (начинается с 1)
 
-	@Column({
-		type: 'enum',
-		enum: ['high', 'medium', 'low'],
-		default: 'medium',
-	})
-	priority!: 'high' | 'medium' | 'low' // Приоритет задачи
-
 	@Column({ type: 'timestamp', nullable: true })
 	deadline?: Date // Срок выполнения с датой и временем
 
