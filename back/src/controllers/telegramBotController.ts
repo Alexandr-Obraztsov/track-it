@@ -9,6 +9,8 @@ import { UserService } from '../services/userService'
 import { UserFormatter, MessageFormatter } from '../services/formatter'
 import { BotMentionUtils } from '../utils/botMentionUtils'
 import { VoiceHandlerService } from '../services/voiceHandlerService'
+import { ContextService } from '../services/contextService'
+import { MessageProcessor } from '../services/messageProcessor'
 
 // Контроллер для Telegram бота
 class TelegramBotController {
@@ -37,7 +39,9 @@ class TelegramBotController {
 		this.userService = userService
 
 		// Инициализируем сервисы обработки
-		this.voiceHandler = new VoiceHandlerService(taskService, chatService, roleService, userService, geminiService)
+		const contextService = new ContextService(taskService, chatService, roleService, userService)
+		const messageProcessor = new MessageProcessor(contextService, geminiService, taskService)
+		this.voiceHandler = new VoiceHandlerService(messageProcessor)
 		this.commandHandler = new CommandHandlerService(taskService, chatService, roleService, userService)
 		this.callbackHandler = new CallbackHandlerService(taskService, chatService, roleService, userService)
 

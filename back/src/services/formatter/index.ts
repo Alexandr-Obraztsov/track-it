@@ -10,6 +10,7 @@ export { RoleFormatter } from './roleFormatter'
 export { OperationFormatter } from './operationFormatter'
 export { ListFormatter } from './listFormatter'
 export { MessageFormatter } from './messageFormatter'
+export { PromptFormatter } from './promptFormatter'
 
 // Типы
 export * from './types'

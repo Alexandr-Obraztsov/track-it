@@ -63,22 +63,6 @@ export class ListFormatter {
 	}
 
 	/**
-	 * Форматирует список ролей из типизированных объектов
-	 * Используется для отображения ролей из API ответов
-	 */
-	static formatTypedRolesList(roles: Role[]): string {
-		if (roles.length === 0) {
-			return '🎭 <b>Роли в группе отсутствуют</b>'
-		}
-
-		let response = `🎭 <b>Роли в группе (${roles.length})</b>\n\n`
-		roles.forEach((role, index) => {
-			response += `${index + 1}. 🎭 ${role.name}\n`
-		})
-		return response.trim()
-	}
-
-	/**
 	 * Форматирует список задач, назначенных конкретному пользователю
 	 * Используется для отображения персональных задач
 	 */
@@ -90,24 +74,6 @@ export class ListFormatter {
 		let response = `📋 <b>Ваши задачи (${tasks.length})</b>\n\n`
 		tasks.forEach((task, index) => {
 			response += `${index + 1}. ${TaskFormatter.formatTask(task)}\n\n`
-		})
-		return response.trim()
-	}
-
-
-	/**
-	 * Форматирует список участников роли
-	 * Используется для отображения участников конкретной роли
-	 */
-	static formatRoleMembersList(role: RoleEntity): string {
-		if (!role.members || role.members.length === 0) {
-			return `🎭 <b>${role.name}</b>\n👥 Участники отсутствуют`
-		}
-
-		let response = `🎭 <b>${role.name}</b>\n👥 Участники (${role.members.length}):\n\n`
-		role.members.forEach((member, index) => {
-			const userInfo = UserFormatter.createShortInfo(member.user)
-			response += `${index + 1}. ${userInfo}\n`
 		})
 		return response.trim()
 	}
