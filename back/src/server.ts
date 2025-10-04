@@ -8,6 +8,7 @@ import { TaskService } from './services/taskService'
 import { TelegramBotController } from './controllers/telegramBotController'
 import logger from './middleware/logger'
 import { ChatService } from './services/chatService'
+import { MessageFormatter } from './services/formatter'
 import { ChatMemberEntity } from './entities/ChatMember'
 import { ChatEntity } from './entities/Chat'
 import { RoleEntity } from './entities/Role'
@@ -82,16 +83,13 @@ class Server {
 			const bot = telegramBotController.getBot()
 			if (bot) {
 				notificationService = new NotificationService(dataSource, bot)
-				// Запускаем планировщик уведомлений
 				notificationService.startNotificationScheduler()
-				console.log('✅ Сервис уведомлений запущен')
 			} else {
 				console.error('❌ Ошибка: не удалось получить экземпляр Telegram бота для сервиса уведомлений')
 			}
 			
-			console.log('База данных подключена успешно')
 		} catch (error) {
-			console.error('Ошибка подключения к базе данных:', error)
+			console.error(MessageFormatter.ERRORS.GENERAL, error)
 		}
 	}
 
@@ -104,7 +102,7 @@ class Server {
 	// Инициализация маршрутов
 	private initializeRoutes(): void {
 		this.app.get('/', (req, res) => {
-			res.send('Сервер работает!')
+			res.send(MessageFormatter.BOT_MESSAGES.SERVER_WORKING)
 		})
 	}
 

@@ -4,7 +4,7 @@ import { TaskService } from './taskService'
 import { ChatService } from './chatService'
 import { RoleService } from './roleService'
 import { UserService } from './userService'
-import { Formatter } from './formatter/formatter'
+import { TaskFormatter, OperationFormatter, MessageFormatter } from './formatter'
 import path from 'path'
 import {
     GeminiUser,
@@ -12,17 +12,13 @@ import {
     GeminiTask,
     GeminiChatMember,
     TaskOperation,
-    RoleOperation,
     AudioTranscriptionResponse,
-    ViewRequest,
-    Role,
     Task,
 } from '../types'
 import { convertOggToMp3, ensureDownloadsDirectory } from '../utils/fileUtils'
 import * as fs from 'fs'
-import { RoleEntity } from '../entities/Role'
 
-// Сервис для обработки голосовых сообщений
+// Сервис для обработки голосовых и текстовых сообщений
 export class VoiceHandlerService {
 	private taskService: TaskService
 	private chatService: ChatService
@@ -45,17 +41,17 @@ export class VoiceHandlerService {
 		ensureDownloadsDirectory()
 	}
 
-	// Основной метод обработки голосового сообщения
+	// Основной метод обработки голосовых и текстовых сообщений
 	async handleVoiceMessage(bot: TelegramBot, msg: TelegramBot.Message): Promise<void> {
 		const chatId = msg.chat.id.toString()
 		const userId = msg.from!.id.toString()
 		const isGroup = msg.chat.type === 'group' || msg.chat.type === 'supergroup'
-		const fileId = msg.voice!.file_id
-		const oggFileName = `voice_${Date.now()}.ogg`
-		const mp3FileName = `voice_${Date.now()}.mp3`
-		const downloadsDir = path.join(__dirname, '../downloads')
-		const oggPath = path.join(downloadsDir, oggFileName)
-		const mp3Path = path.join(downloadsDir, mp3FileName)
+		
+		// Определяем тип сообщения
+		const isVoiceMessage = !!msg.voice
+		const isTextMessage = !!msg.text
+		
+		if (!isVoiceMessage && !isTextMessage) return
 
 		try {
 			// Ставим реакцию думающего смайлика для индикации обработки
@@ -64,7 +60,7 @@ export class VoiceHandlerService {
 					reaction: [{ type: 'emoji', emoji: '🤔' }],
 				})
 			} catch (reactionError) {
-				console.warn('Не удалось поставить реакцию:', reactionError)
+				console.warn(MessageFormatter.ERRORS.GENERAL, reactionError)
 				// Продолжаем обработку даже если реакция не сработала
 			}
 
@@ -100,17 +96,15 @@ export class VoiceHandlerService {
 			}
 
 			// Получаем контекст для Gemini (полноценная схема БД)
-			let users: GeminiUser[] = []
 			let roles: GeminiRole[] = []
 			let tasks: GeminiTask[] = []
 			let members: GeminiChatMember[] = []
-			let currentUserRole: GeminiRole | null = null
 
 			// Создаем объект автора запроса
 			const author: GeminiUser = {
 				telegramId: userId,
 				username: msg.from?.username || userId,
-				firstName: msg.from?.first_name || 'Неизвестный',
+				firstName: msg.from?.first_name || MessageFormatter.VARIANTS.UNKNOWN,
 				lastName: msg.from?.last_name,
 			}
 
@@ -119,14 +113,14 @@ export class VoiceHandlerService {
 					// Обеспечиваем существование пользователя и чата
 					await this.userService.createOrGetUser({
 						telegramId: userId,
-						firstName: msg.from?.first_name || 'Неизвестный',
+						firstName: msg.from?.first_name || MessageFormatter.VARIANTS.UNKNOWN,
 						lastName: msg.from?.last_name,
 						username: msg.from?.username || userId,
 					})
 
 					await this.chatService.createOrGetChat({
 						telegramId: chatId,
-						title: msg.chat.title || 'Неизвестный чат',
+						title: msg.chat.title || MessageFormatter.ERRORS.NOT_FOUND,
 						username: msg.chat.username,
 					})
 
@@ -134,17 +128,10 @@ export class VoiceHandlerService {
 					const chatMembers = await this.chatService.getChatMembers(chatId)
 
 					// Формируем списки для Gemini
-					users = chatMembers.map(member => ({
-						telegramId: member.user?.telegramId || member.userId,
-						username: member.user?.username || '',
-						firstName: member.user?.firstName || 'Неизвестный',
-						lastName: member.user?.lastName,
-					}))
-
 					members = chatMembers.map(member => ({
 						userId: member.userId,
 						username: member.user?.username || '',
-						firstName: member.user?.firstName || 'Неизвестный',
+						firstName: member.user?.firstName || MessageFormatter.VARIANTS.UNKNOWN,
 						lastName: member.user?.lastName,
 						roleId: member.roleId,
 						roleName: member.role?.name,
@@ -168,26 +155,32 @@ export class VoiceHandlerService {
 						description: task.description,
 						deadline: task.deadline ? String(task.deadline) : null,
 						type: task.type,
-						authorId: task.authorId,
 						chatId: task.chatId,
 						assignedUserId: task.assignedUserId,
 						assignedRoleId: task.assignedRoleId,
 						isCompleted: task.isCompleted,
 					}))
 				} catch (error) {
-					console.error('Ошибка получения контекста группы:', error)
+					console.error(MessageFormatter.ERRORS.GENERAL, error)
 				}
 			} else {
 				try {
 					// Обеспечиваем существование пользователя
 					const user = await this.userService.createOrGetUser({
 						telegramId: userId,
-						firstName: msg.from?.first_name || 'Неизвестный',
+						firstName: msg.from?.first_name || MessageFormatter.VARIANTS.UNKNOWN,
 						lastName: msg.from?.last_name,
 						username: msg.from?.username || userId,
 					})
 
-					users = [user]
+					members = [{
+						userId: user.telegramId,
+						username: user.username || '',
+						firstName: user.firstName || MessageFormatter.VARIANTS.UNKNOWN,
+						lastName: user.lastName,
+						roleId: undefined,
+						roleName: undefined,	
+					}]
 
 					// Получаем личные задачи
 					const personalTasks = await this.taskService.getPersonalTasks(userId)
@@ -198,27 +191,27 @@ export class VoiceHandlerService {
 						description: task.description,
 						deadline: task.deadline ? String(task.deadline) : null,
 						type: task.type,
-						authorId: task.authorId,
 						chatId: task.chatId,
 						assignedUserId: task.assignedUserId,
 						assignedRoleId: task.assignedRoleId,
 						isCompleted: task.isCompleted,
 					}))
 				} catch (error) {
-					console.error('Ошибка получения персональных задач:', error)
+					console.error(MessageFormatter.ERRORS.GENERAL, error)
 				}
 			}
 
 			const geminiResult = this.geminiService
-				? await this.geminiService.processAudio(mp3Path, author, users, tasks, roles)
+				? await this.geminiService.processAudio(mp3Path, author, tasks, roles, members, isGroup)
 				: null
 
 			// Проверяем что получили валидный ответ
 			if (!geminiResult) {
-				await bot.sendMessage(chatId, 'Ошибка: сервис Gemini недоступен')
+				await bot.sendMessage(chatId, MessageFormatter.ERRORS.UNAVAILABLE)
 				return
 			}
 
+			// Обрабатываем ответ от Gemini
 			if (typeof geminiResult === 'string') {
 				await bot.sendMessage(chatId, geminiResult)
 				return
@@ -241,7 +234,7 @@ export class VoiceHandlerService {
 					is_big: false,
 				})
 			} catch (reactionError) {
-				console.warn('Не удалось поставить финальную реакцию:', reactionError)
+				console.warn(MessageFormatter.ERRORS.GENERAL, reactionError)
 			}
 
 			// Очищаем файлы
@@ -256,7 +249,7 @@ export class VoiceHandlerService {
 					is_big: false,
 				})
 			} catch (reactionError) {
-				console.warn('Не удалось поставить реакцию ошибки:', reactionError)
+				console.warn(MessageFormatter.ERRORS.GENERAL, reactionError)
 			}
 
 			this.handleVoiceError(bot, chatId, error, oggPath, mp3Path)
@@ -278,19 +271,9 @@ export class VoiceHandlerService {
 
 		const formattedResponse = []
 
-		// Сначала создаем роли
-		if (geminiResponse.roles && geminiResponse.roles.length > 0 && isGroup) {
-			formattedResponse.push(await this.processRolesCreation(geminiResponse.roles, chatId))
-		}
-
 		// Создаем задачи
 		if (geminiResponse.tasks && geminiResponse.tasks.length > 0) {
 			formattedResponse.push(await this.processTasksCreation(geminiResponse.tasks, userId, chatId, isGroup))
-		}
-
-		// Обрабатываем операции с ролями
-		if (geminiResponse.roleOperations && geminiResponse.roleOperations.length > 0 && isGroup) {
-			formattedResponse.push(await this.processRoleOperations(geminiResponse.roleOperations, chatId))
 		}
 
 		// Обрабатываем операции с задачами
@@ -298,44 +281,18 @@ export class VoiceHandlerService {
 			formattedResponse.push(await this.processTaskOperations(geminiResponse.taskOperations))
 		}
 
-		// Обрабатываем запросы на просмотр информации
-		if (geminiResponse.viewRequests && geminiResponse.viewRequests.length > 0) {
-			formattedResponse.push(await this.processViewRequests(geminiResponse.viewRequests, chatId, userId, isGroup))
+		// Если ничего не было сделано, выводим стандартное сообщение
+		if (formattedResponse.length === 0) {
+			return 'Задач не обнаружено 🤷‍♂️'
 		}
 
 		return formattedResponse.join('\n\n')
 	}
 
 
-	private async processRolesCreation(roles: Role[], chatId: string): Promise<string> {
-		const result = []
-		for (const roleData of roles) {
-			let role: RoleEntity | undefined
-			try {
-				role = await this.roleService.createRole({
-					name: roleData.name,
-					chatId,
-				})
-			} catch (dbError) {
-				console.error('Ошибка создания роли:', dbError)
-			}
-
-			const success = !!role
-			result.push(
-				Formatter.formatRoleOperation(
-					{
-						operation: 'create',
-						roleName: roleData.name,
-					},
-					success,role
-				)
-			)
-		}
-		return result.join('\n')
-	}
 
 	private async processTasksCreation(tasks: Task[], userId: string, chatId: string, isGroup: boolean): Promise<string> {
-		const result = ["Новые задачи:"]
+		const result = [MessageFormatter.SUCCESS.NEW_TASKS(tasks.length)]
 		for (const task of tasks) {
 				try {
 					// Создаем задачу через новый API
@@ -343,17 +300,17 @@ export class VoiceHandlerService {
 						title: task.title,
 						description: task.description,
 						deadline: task.deadline ? new Date(task.deadline) : undefined,
-						authorId: userId,
 						chatId: isGroup ? chatId : undefined,
-						assignedUserId: task.assignedUserId ?? undefined,
+						// Если не указан назначенный пользователь, назначаем текущего пользователя
+						assignedUserId: task.assignedUserId ?? userId,
 						assignedRoleId: task.assignedRoleId ?? undefined,
 					})
 
-					// Используем полное форматирование задачи
-					result.push(Formatter.formatTask(createdTask))
+					// Используем красивое форматирование новой задачи
+					result.push(TaskFormatter.formatTask(createdTask))
 				} catch (dbError) {
 					console.error('Ошибка сохранения задачи в БД:', dbError)
-					result.push(`❌ Ошибка создания задачи "${task.title}"\n`)
+					result.push(MessageFormatter.ERRORS.GENERAL + '\n')
 				}
 			}
 		return result.join('\n\n')
@@ -371,7 +328,8 @@ export class VoiceHandlerService {
 				switch (operation.operation) {
 					case 'delete':
 						const deleteSuccess = await this.taskService.deleteTask(task.id)
-						response.push(Formatter.formatTaskOperation(operation, deleteSuccess, task))
+						response.push(OperationFormatter.formatTaskOperation(operation, deleteSuccess, task))
+						break
 
 					case 'update':
 						if (operation.updateData) {
@@ -383,187 +341,20 @@ export class VoiceHandlerService {
 							}
 
 							const updatedTask = await this.taskService.updateTask(task.id, updateData)
-							response.push(Formatter.formatTaskOperation(operation, !!updatedTask, task))
+							response.push(OperationFormatter.formatTaskOperation(operation, !!updatedTask, task))
 						}
 						break
 				}
 			} catch (operationError) {
-				console.error('Ошибка при выполнении операции с задачей:', operationError)
-				response.push(`❌ Ошибка при выполнении операции с задачей #${operation.taskId}\n`)
+				console.error(MessageFormatter.ERRORS.GENERAL, operationError)
+				response.push(MessageFormatter.ERRORS.GENERAL + '\n')
 			}
 		}
 
 		return response.join('\n')
 	}
 
-	private async processRoleOperations(
-		operations: RoleOperation[],
-		chatId: string,
-	): Promise<string> {
-		const response = []
 
-		for (const operation of operations) {
-			try {
-				switch (operation.operation) {
-					case 'create':
-						if (operation.roleName) {
-							let role: RoleEntity | undefined
-							try {
-								role = await this.roleService.createRole({
-									name: operation.roleName,
-									chatId: chatId,
-								})
-							} catch (error) {
-								console.error('Ошибка создания роли:', error)
-							}
-							const success = !!role
-							response.push(
-								Formatter.formatRoleOperation(
-									operation,
-									success,
-									role
-								)
-							)
-						}
-						break
-
-					case 'delete':
-						if (operation.roleId) {
-							const role = await this.roleService.getRoleById(operation.roleId)
-							const deleteSuccess = await this.roleService.deleteRole(operation.roleId)
-							response.push(Formatter.formatRoleOperation(
-								operation,
-								deleteSuccess,
-								role ?? undefined
-							))
-						}
-						break
-
-					case 'update':
-						if (operation.roleId && operation.newRoleName) {
-							const role = await this.roleService.getRoleById(operation.roleId)
-							const updatedRole = await this.roleService.updateRole(operation.roleId, {
-								name: operation.newRoleName,
-							})
-							response.push(Formatter.formatRoleOperation(
-								operation,
-								!!updatedRole,
-								role ?? undefined
-							))
-						}
-						break
-
-					case 'assign':
-						if (operation.targetUserId) {
-							let roleId = operation.roleId
-							if (!roleId && operation.roleName) {
-								const roles = await this.roleService.getChatRoles(chatId)
-								const role = roles.find(r => r.name === operation.roleName)
-								roleId = role?.id
-							}
-
-							if (!roleId) break
-							const role = await this.roleService.getRoleById(roleId)
-							const success = await this.roleService.assignRoleToMember(
-								chatId,
-								operation.targetUserId,
-								roleId
-							)
-							const targetUser = await this.userService.getUserById(operation.targetUserId)
-
-							if (!targetUser) break
-							response.push(Formatter.formatRoleOperation(
-								{...operation, targetUser},
-								success,
-								role ?? undefined
-							))
-						}
-						break
-
-					case 'unassign':
-						if (operation.targetUserId) {
-							const role = await this.roleService.getRoleById(operation.roleId!)
-							const success = await this.roleService.removeRoleFromMember(chatId, operation.targetUserId)
-							const targetUser = await this.userService.getUserById(operation.targetUserId)
-							if (!targetUser) break
-							response.push(Formatter.formatRoleOperation(
-								{...operation, targetUser},
-								success,
-								role ?? undefined
-							))
-						}
-						break
-				}
-			} catch (operationError) {
-				console.error('Ошибка при выполнении операции с ролью:', operationError)
-				response.push(`❌ Ошибка при выполнении операции с ролью "${operation.roleName ?? operation.roleId}"`)
-			}
-		}
-
-		return response.join('\n')
-	}
-
-	// Обработка запросов на просмотр информации
-	private async processViewRequests(
-		requests: ViewRequest[],
-		chatId: string,
-		userId: string,
-		isGroup: boolean
-	): Promise<string> {
-		const response = []
-
-		for (const request of requests) {
-			try {
-				switch (request.type) {
-					case 'tasks':
-						if (isGroup) {
-							const tasks = await this.taskService.getGroupTasks(chatId)
-							response.push(Formatter.formatTasksList(tasks))
-						} else {
-							const tasks = await this.taskService.getPersonalTasks(userId)
-							response.push(Formatter.formatTasksList(tasks))
-						}
-						break
-
-					case 'members':
-						if (isGroup) {
-							const chatMembers = await this.chatService.getChatMembers(chatId)
-							response.push(Formatter.formatMembersList(chatMembers))
-						} else {
-							response.push('❌ Команда показа участников доступна только в группах')
-						}
-						break
-
-					case 'roles':
-						if (isGroup) {
-							const roles = await this.roleService.getChatRoles(chatId)
-							response.push(Formatter.formatRolesList(roles))
-						} else {
-							response.push('❌ Команда показа ролей доступна только в группах')
-						}
-						break
-
-					case 'userTasks':
-						if (isGroup) {
-							const tasks = await this.taskService.getAssignedTasks(userId, chatId)
-							response.push(Formatter.formatTasksList(tasks))
-						} else {
-							const tasks = await this.taskService.getPersonalTasks(userId)
-							response.push(Formatter.formatTasksList(tasks))
-						}
-						break
-
-					default:
-						response.push(`❌ Неизвестный тип запроса: ${request.type}`)
-				}
-			} catch (error) {
-				console.error(`Ошибка при обработке запроса ${request.type}:`, error)
-				response.push(`❌ Ошибка при получении информации ${request.type}`)
-			}
-		}
-
-		return response.join('\n')
-	}
 
 	// Очистка файлов
 	private cleanupFiles(oggPath: string, mp3Path: string): void {

@@ -2,6 +2,7 @@ import { DataSource, Repository, MoreThan } from 'typeorm'
 import { TaskEntity } from '../entities/Task'
 import TelegramBot from 'node-telegram-bot-api'
 import { UserNotificationService } from './userNotificationService'
+import { MessageFormatter } from './formatter'
 
 export class NotificationService {
 	private taskRepository: Repository<TaskEntity>
@@ -31,7 +32,7 @@ export class NotificationService {
 			}
 			
 		} catch (error) {
-			console.error('❌ Ошибка при проверке уведомлений:', error)
+			console.error(MessageFormatter.ERRORS.GENERAL, error)
 		}
 	}
 
@@ -46,7 +47,7 @@ export class NotificationService {
 				isCompleted: false,
 				deadline: MoreThan(now), // Только задачи с дедлайном в будущем
 			},
-			relations: ['author', 'chat', 'assignedUser', 'assignedRole'],
+			relations: [ 'chat', 'assignedUser', 'assignedRole'],
 		})
 	}
 
@@ -94,11 +95,11 @@ export class NotificationService {
 	 * Определяет ID пользователя для отправки уведомления
 	 */
 	private getNotificationTargetUserId(task: TaskEntity): string | null {
-		if (task.type === 'group' && task.assignedUserId) {
+		if (task.assignedUserId) {
 			return task.assignedUserId
 		}
 		
-		return task.authorId
+		return null
 	}
 
 	/**
@@ -171,9 +172,7 @@ export class NotificationService {
 	 * Запускает периодическую проверку уведомлений
 	 * Вызывается каждую минуту
 	 */
-	public startNotificationScheduler(): void {
-		console.log('🚀 Запуск планировщика уведомлений...')
-		
+	public startNotificationScheduler(): void {		
 		// Запускаем немедленно
 		this.checkNotifications()
 		
@@ -181,8 +180,6 @@ export class NotificationService {
 		setInterval(() => {
 			this.checkNotifications()
 		}, this.CHECK_INTERVAL_MS)
-		
-		console.log('✅ Планировщик уведомлений запущен (проверка каждую минуту)')
 	}
 
 	/**

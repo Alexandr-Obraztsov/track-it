@@ -22,10 +22,9 @@ export interface GeminiTask {
 	id: number
 	readableId: string
 	title: string
-	description: string
+	description?: string // Описание задачи (необязательное)
 	deadline: string | null
 	type: 'personal' | 'group'
-	authorId: string
 	chatId?: string
 	assignedUserId?: string
 	assignedRoleId?: number
@@ -52,7 +51,7 @@ export interface Role {
 // Интерфейс задачи для создания
 export interface Task {
 	title: string
-	description: string
+	description?: string // Описание задачи (необязательное)
 	deadline: string | null
 	assignedUserId: string | null // Теперь передаем ID
 	assignedRoleId: number | null // Теперь передаем ID

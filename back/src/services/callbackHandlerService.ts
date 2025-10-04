@@ -1,17 +1,21 @@
 import TelegramBot = require('node-telegram-bot-api')
 import { TaskService } from './taskService'
 import { ChatService } from './chatService'
+import { RoleService } from './roleService'
 import { UserService } from './userService'
+import { MessageFormatter, ListFormatter } from './formatter'
 
 // Сервис для обработки callback query
 export class CallbackHandlerService {
 	private taskService: TaskService
 	private chatService: ChatService
+	private roleService: RoleService
 	private userService: UserService
 
-	constructor(taskService: TaskService, chatService: ChatService, userService: UserService) {
+	constructor(taskService: TaskService, chatService: ChatService, roleService: RoleService, userService: UserService) {
 		this.taskService = taskService
 		this.chatService = chatService
+		this.roleService = roleService
 		this.userService = userService
 	}
 
@@ -26,13 +30,19 @@ export class CallbackHandlerService {
 		try {
 			if (data === 'register') {
 				await this.handleRegisterCallback(bot, callbackQuery, msg, user)
+			} else if (data === 'show_tasks') {
+				await this.handleShowTasksCallback(bot, callbackQuery, msg, user)
+			} else if (data === 'show_members') {
+				await this.handleShowMembersCallback(bot, callbackQuery, msg, user)
+			} else if (data === 'show_roles') {
+				await this.handleShowRolesCallback(bot, callbackQuery, msg, user)
 			}
 
 			// Подтверждаем callback
 			bot.answerCallbackQuery(callbackQuery.id)
 		} catch (error) {
 			console.error('Ошибка обработки callback:', error)
-			bot.answerCallbackQuery(callbackQuery.id, { text: 'Произошла ошибка' })
+			bot.answerCallbackQuery(callbackQuery.id, { text: MessageFormatter.ERRORS.GENERAL })
 		}
 	}
 
@@ -49,7 +59,7 @@ export class CallbackHandlerService {
 
 		if (!isGroup) {
 			bot.answerCallbackQuery(callbackQuery.id, {
-				text: 'В личных сообщениях регистрация не требуется! Просто отправьте голосовое сообщение.',
+				text: MessageFormatter.INFO.PRIVATE_OK,
 			})
 			return
 		}
@@ -82,9 +92,75 @@ export class CallbackHandlerService {
 		} catch (error) {
 			console.error('Ошибка регистрации через callback:', error)
 			bot.answerCallbackQuery(callbackQuery.id, {
-				text: '✅ Регистрация происходит автоматически! Просто отправьте сообщение в чат',
+				text: MessageFormatter.SUCCESS.REGISTERED,
 				show_alert: true,
 			})
+		}
+	}
+
+	// Обработка callback показа задач
+	private async handleShowTasksCallback(
+		bot: TelegramBot,
+		callbackQuery: TelegramBot.CallbackQuery,
+		msg: TelegramBot.Message,
+		user: TelegramBot.User
+	): Promise<void> {
+		const chatId = msg.chat.id.toString()
+		const isGroup = msg.chat.type === 'group' || msg.chat.type === 'supergroup'
+
+		if (!isGroup) return
+
+		try {
+			const tasks = await this.taskService.getGroupTasks(chatId)
+			const response = ListFormatter.formatTasksList(tasks)
+			bot.sendMessage(chatId, response, { parse_mode: 'HTML' })
+		} catch (error) {
+			console.error('Ошибка получения списка задач:', error)
+			bot.sendMessage(chatId, MessageFormatter.ERRORS.GENERAL)
+		}
+	}
+
+	// Обработка callback показа участников
+	private async handleShowMembersCallback(
+		bot: TelegramBot,
+		callbackQuery: TelegramBot.CallbackQuery,
+		msg: TelegramBot.Message,
+		user: TelegramBot.User
+	): Promise<void> {
+		const chatId = msg.chat.id.toString()
+		const isGroup = msg.chat.type === 'group' || msg.chat.type === 'supergroup'
+
+		if (!isGroup) return
+
+		try {
+			const members = await this.chatService.getChatMembers(chatId)
+			const response = ListFormatter.formatMembersList(members)
+			bot.sendMessage(chatId, response, { parse_mode: 'HTML' })
+		} catch (error) {
+			console.error('Ошибка получения списка участников:', error)
+			bot.sendMessage(chatId, MessageFormatter.ERRORS.GENERAL)
+		}
+	}
+
+	// Обработка callback показа ролей
+	private async handleShowRolesCallback(
+		bot: TelegramBot,
+		callbackQuery: TelegramBot.CallbackQuery,
+		msg: TelegramBot.Message,
+		user: TelegramBot.User
+	): Promise<void> {
+		const chatId = msg.chat.id.toString()
+		const isGroup = msg.chat.type === 'group' || msg.chat.type === 'supergroup'
+
+		if (!isGroup) return
+
+		try {
+			const roles = await this.roleService.getChatRoles(chatId)
+			const response = ListFormatter.formatRolesList(roles)
+			bot.sendMessage(chatId, response, { parse_mode: 'HTML' })
+		} catch (error) {
+			console.error('Ошибка получения списка ролей:', error)
+			bot.sendMessage(chatId, MessageFormatter.ERRORS.GENERAL)
 		}
 	}
 }

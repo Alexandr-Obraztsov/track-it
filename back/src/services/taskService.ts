@@ -3,19 +3,18 @@ import { TaskEntity } from '../entities/Task'
 import { ChatEntity } from '../entities/Chat'
 import { UserEntity } from '../entities/User'
 import { RoleEntity } from '../entities/Role'
-import { Formatter } from './formatter/formatter'
+import { TaskFormatter } from './formatter'
 
 // Интерфейс для создания задачи
 export interface CreateTaskDto {
 	title: string
-	description: string
+	description?: string // Описание задачи (необязательное)
 	deadline?: Date
-	authorId: string // ID автора
+	assignedUserId?: string // ID назначенного пользователя
 	type?: 'personal' | 'group'
 	chatId?: string // Для групповых задач
-	assignedUserId?: string // Назначение пользователю
 	assignedRoleId?: number // Назначение роли
-}
+} 
 
 // Интерфейс для обновления задачи
 export interface UpdateTaskDto {
@@ -43,43 +42,24 @@ export class TaskService {
 
 	// Создание задачи (личной или групповой)
 	async createTask(data: CreateTaskDto): Promise<TaskEntity> {
-		// Определяем тип задачи
-		const type = data.chatId ? 'group' : 'personal'
-
-		// Проверяем существование автора
-		const author = await this.userRepository.findOne({
-			where: { telegramId: data.authorId },
-		})
-		if (!author) {
-			throw new Error('Автор задачи не найден')
-		}
-
-		// Для групповых задач проверяем существование чата
-		if (type === 'group' && data.chatId) {
-			const chat = await this.chatRepository.findOne({
-				where: { telegramId: data.chatId },
-			})
-			if (!chat) {
-				throw new Error('Чат не найден')
-			}
-		}
-
-		// Получаем следующий локальный ID
 		let localId: number
 		let readableId: string
 
-		if (type === 'group' && data.chatId) {
+		if (data.type === 'group' && data.chatId) {
 			// Для групповых задач - localId в рамках чата
 			localId = await this.getNextLocalIdForChat(data.chatId)
 			const chat = await this.chatRepository.findOne({
 				where: { telegramId: data.chatId },
 			})
 			const chatTitle = chat?.title || 'Group'
-			readableId = Formatter.createTaskId(chatTitle, localId)
+			readableId = TaskFormatter.createTaskId(chatTitle, localId)
 		} else {
-			// Для личных задач - localId в рамках пользователя
-			localId = await this.getNextLocalIdForUser(data.authorId)
-			readableId = Formatter.createTaskId('Personal', localId)
+			// Для личных задач - localId в рамках назначенного пользователя
+			if (!data.assignedUserId) {
+				throw new Error('Для личных задач должен быть указан назначенный пользователь')
+			}
+			localId = await this.getNextLocalIdForUser(data.assignedUserId)
+			readableId = TaskFormatter.createTaskId('Personal', localId)
 		}
 
 		// Создаем задачу
@@ -87,8 +67,7 @@ export class TaskService {
 			title: data.title,
 			description: data.description,
 			deadline: data.deadline,
-			authorId: data.authorId,
-			type,
+			type: data.type,
 			chatId: data.chatId,
 			assignedUserId: data.assignedUserId,
 			assignedRoleId: data.assignedRoleId,
@@ -98,11 +77,10 @@ export class TaskService {
 
 		const savedTask = await this.taskRepository.save(task)
 
-		// Загружаем задачу со всеми связями для корректного форматирования
 		return (
 			(await this.taskRepository.findOne({
 				where: { id: savedTask.id },
-				relations: ['author', 'chat', 'assignedUser', 'assignedRole'],
+				relations: ['chat', 'assignedUser', 'assignedRole'],
 			})) || savedTask
 		)
 	}
@@ -118,9 +96,9 @@ export class TaskService {
 	}
 
 	// Получение следующего локального ID для личной задачи пользователя
-	private async getNextLocalIdForUser(authorId: string): Promise<number> {
+	private async getNextLocalIdForUser(assignedUserId: string): Promise<number> {
 		const lastTask = await this.taskRepository.findOne({
-			where: { authorId, type: 'personal' },
+			where: { assignedUserId, type: 'personal' },
 			order: { localId: 'DESC' },
 		})
 
@@ -131,7 +109,7 @@ export class TaskService {
 	async getTaskById(id: number): Promise<TaskEntity | null> {
 		return await this.taskRepository.findOne({
 			where: { id },
-			relations: ['author', 'chat', 'assignedUser', 'assignedRole'],
+			relations: ['chat', 'assignedUser', 'assignedRole'],
 		})
 	}
 
@@ -139,10 +117,10 @@ export class TaskService {
 	async getPersonalTasks(userId: string): Promise<TaskEntity[]> {
 		return await this.taskRepository.find({
 			where: {
-				authorId: userId,
+				assignedUserId: userId,
 				type: 'personal',
 			},
-			relations: ['author'],
+			relations: ['assignedUser'],
 			order: { createdAt: 'DESC' },
 		})
 	}
@@ -154,7 +132,7 @@ export class TaskService {
 				chatId,
 				type: 'group',
 			},
-			relations: ['author', 'chat', 'assignedUser', 'assignedRole'],
+			relations: ['chat', 'assignedUser', 'assignedRole'],
 			order: { createdAt: 'DESC' },
 		})
 	}
@@ -171,7 +149,7 @@ export class TaskService {
 
 		return await this.taskRepository.find({
 			where,
-			relations: ['author', 'chat', 'assignedUser', 'assignedRole'],
+			relations: ['chat', 'assignedUser', 'assignedRole'],
 			order: { createdAt: 'DESC' },
 		})
 	}
@@ -180,7 +158,7 @@ export class TaskService {
 	async getTasksByRole(roleId: number): Promise<TaskEntity[]> {
 		return await this.taskRepository.find({
 			where: { assignedRoleId: roleId },
-			relations: ['author', 'chat', 'assignedUser', 'assignedRole'],
+			relations: ['chat', 'assignedUser', 'assignedRole'],
 			order: { createdAt: 'DESC' },
 		})
 	}
@@ -243,7 +221,6 @@ export class TaskService {
 	async getTasks(
 		filters: {
 			type?: 'personal' | 'group'
-			authorId?: string
 			chatId?: string
 			assignedUserId?: string
 			assignedRoleId?: number
@@ -252,7 +229,7 @@ export class TaskService {
 	): Promise<TaskEntity[]> {
 		return await this.taskRepository.find({
 			where: filters,
-			relations: ['author', 'chat', 'assignedUser', 'assignedRole'],
+			relations: ['chat', 'assignedUser', 'assignedRole'],
 			order: { createdAt: 'DESC' },
 		})
 	}

@@ -6,7 +6,7 @@ import { RoleService } from '../services/roleService'
 import { CommandHandlerService } from '../services/commandHandlerService'
 import { CallbackHandlerService } from '../services/callbackHandlerService'
 import { UserService } from '../services/userService'
-import { Formatter } from '../services/formatter/formatter'
+import { UserFormatter, MessageFormatter } from '../services/formatter'
 import { BotMentionUtils } from '../utils/botMentionUtils'
 import { VoiceHandlerService } from '../services/voiceHandlerService'
 
@@ -38,8 +38,8 @@ class TelegramBotController {
 
 		// Инициализируем сервисы обработки
 		this.voiceHandler = new VoiceHandlerService(taskService, chatService, roleService, userService, geminiService)
-		this.commandHandler = new CommandHandlerService()
-		this.callbackHandler = new CallbackHandlerService(taskService, chatService, userService)
+		this.commandHandler = new CommandHandlerService(taskService, chatService, roleService, userService)
+		this.callbackHandler = new CallbackHandlerService(taskService, chatService, roleService, userService)
 
 		this.token = process.env.TELEGRAM_BOT_TOKEN || 'YOUR_BOT_TOKEN'
 		if (this.token === 'YOUR_BOT_TOKEN') {
@@ -88,6 +88,42 @@ class TelegramBotController {
 				await this.handleCheckCommand(this.bot!, msg)
 			} catch (error) {
 				console.error('Ошибка в обработке сообщения:', error)
+			}
+		})
+
+		// Обработка команды /tasks
+		this.bot.onText(/\/tasks/, async msg => {
+			try {
+				await this.commandHandler.handleTasks(this.bot!, msg)
+			} catch (error) {
+				console.error('Ошибка в команде /tasks:', error)
+			}
+		})
+
+		// Обработка команды /members
+		this.bot.onText(/\/members/, async msg => {
+			try {
+				await this.commandHandler.handleMembers(this.bot!, msg)
+			} catch (error) {
+				console.error('Ошибка в команде /members:', error)
+			}
+		})
+
+		// Обработка команды /roles
+		this.bot.onText(/\/roles/, async msg => {
+			try {
+				await this.commandHandler.handleRoles(this.bot!, msg)
+			} catch (error) {
+				console.error('Ошибка в команде /roles:', error)
+			}
+		})
+
+		// Обработка команды /mytasks
+		this.bot.onText(/\/mytasks/, async msg => {
+			try {
+				await this.commandHandler.handleMyTasks(this.bot!, msg)
+			} catch (error) {
+				console.error('Ошибка в команде /mytasks:', error)
 			}
 		})
 
@@ -172,11 +208,7 @@ class TelegramBotController {
 			// Автоматически регистрируем нового участника
 			await this.chatService.addMember(chatId, member.telegramId.toString())
 
-			const personalWelcome =
-				`👋 Привет, ${Formatter.getTag(member)}! Добро пожаловать в группу!\n\n` +
-				'✅ Вы автоматически зарегистрированы в системе.\n' +
-				'📌 Обратите внимание на закрепленное сообщение с инструкциями.\n' +
-				'🎙️ Просто отправьте голосовое сообщение с вашей просьбой!'
+			const personalWelcome = MessageFormatter.WELCOME.NEW_MEMBER(UserFormatter.createTag(member))
 
 			bot.sendMessage(chatId, personalWelcome)
 		} catch (error) {
@@ -189,7 +221,7 @@ class TelegramBotController {
 		const chat = msg.chat
 		const user = msg.from
 		const isGroup = msg.chat.type === 'group' || msg.chat.type === 'supergroup'
-		const messageText = msg.text || msg.caption || '[системное сообщение]'
+		const messageText = msg.text || msg.caption || MessageFormatter.BOT_MESSAGES.SYSTEM_MESSAGE
 
 		try {
 			const isMentioned = await BotMentionUtils.isBotMentioned(this.bot!, msg)
@@ -198,6 +230,19 @@ class TelegramBotController {
 				await this.voiceHandler.handleVoiceMessage(this.bot!, msg.reply_to_message)
 		} catch (error) {
 			console.error('Ошибка в обработке сообщения:', error)
+		}
+
+		// Обработка кнопок клавиатуры в личных чатах
+		if (!isGroup && user && !user.is_bot && msg.text) {
+			const buttonTexts = ['📋 Мои задачи', '📝 Все задачи']
+			if (buttonTexts.includes(msg.text)) {
+				try {
+					await this.commandHandler.handleKeyboardButton(this.bot!, msg)
+					return // Не продолжаем обработку, если это кнопка клавиатуры
+				} catch (error) {
+					console.error('Ошибка обработки кнопки клавиатуры:', error)
+				}
+			}
 		}
 
 		// Автоматическая регистрация в групповых чатах
@@ -225,8 +270,8 @@ class TelegramBotController {
 					// Автоматически регистрируем пользователя
 					await this.chatService.addMember(chat.id.toString(), user.id.toString())
 
-					const userTag = Formatter.getTag(member)
-					const welcomeText = `✅ ${userTag}, вы автоматически зарегистрированы в системе!`
+					const userTag = UserFormatter.createTag(member)
+					const welcomeText = MessageFormatter.WELCOME.AUTO_REGISTERED(userTag)
 
 					// Отправляем уведомление, которое самоудалится через 5 секунд
 					const sentMessage = await bot.sendMessage(chat.id.toString(), welcomeText)
@@ -249,7 +294,7 @@ class TelegramBotController {
 		if (msg.reply_to_message && msg.reply_to_message.voice)
 			await this.voiceHandler.handleVoiceMessage(this.bot!, msg.reply_to_message)
 		else
-			this.bot!.sendMessage(msg.chat.id, 'Не нашел голосовое сообщение 🤷‍♂️', {
+			this.bot!.sendMessage(msg.chat.id, MessageFormatter.BOT_MESSAGES.VOICE_NOT_FOUND, {
 				reply_to_message_id: msg.message_id,
 			})
 	}
@@ -297,24 +342,27 @@ class TelegramBotController {
 
 		// Отправляем приветственное сообщение
 		const welcomeMessage =
-			'🎉 Привет! Я голосовой бот для управления задачами!\n\n' +
-			'🎙️ Чтобы я Вас услышал, сделайте одно из следующих действий:\n' +
-			'• Запиши голосовое в ответ на любое мое сообщение\n' +
-			'• Запиши голосовое сообщение, потом ответь на него, отправив команду "/check" или упомянув меня через "@"\n\n' +
-			'✨ Говорите естественно - я пойму!\n\n' +
+			MessageFormatter.BOT_MESSAGES.WELCOME + '\n\n' +
+			MessageFormatter.BOT_MESSAGES.VOICE_INSTRUCTIONS + '\n\n' +
+			MessageFormatter.BOT_MESSAGES.NATURAL_SPEECH + '\n\n' +
 			(isAdmin
-				? '✅ У меня есть права администратора - сейчас закреплю это сообщение!'
-				: '⚠️ Для полной функциональности сделайте меня администратором группы')
+				? MessageFormatter.BOT_MESSAGES.ADMIN_OK
+				: MessageFormatter.BOT_MESSAGES.ADMIN_NEED)
 
 		// Создаем inline клавиатуру с полезными кнопками
 		const keyboard = {
 			inline_keyboard: [
 				[
 					{
-						text: '👤 Зарегистрироваться',
+						text: MessageFormatter.BOT_MESSAGES.REGISTER_BUTTON,
 						callback_data: 'register',
 					},
 				],
+				[
+					{ text: '📋 Задачи', callback_data: 'show_tasks' },
+					{ text: '👥 Участники', callback_data: 'show_members' },
+					{ text: '🎭 Роли', callback_data: 'show_roles' }
+				]
 			],
 		}
 
@@ -327,7 +375,7 @@ class TelegramBotController {
 			try {
 				await bot.pinChatMessage(chat.id.toString(), sentMessage.message_id)
 				await this.chatService.updateWelcomeMessage(chat.id.toString(), sentMessage.message_id)
-				bot.sendMessage(chat.id.toString(), '📌 Приветственное сообщение закреплено!')
+				bot.sendMessage(chat.id.toString(), MessageFormatter.BOT_MESSAGES.PINNED)
 			} catch (error) {
 				console.error('Ошибка закрепления сообщения:', error)
 			}
@@ -350,18 +398,18 @@ class TelegramBotController {
 				await bot.pinChatMessage(chatId, welcomeMessageId)
 				bot.sendMessage(
 					chatId,
-					'🎉 Отлично! Теперь у меня есть права администратора.\n📌 Приветственное сообщение закреплено!'
+					MessageFormatter.BOT_MESSAGES.ADMIN_WELCOME_PINNED
 				)
 			} else {
 				// Если нет сохраненного сообщения, отправляем новое
 				bot.sendMessage(
 					chatId,
-					'🎉 Спасибо за права администратора! Теперь я могу полноценно работать в этой группе.'
+					MessageFormatter.BOT_MESSAGES.ADMIN_THANKS + ' ' + MessageFormatter.BOT_MESSAGES.ADMIN_FULL
 				)
 			}
 		} catch (error) {
 			console.error('Ошибка при обработке получения прав администратора:', error)
-			bot.sendMessage(chatId, '🎉 Спасибо за права администратора!')
+			bot.sendMessage(chatId, MessageFormatter.BOT_MESSAGES.ADMIN_THANKS)
 		}
 	}
 

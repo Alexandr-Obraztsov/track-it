@@ -12,8 +12,8 @@ export class TaskEntity {
 	@Column({ type: 'varchar' })
 	title!: string // Название задачи
 
-	@Column({ type: 'text' })
-	description!: string // Описание задачи
+	@Column({ type: 'text', nullable: true })
+	description?: string // Описание задачи
 
 	@Column({ type: 'varchar' })
 	readableId!: string // Читаемый ID задачи (например: CHT-123 или PSN-456)
@@ -34,9 +34,6 @@ export class TaskEntity {
 	})
 	type!: 'personal' | 'group' // Тип задачи
 
-	@Column({ type: 'bigint' })
-	authorId!: string // ID автора задачи
-
 	@Column({ type: 'bigint', nullable: true })
 	chatId?: string // ID чата для групповых задач
 
@@ -51,11 +48,6 @@ export class TaskEntity {
 
 	@Column({ type: 'timestamp', default: () => 'CURRENT_TIMESTAMP', onUpdate: 'CURRENT_TIMESTAMP' })
 	updatedAt!: Date // Дата последнего обновления
-
-	// Автор задачи
-	@ManyToOne(() => UserEntity, user => user.createdTasks, { onDelete: 'CASCADE' })
-	@JoinColumn({ name: 'authorId' })
-	author!: UserEntity
 
 	// Чат для групповых задач
 	@ManyToOne(() => ChatEntity, chat => chat.tasks, { nullable: true, onDelete: 'CASCADE' })

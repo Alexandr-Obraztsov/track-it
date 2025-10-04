@@ -1,7 +1,8 @@
 import { GoogleGenerativeAI } from '@google/generative-ai'
 import * as fs from 'fs'
 import { GEMINI_PROMPTS } from '../configs/geminiPrompts'
-import { GeminiUser, GeminiTask, GeminiRole, AudioTranscriptionResponse } from '../types'
+import { GeminiUser, GeminiTask, GeminiRole, GeminiChatMember, AudioTranscriptionResponse } from '../types'
+import { MessageFormatter } from './formatter'
 
 // Сервис для работы с Gemini AI
 export class GeminiService {
@@ -15,9 +16,10 @@ export class GeminiService {
 	public async processAudio(
 		audioPath: string,
 		author: GeminiUser,
-		users: GeminiUser[] = [],
 		tasks: GeminiTask[] = [],
-		roles: GeminiRole[] = []
+		roles: GeminiRole[] = [],
+		members: GeminiChatMember[] = [],
+		isGroup: boolean = true
 	): Promise<AudioTranscriptionResponse | string> {
 		try {
 			const model = this.genAI.getGenerativeModel({ model: 'gemini-2.5-flash' })
@@ -30,16 +32,16 @@ export class GeminiService {
 			// Форматируем автора запроса
 			const authorString = `ID: ${author.telegramId}, Имя: ${author.firstName} ${author.lastName || ''}, Username: @${author.username}`
 
-			// Форматируем пользователей
-			const usersString =
-				users.length > 0
-					? users
+			// Форматируем участников чата
+			const membersString =
+				members.length > 0
+					? members
 							.map(
-								u =>
-									`ID: ${u.telegramId}, Имя: ${u.firstName} ${u.lastName || ''}, Username: @${u.username}`
+								m =>
+									`ID: ${m.userId}, Имя: ${m.firstName} ${m.lastName || ''}, Username: @${m.username}, Роль: ${m.roleName || 'Без роли'}`
 							)
 							.join('\n')
-					: 'Пользователи отсутствуют'
+					: MessageFormatter.GEMINI_DATA.USERS_ABSENT
 
 			// Форматируем роли
 			const rolesString =
@@ -48,10 +50,10 @@ export class GeminiService {
 							.map(
 								r =>
 									`ID: ${r.id}, Название: ${r.name}, Участников: ${r.memberIds.length}, ` +
-									`Пользователи: ${r.memberIds.length > 0 ? r.memberIds.join(', ') : 'отсутствуют'}`
+									`Пользователи: ${r.memberIds.length > 0 ? r.memberIds.join(', ') : MessageFormatter.GEMINI_DATA.USERS_ABSENT}`
 							)
 							.join('\n')
-					: 'Роли отсутствуют'
+					: MessageFormatter.GEMINI_DATA.ROLES_ABSENT
 
 			// Форматируем задачи
 			const tasksString =
@@ -60,19 +62,24 @@ export class GeminiService {
 							.map(
 								t =>
 									`ID: ${t.id}, Читаемый ID: ${t.readableId}, Название: ${t.title}, Описание: ${t.description}, ` +
-									`Дедлайн: ${t.deadline || 'не указан'}, ` +
-									`Назначена на пользователя: ${t.assignedUserId || 'не назначена'}, ` +
-									`Назначена на роль: ${t.assignedRoleId || 'не назначена'}, ` +
-									`Выполнена: ${t.isCompleted ? 'да' : 'нет'}`
+									`Дедлайн: ${t.deadline || MessageFormatter.GEMINI_DATA.DEADLINE_NOT_SET}, ` +
+									`Назначена на пользователя: ${t.assignedUserId || MessageFormatter.GEMINI_DATA.NOT_ASSIGNED}, ` +
+									`Назначена на роль: ${t.assignedRoleId || MessageFormatter.GEMINI_DATA.NOT_ASSIGNED}, ` +
+									`Выполнена: ${t.isCompleted ? MessageFormatter.GEMINI_DATA.COMPLETED_YES : MessageFormatter.GEMINI_DATA.COMPLETED_NO}`
 							)
 							.join('\n')
-					: 'Задачи отсутствуют'
+					: MessageFormatter.GEMINI_DATA.TASKS_ABSENT
 
-			let prompt = GEMINI_PROMPTS.AUDIO_TRANSCRIPTION.replace('{currentTime}', currentTime)
+			// Выбираем промпт в зависимости от типа чата
+			const basePrompt = isGroup 
+				? GEMINI_PROMPTS.AUDIO_TRANSCRIPTION 
+				: GEMINI_PROMPTS.PERSONAL_TASK_ASSISTANT
+
+			let prompt = basePrompt.replace('{currentTime}', currentTime)
 				.replace('{author}', authorString)
-				.replace('{users}', usersString)
 				.replace('{roles}', rolesString)
 				.replace('{tasks}', tasksString)
+				.replace('{chatMembers}', membersString)
 
 			const result = await model.generateContent([
 				prompt,
@@ -98,12 +105,12 @@ export class GeminiService {
 				const parsedResponse = JSON.parse(cleanedText) as AudioTranscriptionResponse
 				return parsedResponse
 			} catch (parseError) {
-				console.warn('Не удалось распарсить ответ Gemini как JSON, возвращаем сырой текст')
+				console.warn(MessageFormatter.ERRORS.GENERAL)
 				return responseText
 			}
 		} catch (error) {
-			console.error('Ошибка обработки аудио с Gemini:', error instanceof Error ? error.message : String(error))
-			return 'Ошибка обработки аудио с Gemini'
+		console.error(MessageFormatter.ERRORS.GENERAL, error instanceof Error ? error.message : String(error))
+		return MessageFormatter.ERRORS.GENERAL
 		}
 	}
 }

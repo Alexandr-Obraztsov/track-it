@@ -49,7 +49,6 @@ export class UserService {
 		return await this.userRepository.findOne({
 			where: { telegramId },
 			relations: [
-				'createdTasks',
 				'assignedTasks',
 				'chatMemberships',
 				'chatMemberships.chat',
@@ -95,20 +94,12 @@ export class UserService {
 		})
 	}
 
-	// Получение созданных пользователем задач
-	async getUserCreatedTasks(telegramId: string): Promise<TaskEntity[]> {
-		return await this.taskRepository.find({
-			where: { authorId: telegramId },
-			relations: ['chat', 'assignedUser', 'assignedRole'],
-			order: { createdAt: 'DESC' },
-		})
-	}
 
 	// Получение задач, назначенных пользователю
 	async getUserAssignedTasks(telegramId: string): Promise<TaskEntity[]> {
 		return await this.taskRepository.find({
 			where: { assignedUserId: telegramId },
-			relations: ['author', 'chat', 'assignedRole'],
+			relations: ['chat', 'assignedRole'],
 			order: { createdAt: 'DESC' },
 		})
 	}
@@ -117,26 +108,21 @@ export class UserService {
 	async getUserPersonalTasks(telegramId: string): Promise<TaskEntity[]> {
 		return await this.taskRepository.find({
 			where: {
-				authorId: telegramId,
+				assignedUserId: telegramId,
 				type: 'personal',
 			},
-			relations: ['author'],
+			relations: ['assignedUser'],
 			order: { createdAt: 'DESC' },
 		})
 	}
 
 	// Получение статистики пользователя
 	async getUserStats(telegramId: string): Promise<{
-		totalCreatedTasks: number
 		totalAssignedTasks: number
 		completedTasks: number
 		pendingTasks: number
 		totalChats: number
 	}> {
-		const createdTasks = await this.taskRepository.count({
-			where: { authorId: telegramId },
-		})
-
 		const assignedTasks = await this.taskRepository.count({
 			where: { assignedUserId: telegramId },
 		})
@@ -160,7 +146,6 @@ export class UserService {
 		})
 
 		return {
-			totalCreatedTasks: createdTasks,
 			totalAssignedTasks: assignedTasks,
 			completedTasks,
 			pendingTasks,

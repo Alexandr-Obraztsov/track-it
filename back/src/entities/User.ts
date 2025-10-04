@@ -39,9 +39,6 @@ export class UserEntity {
 	})
 	groupNotificationPreset!: NotificationPresetType // Пресет для групповых задач
 
-	@OneToMany(() => TaskEntity, task => task.author)
-	createdTasks?: TaskEntity[] // Задачи, созданные пользователем
-
 	@OneToMany(() => TaskEntity, task => task.assignedUser)
 	assignedTasks?: TaskEntity[] // Задачи, назначенные пользователю
 
