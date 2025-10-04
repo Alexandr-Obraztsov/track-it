@@ -133,7 +133,7 @@ class TelegramBotController {
 				const isMentioned = await BotMentionUtils.isBotMentioned(this.bot!, msg)
 				if (!isMentioned) return
 
-				await this.voiceHandler.handleVoiceMessage(this.bot!, msg)
+				await this.voiceHandler.handleMessage(this.bot!, msg)
 			} catch (error) {
 				console.error('Ошибка в обработке голосового сообщения:', error)
 			}
@@ -227,20 +227,33 @@ class TelegramBotController {
 			const isMentioned = await BotMentionUtils.isBotMentioned(this.bot!, msg)
 			// Если бот упомянут и сообщение является ответом на голосовое сообщение
 			if (isMentioned && msg.reply_to_message && msg.reply_to_message.voice)
-				await this.voiceHandler.handleVoiceMessage(this.bot!, msg.reply_to_message)
+				await this.voiceHandler.handleMessage(this.bot!, msg.reply_to_message)
 		} catch (error) {
 			console.error('Ошибка в обработке сообщения:', error)
 		}
 
 		// Обработка кнопок клавиатуры в личных чатах
 		if (!isGroup && user && !user.is_bot && msg.text) {
-			const buttonTexts = ['📋 Мои задачи', '📝 Все задачи']
+			const buttonTexts = ['📋 Мои задачи']
 			if (buttonTexts.includes(msg.text)) {
 				try {
 					await this.commandHandler.handleKeyboardButton(this.bot!, msg)
 					return // Не продолжаем обработку, если это кнопка клавиатуры
 				} catch (error) {
 					console.error('Ошибка обработки кнопки клавиатуры:', error)
+				}
+			}
+		}
+
+		// Обработка текстовых сообщений для создания задач
+		if (user && !user.is_bot && msg.text && !msg.text.startsWith('/')) {
+			const isMentioned = await BotMentionUtils.isBotMentioned(this.bot!, msg)
+			if (isMentioned || !isGroup) {
+				try {
+					await this.voiceHandler.handleMessage(this.bot!, msg)
+					return // Не продолжаем обработку, если это текстовое сообщение для создания задач
+				} catch (error) {
+					console.error('Ошибка обработки текстового сообщения:', error)
 				}
 			}
 		}
@@ -292,7 +305,7 @@ class TelegramBotController {
 
 	private async handleCheckCommand(bot: TelegramBot, msg: TelegramBot.Message): Promise<void> {
 		if (msg.reply_to_message && msg.reply_to_message.voice)
-			await this.voiceHandler.handleVoiceMessage(this.bot!, msg.reply_to_message)
+			await this.voiceHandler.handleMessage(this.bot!, msg.reply_to_message)
 		else
 			this.bot!.sendMessage(msg.chat.id, MessageFormatter.BOT_MESSAGES.VOICE_NOT_FOUND, {
 				reply_to_message_id: msg.message_id,

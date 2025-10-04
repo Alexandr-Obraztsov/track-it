@@ -113,4 +113,91 @@ export class GeminiService {
 		return MessageFormatter.ERRORS.GENERAL
 		}
 	}
+
+	// Обработка текстового сообщения и извлечение задач с ролями
+	public async processText(
+		text: string,
+		author: GeminiUser,
+		tasks: GeminiTask[] = [],
+		roles: GeminiRole[] = [],
+		members: GeminiChatMember[] = [],
+		isGroup: boolean = true
+	): Promise<AudioTranscriptionResponse | string> {
+		try {
+			const model = this.genAI.getGenerativeModel({ model: 'gemini-2.5-flash' })
+
+			// Подставляем текущее время, автора, список пользователей, роли и задачи в промпт
+			const currentTime = new Date().toString()
+
+			// Форматируем автора запроса
+			const authorString = `ID: ${author.telegramId}, Имя: ${author.firstName} ${author.lastName || ''}, Username: @${author.username}`
+
+			// Форматируем участников чата
+			const membersString =
+				members.length > 0
+					? members
+							.map(
+								m =>
+									`ID: ${m.userId}, Имя: ${m.firstName} ${m.lastName || ''}, Username: @${m.username}, Роль: ${m.roleName || 'Без роли'}`
+							)
+							.join('\n')
+					: MessageFormatter.GEMINI_DATA.USERS_ABSENT
+
+			// Форматируем роли
+			const rolesString =
+				roles.length > 0
+					? roles
+							.map(
+								r =>
+									`ID: ${r.id}, Название: ${r.name}, Участников: ${r.memberIds.length}, ` +
+									`Пользователи: ${r.memberIds.length > 0 ? r.memberIds.join(', ') : MessageFormatter.GEMINI_DATA.USERS_ABSENT}`
+							)
+							.join('\n')
+					: MessageFormatter.GEMINI_DATA.ROLES_ABSENT
+
+			// Форматируем задачи
+			const tasksString =
+				tasks.length > 0
+					? tasks
+							.map(
+								t =>
+									`ID: ${t.id}, ReadableId: ${t.readableId}, Название: ${t.title}, Описание: ${t.description || 'отсутствует'}, ` +
+									`Дедлайн: ${t.deadline || 'отсутствует'}, Назначена на пользователя: ${t.assignedUserId || 'отсутствует'}, ` +
+									`Назначена на роль: ${t.assignedRoleId || 'отсутствует'}, Выполнена: ${t.isCompleted ? 'да' : 'нет'}`
+							)
+							.join('\n')
+					: MessageFormatter.GEMINI_DATA.TASKS_ABSENT
+
+			// Выбираем промпт в зависимости от типа чата
+			const basePrompt = isGroup 
+				? GEMINI_PROMPTS.AUDIO_TRANSCRIPTION 
+				: GEMINI_PROMPTS.PERSONAL_TASK_ASSISTANT
+
+			let prompt = basePrompt.replace('{currentTime}', currentTime)
+				.replace('{author}', authorString)
+				.replace('{roles}', rolesString)
+				.replace('{tasks}', tasksString)
+				.replace('{chatMembers}', membersString)
+
+			// Добавляем текст сообщения в конец промпта
+			prompt += `\n\nТЕКСТ СООБЩЕНИЯ ПОЛЬЗОВАТЕЛЯ: "${text}"`
+
+			const result = await model.generateContent(prompt)
+			const responseText = result.response.text()
+
+			// Очищаем текст от markdown код-блоков перед парсингом JSON
+			const cleanedText = responseText
+				.replace(/```json\n?/g, '')
+				.replace(/```/g, '')
+				.trim()
+
+			// Парсим JSON
+			const parsedResponse: AudioTranscriptionResponse = JSON.parse(cleanedText)
+
+			return parsedResponse
+		} catch (error) {
+			console.error('Error processing text with Gemini:', error)
+			return MessageFormatter.ERRORS.GENERAL
+		}
+	}
 }

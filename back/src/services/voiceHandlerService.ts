@@ -18,7 +18,7 @@ import {
 import { convertOggToMp3, ensureDownloadsDirectory } from '../utils/fileUtils'
 import * as fs from 'fs'
 
-// Сервис для обработки голосовых сообщений
+// Сервис для обработки голосовых и текстовых сообщений
 export class VoiceHandlerService {
 	private taskService: TaskService
 	private chatService: ChatService
@@ -41,17 +41,21 @@ export class VoiceHandlerService {
 		ensureDownloadsDirectory()
 	}
 
-	// Основной метод обработки голосового сообщения
-	async handleVoiceMessage(bot: TelegramBot, msg: TelegramBot.Message): Promise<void> {
+	// Универсальный метод обработки голосовых и текстовых сообщений
+	async handleMessage(bot: TelegramBot, msg: TelegramBot.Message): Promise<void> {
 		const chatId = msg.chat.id.toString()
 		const userId = msg.from!.id.toString()
 		const isGroup = msg.chat.type === 'group' || msg.chat.type === 'supergroup'
-		const fileId = msg.voice!.file_id
-		const oggFileName = `voice_${Date.now()}.ogg`
-		const mp3FileName = `voice_${Date.now()}.mp3`
-		const downloadsDir = path.join(__dirname, '../downloads')
-		const oggPath = path.join(downloadsDir, oggFileName)
-		const mp3Path = path.join(downloadsDir, mp3FileName)
+		
+		// Определяем тип сообщения
+		const isVoiceMessage = !!msg.voice
+		const isTextMessage = !!msg.text
+		
+		if (!isVoiceMessage && !isTextMessage) return
+
+		// Переменные для голосовых файлов
+		let oggPath: string | undefined
+		let mp3Path: string | undefined
 
 		try {
 			// Ставим реакцию думающего смайлика для индикации обработки
@@ -64,35 +68,43 @@ export class VoiceHandlerService {
 				// Продолжаем обработку даже если реакция не сработала
 			}
 
-			// Скачиваем файл
-			const fileInfo = await bot.getFile(fileId)
+			// Обрабатываем голосовое сообщение
+			if (isVoiceMessage) {
+				const fileId = msg.voice!.file_id
+				const oggFileName = `voice_${Date.now()}.ogg`
+				const mp3FileName = `voice_${Date.now()}.mp3`
+				const downloadsDir = path.join(__dirname, '../downloads')
+				oggPath = path.join(downloadsDir, oggFileName)
+				mp3Path = path.join(downloadsDir, mp3FileName)
 
-			const downloadResult = await bot.downloadFile(fileId, downloadsDir)
+				// Скачиваем файл
+				const fileInfo = await bot.getFile(fileId)
+				const downloadResult = await bot.downloadFile(fileId, downloadsDir)
 
-			let downloadedFilePath: string
+				let downloadedFilePath: string
+				if (typeof downloadResult === 'string') {
+					downloadedFilePath = downloadResult
+				} else {
+					throw new Error('Download returned a stream instead of file path')
+				}
 
-			if (typeof downloadResult === 'string') {
-				downloadedFilePath = downloadResult
-			} else {
-				throw new Error('Download returned a stream instead of file path')
-			}
+				// Переименовываем файл
+				if (fs.existsSync(downloadedFilePath)) {
+					fs.renameSync(downloadedFilePath, oggPath)
+				} else {
+					throw new Error(`Downloaded file not found at ${downloadedFilePath}`)
+				}
 
-			// Переименовываем файл
-			if (fs.existsSync(downloadedFilePath)) {
-				fs.renameSync(downloadedFilePath, oggPath)
-			} else {
-				throw new Error(`Downloaded file not found at ${downloadedFilePath}`)
-			}
+				if (!fs.existsSync(oggPath)) {
+					throw new Error(`OGG file not found at ${oggPath}`)
+				}
 
-			if (!fs.existsSync(oggPath)) {
-				throw new Error(`OGG file not found at ${oggPath}`)
-			}
+				// Конвертируем в MP3
+				await convertOggToMp3(oggPath, mp3Path)
 
-			// Конвертируем в MP3
-			await convertOggToMp3(oggPath, mp3Path)
-
-			if (!fs.existsSync(mp3Path)) {
-				throw new Error(`MP3 file not created at ${mp3Path}`)
+				if (!fs.existsSync(mp3Path)) {
+					throw new Error(`MP3 file not created at ${mp3Path}`)
+				}
 			}
 
 			// Получаем контекст для Gemini (полноценная схема БД)
@@ -202,7 +214,9 @@ export class VoiceHandlerService {
 			}
 
 			const geminiResult = this.geminiService
-				? await this.geminiService.processAudio(mp3Path, author, tasks, roles, members, isGroup)
+				? isVoiceMessage 
+					? await this.geminiService.processAudio(mp3Path!, author, tasks, roles, members, isGroup)
+					: await this.geminiService.processText(msg.text!, author, tasks, roles, members, isGroup)
 				: null
 
 			// Проверяем что получили валидный ответ
@@ -237,10 +251,12 @@ export class VoiceHandlerService {
 				console.warn(MessageFormatter.ERRORS.GENERAL, reactionError)
 			}
 
-			// Очищаем файлы
-			this.cleanupFiles(oggPath, mp3Path)
+			// Очищаем файлы только для голосовых сообщений
+			if (isVoiceMessage && oggPath && mp3Path) {
+				this.cleanupFiles(oggPath, mp3Path)
+			}
 		} catch (error) {
-			console.error('Error processing voice message:', error)
+			console.error('Error processing message:', error)
 
 			// Ставим реакцию ошибки при неудачной обработке
 			try {
@@ -252,7 +268,7 @@ export class VoiceHandlerService {
 				console.warn(MessageFormatter.ERRORS.GENERAL, reactionError)
 			}
 
-			this.handleVoiceError(bot, chatId, error, oggPath, mp3Path)
+			this.handleMessageError(bot, chatId, error, isVoiceMessage, oggPath, mp3Path)
 		}
 	}
 
@@ -367,7 +383,7 @@ export class VoiceHandlerService {
 	}
 
 	// Обработка ошибок
-	private handleVoiceError(bot: TelegramBot, chatId: string, error: any, oggPath: string, mp3Path: string): void {
+	private handleMessageError(bot: TelegramBot, chatId: string, error: any, isVoiceMessage: boolean, oggPath?: string, mp3Path?: string): void {
 		let errorMessage = 'Unknown error occurred'
 		let isProxyError = false
 
@@ -385,7 +401,8 @@ export class VoiceHandlerService {
 			}
 		}
 
-		let userMessage = `Error processing voice message: ${errorMessage}`
+		const messageType = isVoiceMessage ? 'voice' : 'text'
+		let userMessage = `Error processing ${messageType} message: ${errorMessage}`
 
 		if (isProxyError) {
 			userMessage +=
@@ -394,11 +411,13 @@ export class VoiceHandlerService {
 
 		bot.sendMessage(chatId, userMessage)
 
-		// Очищаем файлы при ошибке
-		try {
-			this.cleanupFiles(oggPath, mp3Path)
-		} catch (cleanupError) {
-			console.warn('Error during cleanup:', cleanupError)
+		// Очищаем файлы при ошибке только для голосовых сообщений
+		if (isVoiceMessage && oggPath && mp3Path) {
+			try {
+				this.cleanupFiles(oggPath, mp3Path)
+			} catch (cleanupError) {
+				console.warn('Error during cleanup:', cleanupError)
+			}
 		}
 	}
 }
