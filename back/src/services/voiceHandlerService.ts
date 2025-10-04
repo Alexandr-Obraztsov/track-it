@@ -18,7 +18,7 @@ import {
 import { convertOggToMp3, ensureDownloadsDirectory } from '../utils/fileUtils'
 import * as fs from 'fs'
 
-// Сервис для обработки голосовых и текстовых сообщений
+// Сервис для обработки голосовых сообщений
 export class VoiceHandlerService {
 	private taskService: TaskService
 	private chatService: ChatService
@@ -41,17 +41,17 @@ export class VoiceHandlerService {
 		ensureDownloadsDirectory()
 	}
 
-	// Основной метод обработки голосовых и текстовых сообщений
+	// Основной метод обработки голосового сообщения
 	async handleVoiceMessage(bot: TelegramBot, msg: TelegramBot.Message): Promise<void> {
 		const chatId = msg.chat.id.toString()
 		const userId = msg.from!.id.toString()
 		const isGroup = msg.chat.type === 'group' || msg.chat.type === 'supergroup'
-		
-		// Определяем тип сообщения
-		const isVoiceMessage = !!msg.voice
-		const isTextMessage = !!msg.text
-		
-		if (!isVoiceMessage && !isTextMessage) return
+		const fileId = msg.voice!.file_id
+		const oggFileName = `voice_${Date.now()}.ogg`
+		const mp3FileName = `voice_${Date.now()}.mp3`
+		const downloadsDir = path.join(__dirname, '../downloads')
+		const oggPath = path.join(downloadsDir, oggFileName)
+		const mp3Path = path.join(downloadsDir, mp3FileName)
 
 		try {
 			// Ставим реакцию думающего смайлика для индикации обработки
