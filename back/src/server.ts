@@ -1,6 +1,7 @@
 import 'dotenv/config'
 import 'reflect-metadata'
 import express, { Application } from 'express'
+import cors from 'cors'
 import { DataSource } from 'typeorm'
 import { TaskEntity } from './entities/Task'
 import { UserEntity } from './entities/User'
@@ -16,6 +17,7 @@ import { UserService } from './services/userService'
 import { RoleService } from './services/roleService'
 import { GeminiService } from './services/geminiService'
 import { NotificationService } from './services/notificationService'
+import apiRoutes from './routes'
 
 process.on('unhandledRejection', (reason, promise) => {
 	console.error('Unhandled Rejection at:', promise, 'reason:', reason)
@@ -95,21 +97,66 @@ class Server {
 
 	// Инициализация middleware
 	private initializeMiddleware(): void {
+		// CORS для фронтенда (поддержка HTTP и HTTPS для локальной разработки)
+		const allowedOrigins = [
+			'http://localhost:5173',
+			'https://localhost:5173',
+			process.env.FRONTEND_URL,
+		].filter(Boolean) // Убираем undefined если FRONTEND_URL не задан
+		
+		this.app.use(cors({
+			origin: (origin, callback) => {
+				// Разрешаем запросы без origin (например, Postman или curl)
+				if (!origin) return callback(null, true)
+				
+				// Разрешаем localhost с любым портом
+				if (origin.includes('localhost') || origin.includes('127.0.0.1')) {
+					return callback(null, true)
+				}
+				
+				// Разрешаем локальные IP адреса (192.168.x.x, 10.x.x.x)
+				if (origin.match(/^https?:\/\/(192\.168\.|10\.)\d+\.\d+:\d+$/)) {
+					return callback(null, true)
+				}
+				
+				// Проверяем whitelist
+				if (allowedOrigins.includes(origin)) {
+					return callback(null, true)
+				}
+				
+				callback(new Error('Not allowed by CORS'))
+			},
+			credentials: true,
+		}))
 		this.app.use(express.json())
 		this.app.use(logger)
 	}
 
 	// Инициализация маршрутов
 	private initializeRoutes(): void {
+		// Главная страница
 		this.app.get('/', (req, res) => {
 			res.send(MessageFormatter.BOT_MESSAGES.SERVER_WORKING)
+		})
+		
+		// API маршруты
+		this.app.use('/api', apiRoutes)
+		
+		// Обработка 404 для API
+		this.app.use('/api/*', (req, res) => {
+			res.status(404).json({
+				success: false,
+				error: 'API endpoint не найден'
+			})
 		})
 	}
 
 	// Запуск сервера
 	public start(): void {
-		this.app.listen(this.port, () => {
-			console.log(`Сервер запущен на порту ${this.port}`)
+		// Слушаем на 0.0.0.0 чтобы быть доступным из локальной сети
+		this.app.listen(this.port, '0.0.0.0', () => {
+			console.log(`🚀 Сервер запущен на http://0.0.0.0:${this.port}`)
+			console.log(`📱 Доступен в локальной сети`)
 		})
 	}
 }

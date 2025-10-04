@@ -41,6 +41,73 @@ export class MessageProcessor {
 	}
 
 	/**
+	 * Универсальный метод обработки голосовых и текстовых сообщений
+	 * 
+	 * @description Обрабатывает входящие сообщения, управляет реакциями Telegram
+	 * и выполняет основную логику обработки через Gemini AI.
+	 * 
+	 * @param bot - Экземпляр Telegram бота
+	 * @param msg - Сообщение для обработки
+	 * 
+	 * @example
+	 * ```typescript
+	 * await messageProcessor.handleMessage(bot, message)
+	 * ```
+	 */
+	async handleMessage(bot: TelegramBot, msg: TelegramBot.Message): Promise<void> {
+		const chatId = msg.chat.id.toString()
+		const isVoiceMessage = !!msg.voice
+		const isTextMessage = !!msg.text
+		
+		if (!isVoiceMessage && !isTextMessage) return
+
+		try {
+			// Ставим реакцию думающего смайлика для индикации обработки
+			try {
+				await bot.setMessageReaction(chatId, msg.message_id, {
+					reaction: [{ type: 'emoji', emoji: '🤔' }],
+				})
+			} catch (reactionError) {
+				console.warn(MessageFormatter.ERRORS.GENERAL, reactionError)
+			}
+
+			// Обрабатываем сообщение
+			const response = await this.processMessage(bot, msg)
+
+			// Отправляем ответ
+			await bot.sendMessage(chatId, response, {
+					reply_to_message_id: msg.message_id,
+					parse_mode: 'HTML'
+				})
+
+			// Ставим реакцию галочки после успешной обработки
+			try {
+				await bot.setMessageReaction(chatId, msg.message_id, {
+					reaction: [{ type: 'emoji', emoji: '🍓' }],
+					is_big: false,
+				})
+			} catch (reactionError) {
+				console.warn(MessageFormatter.ERRORS.GENERAL, reactionError)
+			}
+
+		} catch (error) {
+			console.error('Error processing message:', error)
+
+			// Ставим реакцию ошибки при неудачной обработке
+			try {
+				await bot.setMessageReaction(chatId, msg.message_id, {
+					reaction: [{ type: 'emoji', emoji: '💔' }],
+					is_big: false,
+				})
+			} catch (reactionError) {
+				console.warn(MessageFormatter.ERRORS.GENERAL, reactionError)
+			}
+
+			await bot.sendMessage(chatId, MessageFormatter.ERRORS.GENERAL)
+		}
+	}
+
+	/**
 	 * Обрабатывает сообщение (голосовое или текстовое)
 	 * 
 	 * @description Универсальный метод для обработки всех типов сообщений.
@@ -57,7 +124,7 @@ export class MessageProcessor {
 	 * await bot.sendMessage(chatId, response)
 	 * ```
 	 */
-	async processMessage(bot: TelegramBot, msg: TelegramBot.Message): Promise<string> {
+	private async processMessage(bot: TelegramBot, msg: TelegramBot.Message): Promise<string> {
 		const chatId = msg.chat.id.toString()
 		const userId = msg.from!.id.toString()
 		const isGroup = msg.chat.type === 'group' || msg.chat.type === 'supergroup'
@@ -86,9 +153,15 @@ export class MessageProcessor {
 			const context = await this.contextService.getContext(msg)
 
 			// Обрабатываем через Gemini
-			const geminiResult = isVoiceMessage 
-				? await this.geminiService.processAudio(mp3Path!, context.author, context.tasks, context.roles, context.members, context.isGroup)
-				: await this.geminiService.processText(msg.text!, context.author, context.tasks, context.roles, context.members, context.isGroup)
+			const geminiResult = await this.geminiService.processMessage(
+				isVoiceMessage ? mp3Path! : msg.text!,
+				context.author,
+				context.tasks,
+				context.roles,
+				context.members,
+				context.isGroup,
+				isVoiceMessage
+			)
 
 			// Проверяем что получили валидный ответ
 			if (!geminiResult) {
@@ -198,7 +271,7 @@ export class MessageProcessor {
 	 * Обрабатывает создание задач
 	 */
 	private async processTasksCreation(tasks: Task[], userId: string, chatId: string, isGroup: boolean): Promise<string> {
-		const result = [MessageFormatter.SUCCESS.NEW_TASKS(tasks.length)]
+		const result = [MessageFormatter.SUCCESS]
 		for (const task of tasks) {
 			try {
 				// Создаем задачу через новый API
@@ -236,7 +309,7 @@ export class MessageProcessor {
 				switch (operation.operation) {
 					case 'delete':
 						const deleteSuccess = await this.taskService.deleteTask(task.id)
-						response.push(OperationFormatter.formatTaskOperation(operation, deleteSuccess, task))
+						response.push(OperationFormatter.formatTaskOperation(operation.operation, task))
 						break
 
 					case 'update':
@@ -249,7 +322,17 @@ export class MessageProcessor {
 							}
 
 							const updatedTask = await this.taskService.updateTask(task.id, updateData)
-							response.push(OperationFormatter.formatTaskOperation(operation, !!updatedTask, task))
+							if (updatedTask) {
+								response.push(OperationFormatter.formatTaskUpdate(task, updatedTask, operation.updateData))
+							}
+						}
+						break
+
+					case 'complete':
+						const completeData = { isCompleted: true }
+						const completedTask = await this.taskService.updateTask(task.id, completeData)
+						if (completedTask) {
+							response.push(OperationFormatter.formatTaskUpdate(task, completedTask, completeData))
 						}
 						break
 				}

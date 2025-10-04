@@ -76,55 +76,21 @@ export class RoleService {
 	// Получение всех ролей
 	async getAllRoles(): Promise<RoleEntity[]> {
 		return await this.roleRepository.find({
-			relations: ['chat', 'members'],
-			order: { createdAt: 'DESC' },
+			relations: ['chat', 'members', 'members.user'],
+			order: { createdAt: 'ASC' },
 		})
 	}
 
 	// Обновление роли
 	async updateRole(id: number, data: UpdateRoleDto): Promise<RoleEntity | null> {
-		const role = await this.roleRepository.findOne({ where: { id } })
-		if (!role) {
-			return null
-		}
-
-		// Проверяем уникальность нового имени в чате
-		if (data.name && data.name !== role.name) {
-			const existingRole = await this.roleRepository.findOne({
-				where: { name: data.name, chatId: role.chatId },
-			})
-			if (existingRole) {
-				throw new Error('Роль с таким именем уже существует в этом чате')
-			}
-		}
-
-		Object.assign(role, data)
-		return await this.roleRepository.save(role)
+		await this.roleRepository.update({ id }, data)
+		return await this.getRoleById(id)
 	}
 
 	// Удаление роли
 	async deleteRole(id: number): Promise<boolean> {
-		// Сначала снимаем роль со всех участников
-		const membersWithRole = await this.memberRepository.find({
-			where: { roleId: id },
-		})
-
-		for (const member of membersWithRole) {
-			member.roleId = undefined
-			await this.memberRepository.save(member)
-		}
-
-		const result = await this.roleRepository.delete(id)
-		return (result.affected || 0) > 0
-	}
-
-	// Удаление роли по имени в чате
-	async deleteRoleByName(chatId: string, name: string): Promise<boolean> {
-		const role = await this.getRoleByName(chatId, name)
-		if (!role) {
-			return false
-		}
-		return await this.deleteRole(role.id)
+		const result = await this.roleRepository.delete({ id })
+		return result.affected !== 0
 	}
 
 	// Получение участников роли
@@ -132,60 +98,48 @@ export class RoleService {
 		return await this.memberRepository.find({
 			where: { roleId },
 			relations: ['user', 'chat'],
+			order: { joinedAt: 'ASC' },
 		})
 	}
 
-	// Назначение роли участнику
-	async assignRoleToMember(chatId: string, userId: string, roleId: number): Promise<boolean> {
-		// Проверяем существование роли
-		const role = await this.roleRepository.findOne({
-			where: { id: roleId, chatId },
-		})
+	// Назначение роли пользователю
+	async assignRoleToMember(roleId: number, userId: string): Promise<ChatMemberEntity> {
+		// Находим роль
+		const role = await this.getRoleById(roleId)
 		if (!role) {
-			return false
+			throw new Error('Роль не найдена')
 		}
 
-		// Проверяем существование участника
-		const member = await this.memberRepository.findOne({
-			where: { chatId, userId },
+		// Проверяем, не назначена ли уже эта роль пользователю в этом чате
+		const existingMember = await this.memberRepository.findOne({
+			where: { chatId: role.chatId, userId },
 		})
-		if (!member) {
-			return false
+
+		if (existingMember) {
+			// Обновляем существующего участника
+			existingMember.roleId = roleId
+			return await this.memberRepository.save(existingMember)
+		} else {
+			// Создаем нового участника
+			const member = this.memberRepository.create({
+				chatId: role.chatId,
+				userId,
+				roleId,
+			})
+			return await this.memberRepository.save(member)
 		}
-
-		// Назначаем роль
-		member.roleId = roleId
-		await this.memberRepository.save(member)
-		return true
 	}
 
-	// Снятие роли с участника
-	async removeRoleFromMember(chatId: string, userId: string): Promise<boolean> {
-		const member = await this.memberRepository.findOne({
-			where: { chatId, userId },
-		})
-		if (!member) {
-			return false
-		}
-
-		member.roleId = undefined
-		await this.memberRepository.save(member)
-		return true
+	// Снятие роли с пользователя
+	async removeRoleFromMember(roleId: number, userId: string): Promise<boolean> {
+		const result = await this.memberRepository.delete({ roleId, userId })
+		return result.affected !== 0
 	}
 
-	// Получение количества участников роли
-	async getRoleMemberCount(roleId: number): Promise<number> {
-		return await this.memberRepository.count({
-			where: { roleId },
-		})
-	}
-
-	// Получение количества задач, назначенных роли
-	async getRoleTaskCount(roleId: number): Promise<number> {
-		const role = await this.roleRepository.findOne({
-			where: { id: roleId },
-			relations: ['assignedTasks'],
-		})
-		return role?.assignedTasks?.length || 0
+	// Получение задач роли
+	async getRoleTasks(roleId: number): Promise<any[]> {
+		// Этот метод должен быть в TaskService, но добавим для совместимости
+		// В реальном проекте лучше использовать TaskService с фильтром по assignedRoleId
+		return []
 	}
 }

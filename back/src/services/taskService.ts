@@ -113,6 +113,14 @@ export class TaskService {
 		})
 	}
 
+	// Получение всех задач (для API)
+	async getAllTasks(): Promise<TaskEntity[]> {
+		return await this.taskRepository.find({
+			relations: ['chat', 'assignedUser', 'assignedRole'],
+			order: { createdAt: 'DESC' },
+		})
+	}
+
 	// Получение всех личных задач пользователя
 	async getPersonalTasks(userId: string): Promise<TaskEntity[]> {
 		return await this.taskRepository.find({
@@ -154,14 +162,6 @@ export class TaskService {
 		})
 	}
 
-	// Получение задач, назначенных роли
-	async getTasksByRole(roleId: number): Promise<TaskEntity[]> {
-		return await this.taskRepository.find({
-			where: { assignedRoleId: roleId },
-			relations: ['chat', 'assignedUser', 'assignedRole'],
-			order: { createdAt: 'DESC' },
-		})
-	}
 
 	// Обновление задачи
 	async updateTask(id: number, data: UpdateTaskDto): Promise<TaskEntity | null> {
@@ -182,40 +182,6 @@ export class TaskService {
 		return (result.affected || 0) > 0
 	}
 
-	// Отметить задачу как выполненную/невыполненную
-	async toggleTaskCompletion(id: number): Promise<TaskEntity | null> {
-		const task = await this.taskRepository.findOne({ where: { id } })
-		if (!task) {
-			return null
-		}
-
-		task.isCompleted = !task.isCompleted
-		return await this.taskRepository.save(task)
-	}
-
-	// Назначить задачу пользователю
-	async assignToUser(taskId: number, userId: string): Promise<TaskEntity | null> {
-		return await this.updateTask(taskId, {
-			assignedUserId: userId,
-			assignedRoleId: null, // Очищаем назначение роли
-		})
-	}
-
-	// Назначить задачу роли
-	async assignToRole(taskId: number, roleId: number): Promise<TaskEntity | null> {
-		return await this.updateTask(taskId, {
-			assignedRoleId: roleId,
-			assignedUserId: null, // Очищаем назначение пользователю
-		})
-	}
-
-	// Снять назначение задачи
-	async unassignTask(taskId: number): Promise<TaskEntity | null> {
-		return await this.updateTask(taskId, {
-			assignedUserId: null,
-			assignedRoleId: null,
-		})
-	}
 
 	// Получение всех задач с фильтрацией
 	async getTasks(

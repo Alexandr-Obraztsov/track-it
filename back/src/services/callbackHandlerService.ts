@@ -59,7 +59,7 @@ export class CallbackHandlerService {
 
 		if (!isGroup) {
 			bot.answerCallbackQuery(callbackQuery.id, {
-				text: MessageFormatter.INFO.PRIVATE_OK,
+				text: '✅ Команда выполнена',
 			})
 			return
 		}
@@ -92,7 +92,7 @@ export class CallbackHandlerService {
 		} catch (error) {
 			console.error('Ошибка регистрации через callback:', error)
 			bot.answerCallbackQuery(callbackQuery.id, {
-				text: MessageFormatter.SUCCESS.REGISTERED,
+				text: '✅ Пользователь зарегистрирован',
 				show_alert: true,
 			})
 		}
@@ -134,7 +134,7 @@ export class CallbackHandlerService {
 
 		try {
 			const members = await this.chatService.getChatMembers(chatId)
-			const response = ListFormatter.formatMembersList(members)
+			const response = ListFormatter.formatChatMembersList(members)
 			bot.sendMessage(chatId, response, { parse_mode: 'HTML' })
 		} catch (error) {
 			console.error('Ошибка получения списка участников:', error)

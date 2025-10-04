@@ -60,55 +60,50 @@ export class UserService {
 	// Получение всех пользователей
 	async getAllUsers(): Promise<UserEntity[]> {
 		return await this.userRepository.find({
-			relations: ['chatMemberships', 'chatMemberships.chat'],
-			order: { createdAt: 'DESC' },
+			order: { firstName: 'ASC' },
 		})
+	}
+
+	// Создание пользователя
+	async createUser(data: CreateUserDto): Promise<UserEntity> {
+		const user = this.userRepository.create(data)
+		return await this.userRepository.save(user)
 	}
 
 	// Обновление пользователя
 	async updateUser(telegramId: string, data: UpdateUserDto): Promise<UserEntity | null> {
-		const user = await this.userRepository.findOne({
-			where: { telegramId },
-		})
-
-		if (!user) {
-			return null
-		}
-
-		Object.assign(user, data)
-		return await this.userRepository.save(user)
+		await this.userRepository.update({ telegramId }, data)
+		return await this.getUserById(telegramId)
 	}
 
-	// Удаление пользователя (осторожно - удалит все связанные данные)
+	// Удаление пользователя
 	async deleteUser(telegramId: string): Promise<boolean> {
 		const result = await this.userRepository.delete({ telegramId })
-		return (result.affected || 0) > 0
+		return result.affected !== 0
 	}
-
-	// Получение чатов пользователя
-	async getUserChats(telegramId: string): Promise<ChatMemberEntity[]> {
-		return await this.memberRepository.find({
-			where: { userId: telegramId },
-			relations: ['chat', 'role'],
-			order: { joinedAt: 'DESC' },
-		})
-	}
-
 
 	// Получение задач, назначенных пользователю
-	async getUserAssignedTasks(telegramId: string): Promise<TaskEntity[]> {
+	async getUserAssignedTasks(userId: string, chatId?: string): Promise<TaskEntity[]> {
+		const where: any = {
+			assignedUserId: userId,
+		}
+
+		if (chatId) {
+			where.chatId = chatId
+		}
+
 		return await this.taskRepository.find({
-			where: { assignedUserId: telegramId },
-			relations: ['chat', 'assignedRole'],
+			where,
+			relations: ['chat', 'assignedUser', 'assignedRole'],
 			order: { createdAt: 'DESC' },
 		})
 	}
 
 	// Получение личных задач пользователя
-	async getUserPersonalTasks(telegramId: string): Promise<TaskEntity[]> {
+	async getUserPersonalTasks(userId: string): Promise<TaskEntity[]> {
 		return await this.taskRepository.find({
 			where: {
-				assignedUserId: telegramId,
+				assignedUserId: userId,
 				type: 'personal',
 			},
 			relations: ['assignedUser'],
@@ -116,69 +111,13 @@ export class UserService {
 		})
 	}
 
-	// Получение статистики пользователя
-	async getUserStats(telegramId: string): Promise<{
-		totalAssignedTasks: number
-		completedTasks: number
-		pendingTasks: number
-		totalChats: number
-	}> {
-		const assignedTasks = await this.taskRepository.count({
-			where: { assignedUserId: telegramId },
-		})
-
-		const completedTasks = await this.taskRepository.count({
-			where: {
-				assignedUserId: telegramId,
-				isCompleted: true,
-			},
-		})
-
-		const pendingTasks = await this.taskRepository.count({
-			where: {
-				assignedUserId: telegramId,
-				isCompleted: false,
-			},
-		})
-
-		const totalChats = await this.memberRepository.count({
-			where: { userId: telegramId },
-		})
-
-		return {
-			totalAssignedTasks: assignedTasks,
-			completedTasks,
-			pendingTasks,
-			totalChats,
-		}
-	}
-
-	// Поиск пользователей по имени или username
-	async searchUsers(query: string): Promise<UserEntity[]> {
-		return await this.userRepository
-			.createQueryBuilder('user')
-			.where('user.username LIKE :query', { query: `%${query}%` })
-			.orWhere('user.firstName LIKE :query', { query: `%${query}%` })
-			.orWhere('user.lastName LIKE :query', { query: `%${query}%` })
-			.getMany()
-	}
-
-	// Проверка существования пользователя
-	async userExists(telegramId: string): Promise<boolean> {
-		const count = await this.userRepository.count({
-			where: { telegramId },
-		})
-		return count > 0
-	}
-
-	// Получение пользователей чата
-	async getChatUsers(chatId: string): Promise<UserEntity[]> {
+	// Получение чатов пользователя
+	async getUserChats(userId: string): Promise<any[]> {
 		const members = await this.memberRepository.find({
-			where: { chatId },
-			relations: ['user'],
-			order: { joinedAt: 'ASC' },
+			where: { userId },
+			relations: ['chat'],
 		})
 
-		return members.map(member => member.user).filter(user => user)
+		return members.map(member => member.chat)
 	}
 }

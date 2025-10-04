@@ -38,7 +38,7 @@ export class CommandHandlerService {
 
 			bot.sendMessage(
 				chatId,
-				MessageFormatter.BOT_MESSAGES.START_COMMAND + '\n\n🎙️ Отправьте голосовое сообщение для создания задач или используйте кнопки ниже:',
+				MessageFormatter.BOT_MESSAGES.WELCOME + '\n\n🎙️ Отправьте голосовое сообщение для создания задач или используйте кнопки ниже:',
 				{ reply_markup: keyboard }
 			)
 		}
@@ -72,13 +72,13 @@ export class CommandHandlerService {
 		const isGroup = msg.chat.type === 'group' || msg.chat.type === 'supergroup'
 
 		if (!isGroup) {
-			bot.sendMessage(chatId, MessageFormatter.INFO.GROUPS_ONLY)
+			bot.sendMessage(chatId, '⚠️ Эта команда работает только в группах')
 			return
 		}
 
 		try {
 			const members = await this.chatService.getChatMembers(chatId)
-			const response = ListFormatter.formatMembersList(members)
+			const response = ListFormatter.formatChatMembersList(members)
 			bot.sendMessage(chatId, response, { parse_mode: 'HTML' })
 		} catch (error) {
 			console.error('Ошибка получения списка участников:', error)
@@ -92,7 +92,7 @@ export class CommandHandlerService {
 		const isGroup = msg.chat.type === 'group' || msg.chat.type === 'supergroup'
 
 		if (!isGroup) {
-			bot.sendMessage(chatId, MessageFormatter.INFO.GROUPS_ONLY)
+			bot.sendMessage(chatId, '⚠️ Эта команда работает только в группах')
 			return
 		}
 
@@ -120,7 +120,7 @@ export class CommandHandlerService {
 				tasks = await this.taskService.getPersonalTasks(userId)
 			}
 
-			const response = ListFormatter.formatUserTasksList(tasks, userId)
+			const response = ListFormatter.formatTasksList(tasks)
 			bot.sendMessage(chatId, response, { parse_mode: 'HTML' })
 		} catch (error) {
 			console.error('Ошибка получения персональных задач:', error)

@@ -8,7 +8,6 @@ import { CallbackHandlerService } from '../services/callbackHandlerService'
 import { UserService } from '../services/userService'
 import { UserFormatter, MessageFormatter } from '../services/formatter'
 import { BotMentionUtils } from '../utils/botMentionUtils'
-import { VoiceHandlerService } from '../services/voiceHandlerService'
 import { ContextService } from '../services/contextService'
 import { MessageProcessor } from '../services/messageProcessor'
 
@@ -21,7 +20,7 @@ class TelegramBotController {
 	private roleService: RoleService
 	private commandHandler: CommandHandlerService
 	private callbackHandler: CallbackHandlerService
-	private voiceHandler: VoiceHandlerService
+	private messageProcessor: MessageProcessor
 	private geminiService: GeminiService
 	private userService: UserService
 
@@ -40,8 +39,7 @@ class TelegramBotController {
 
 		// Инициализируем сервисы обработки
 		const contextService = new ContextService(taskService, chatService, roleService, userService)
-		const messageProcessor = new MessageProcessor(contextService, geminiService, taskService)
-		this.voiceHandler = new VoiceHandlerService(messageProcessor)
+		this.messageProcessor = new MessageProcessor(contextService, geminiService, taskService)
 		this.commandHandler = new CommandHandlerService(taskService, chatService, roleService, userService)
 		this.callbackHandler = new CallbackHandlerService(taskService, chatService, roleService, userService)
 
@@ -137,9 +135,28 @@ class TelegramBotController {
 				const isMentioned = await BotMentionUtils.isBotMentioned(this.bot!, msg)
 				if (!isMentioned) return
 
-				await this.voiceHandler.handleMessage(this.bot!, msg)
+				await this.messageProcessor.handleMessage(this.bot!, msg)
 			} catch (error) {
 				console.error('Ошибка в обработке голосового сообщения:', error)
+			}
+		})
+
+		// Обработка текстовых сообщений (не команд)
+		this.bot.on('message', async msg => {
+			try {
+				// Пропускаем команды, голосовые сообщения и другие типы
+				if (msg.text?.startsWith('/') || msg.voice || !msg.text) return
+				
+				// Проверяем, упомянут ли бот в групповом чате
+				const isGroup = msg.chat.type === 'group' || msg.chat.type === 'supergroup'
+				if (isGroup) {
+					const isMentioned = await BotMentionUtils.isBotMentioned(this.bot!, msg)
+					if (!isMentioned) return
+				}
+
+				await this.messageProcessor.handleMessage(this.bot!, msg)
+			} catch (error) {
+				console.error('Ошибка в обработке текстового сообщения:', error)
 			}
 		})
 
@@ -212,7 +229,7 @@ class TelegramBotController {
 			// Автоматически регистрируем нового участника
 			await this.chatService.addMember(chatId, member.telegramId.toString())
 
-			const personalWelcome = MessageFormatter.WELCOME.NEW_MEMBER(UserFormatter.createTag(member))
+			const personalWelcome = MessageFormatter.BOT_MESSAGES.WELCOME(member)
 
 			bot.sendMessage(chatId, personalWelcome)
 		} catch (error) {
@@ -231,7 +248,7 @@ class TelegramBotController {
 			const isMentioned = await BotMentionUtils.isBotMentioned(this.bot!, msg)
 			// Если бот упомянут и сообщение является ответом на голосовое сообщение
 			if (isMentioned && msg.reply_to_message && msg.reply_to_message.voice)
-				await this.voiceHandler.handleMessage(this.bot!, msg.reply_to_message)
+				await this.messageProcessor.handleMessage(this.bot!, msg.reply_to_message)
 		} catch (error) {
 			console.error('Ошибка в обработке сообщения:', error)
 		}
@@ -254,7 +271,7 @@ class TelegramBotController {
 			const isMentioned = await BotMentionUtils.isBotMentioned(this.bot!, msg)
 			if (isMentioned || !isGroup) {
 				try {
-					await this.voiceHandler.handleMessage(this.bot!, msg)
+					await this.messageProcessor.handleMessage(this.bot!, msg)
 					return // Не продолжаем обработку, если это текстовое сообщение для создания задач
 				} catch (error) {
 					console.error('Ошибка обработки текстового сообщения:', error)
@@ -288,7 +305,7 @@ class TelegramBotController {
 					await this.chatService.addMember(chat.id.toString(), user.id.toString())
 
 					const userTag = UserFormatter.createTag(member)
-					const welcomeText = MessageFormatter.WELCOME.AUTO_REGISTERED(userTag)
+					const welcomeText = MessageFormatter.BOT_MESSAGES.WELCOME(member)
 
 					// Отправляем уведомление, которое самоудалится через 5 секунд
 					const sentMessage = await bot.sendMessage(chat.id.toString(), welcomeText)
@@ -308,12 +325,13 @@ class TelegramBotController {
 	}
 
 	private async handleCheckCommand(bot: TelegramBot, msg: TelegramBot.Message): Promise<void> {
-		if (msg.reply_to_message && msg.reply_to_message.voice)
-			await this.voiceHandler.handleMessage(this.bot!, msg.reply_to_message)
-		else
-			this.bot!.sendMessage(msg.chat.id, MessageFormatter.BOT_MESSAGES.VOICE_NOT_FOUND, {
+		if (msg.reply_to_message && (msg.reply_to_message.voice || msg.reply_to_message.text)) {
+			await this.messageProcessor.handleMessage(this.bot!, msg.reply_to_message)
+		} else {
+			this.bot!.sendMessage(msg.chat.id, '❓ Ответьте на голосовое или текстовое сообщение командой /check', {
 				reply_to_message_id: msg.message_id,
 			})
+		}
 	}
 	// Обработка изменения статуса бота в чате (добавление/удаление)
 	private async handleMyChatMember(bot: TelegramBot, msg: TelegramBot.ChatMemberUpdated): Promise<void> {

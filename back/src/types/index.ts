@@ -103,3 +103,46 @@ export interface AudioTranscriptionResponse {
 export interface ViewRequest {
 	type: 'tasks' | 'members' | 'roles' | 'userTasks'
 }
+
+// === DTO для API ===
+
+// DTO для создания пользователя
+export interface CreateUserDto {
+	telegramId: string
+	firstName: string
+	lastName?: string
+	username?: string
+}
+
+// DTO для обновления пользователя
+export interface UpdateUserDto {
+	firstName?: string
+	lastName?: string
+	username?: string
+}
+
+// DTO для создания чата
+export interface CreateChatDto {
+	telegramId: string
+	title: string
+	type?: string
+}
+
+// DTO для обновления чата
+export interface UpdateChatDto {
+	title?: string
+	type?: string
+}
+
+// DTO для создания роли
+export interface CreateRoleDto {
+	name: string
+	chatId: string
+	color?: string
+}
+
+// DTO для обновления роли
+export interface UpdateRoleDto {
+	name?: string
+	color?: string
+}

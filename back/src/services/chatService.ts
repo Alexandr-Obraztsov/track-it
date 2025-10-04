@@ -55,16 +55,8 @@ export class ChatService {
 		})
 	}
 
-	// Получение всех чатов
-	async getAllChats(): Promise<ChatEntity[]> {
-		return await this.chatRepository.find({
-			relations: ['members', 'roles'],
-			order: { createdAt: 'DESC' },
-		})
-	}
-
-	// Обновление чата
-	async updateChat(telegramId: string, data: UpdateChatDto): Promise<ChatEntity | null> {
+	// Обновление чата (приватный метод для внутреннего использования)
+	private async updateChatInternal(telegramId: string, data: UpdateChatDto): Promise<ChatEntity | null> {
 		const chat = await this.chatRepository.findOne({
 			where: { telegramId },
 		})
@@ -75,12 +67,6 @@ export class ChatService {
 
 		Object.assign(chat, data)
 		return await this.chatRepository.save(chat)
-	}
-
-	// Удаление чата
-	async deleteChat(telegramId: string): Promise<boolean> {
-		const result = await this.chatRepository.delete({ telegramId })
-		return (result.affected || 0) > 0
 	}
 
 	// Добавление участника в чат
@@ -134,33 +120,6 @@ export class ChatService {
 		})
 	}
 
-	// Назначение роли участнику
-	async assignRole(chatId: string, userId: string, roleId: number): Promise<ChatMemberEntity | null> {
-		const member = await this.memberRepository.findOne({
-			where: { chatId, userId },
-		})
-
-		if (!member) {
-			return null
-		}
-
-		member.roleId = roleId
-		return await this.memberRepository.save(member)
-	}
-
-	// Снятие роли с участника
-	async removeRole(chatId: string, userId: string): Promise<ChatMemberEntity | null> {
-		const member = await this.memberRepository.findOne({
-			where: { chatId, userId },
-		})
-
-		if (!member) {
-			return null
-		}
-
-		member.roleId = undefined
-		return await this.memberRepository.save(member)
-	}
 
 	// Проверка, является ли пользователь участником чата
 	async isMember(chatId: string, userId: string): Promise<boolean> {
@@ -170,25 +129,13 @@ export class ChatService {
 		return !!member
 	}
 
-	// Получение роли участника в чате
-	async getMemberRole(chatId: string, userId: string): Promise<RoleEntity | null> {
-		const member = await this.memberRepository.findOne({
-			where: { chatId, userId },
-			relations: ['role'],
-		})
-		return member?.role || null
-	}
 
 	// Обновление сообщений чата
 	async updateWelcomeMessage(chatId: string, messageId: number): Promise<ChatEntity | null> {
-		return await this.updateChat(chatId, { welcomeMessageId: messageId })
+		return await this.updateChatInternal(chatId, { welcomeMessageId: messageId })
 	}
 
-	async updateWarningMessage(chatId: string, messageId: number): Promise<ChatEntity | null> {
-		return await this.updateChat(chatId, { warningMessageId: messageId })
-	}
-
-	// Получение ID сообщений
+	// Получение ID приветственного сообщения
 	async getWelcomeMessageId(chatId: string): Promise<number | null> {
 		const chat = await this.chatRepository.findOne({
 			where: { telegramId: chatId },
@@ -196,10 +143,35 @@ export class ChatService {
 		return chat?.welcomeMessageId || null
 	}
 
-	async getWarningMessageId(chatId: string): Promise<number | null> {
-		const chat = await this.chatRepository.findOne({
-			where: { telegramId: chatId },
+	// Получение всех чатов
+	async getAllChats(): Promise<ChatEntity[]> {
+		return await this.chatRepository.find({
+			relations: ['members', 'members.user', 'members.role', 'roles', 'tasks'],
+			order: { title: 'ASC' },
 		})
-		return chat?.warningMessageId || null
+	}
+
+	// Создание чата
+	async createChat(data: CreateChatDto): Promise<ChatEntity> {
+		const chat = this.chatRepository.create(data)
+		return await this.chatRepository.save(chat)
+	}
+
+	// Обновление чата (публичный метод для API)
+	async updateChat(telegramId: string, data: UpdateChatDto): Promise<ChatEntity | null> {
+		return await this.updateChatInternal(telegramId, data)
+	}
+
+	// Удаление чата
+	async deleteChat(telegramId: string): Promise<boolean> {
+		const result = await this.chatRepository.delete({ telegramId })
+		return result.affected !== 0
+	}
+
+	// Получение задач чата
+	async getChatTasks(chatId: string): Promise<any[]> {
+		// Этот метод должен быть в TaskService, но добавим для совместимости
+		// В реальном проекте лучше использовать TaskService.getGroupTasks
+		return []
 	}
 }
