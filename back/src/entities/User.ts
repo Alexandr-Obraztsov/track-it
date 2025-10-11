@@ -1,47 +1,35 @@
-import { Entity, PrimaryColumn, Column, OneToMany } from 'typeorm'
-import { TaskEntity } from './Task'
-import { ChatMemberEntity } from './ChatMember'
-import { NotificationPresetType, DEFAULT_NOTIFICATION_PRESETS } from '../configs/notificationPresets'
+import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, OneToMany } from 'typeorm';
+import { UserChatRole } from './UserChatRole';
+import { UserTask } from './UserTask';
 
-// Сущность пользователя Telegram
 @Entity('users')
-export class UserEntity {
-	@PrimaryColumn({ type: 'bigint' })
-	telegramId!: string // ID пользователя в Telegram как первичный ключ
+export class User {
+  @PrimaryGeneratedColumn('increment')
+  id!: number;
 
-	@Column({ type: 'varchar' })
-	username!: string // Username пользователя
+  @Column({ name: 'telegram_id', type: 'bigint', unique: true })
+  telegramId!: number;
 
-	@Column({ type: 'varchar' })
-	firstName!: string // Имя пользователя
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  username?: string;
 
-	@Column({ type: 'varchar', nullable: true })
-	lastName?: string // Фамилия пользователя
+  @Column({ type: 'varchar', length: 255 })
+  firstName!: string;
 
-	@Column({ type: 'timestamp', default: () => 'CURRENT_TIMESTAMP' })
-	createdAt!: Date // Дата регистрации
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  lastName?: string;
 
-	@Column({ type: 'timestamp', default: () => 'CURRENT_TIMESTAMP', onUpdate: 'CURRENT_TIMESTAMP' })
-	updatedAt!: Date // Дата последнего обновления
+  @Column({ type: 'varchar', length: 500, nullable: true })
+  photoUrl?: string;
 
-	// Настройки уведомлений
-	@Column({ 
-		type: 'enum',
-		enum: ['off', 'minimal', 'standard', 'frequent', 'maximum'],
-		default: DEFAULT_NOTIFICATION_PRESETS.personal
-	})
-	personalNotificationPreset!: NotificationPresetType // Пресет для личных задач
+  @CreateDateColumn()
+  createdAt!: Date;
 
-	@Column({ 
-		type: 'enum',
-		enum: ['off', 'minimal', 'standard', 'frequent', 'maximum'],
-		default: DEFAULT_NOTIFICATION_PRESETS.group
-	})
-	groupNotificationPreset!: NotificationPresetType // Пресет для групповых задач
+  // Связь один-ко-многим с UserChatRole
+  @OneToMany(() => UserChatRole, userChatRole => userChatRole.user)
+  userChatRoles!: UserChatRole[];
 
-	@OneToMany(() => TaskEntity, task => task.assignedUser)
-	assignedTasks?: TaskEntity[] // Задачи, назначенные пользователю
-
-	@OneToMany(() => ChatMemberEntity, membership => membership.user)
-	chatMemberships?: ChatMemberEntity[] // Участие в чатах
+  // Связь один-ко-многим с UserTask (личные задачи пользователя)
+  @OneToMany(() => UserTask, userTask => userTask.user)
+  userTasks!: UserTask[];
 }

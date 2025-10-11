@@ -1,66 +1,52 @@
-import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, JoinColumn } from 'typeorm'
-import { ChatEntity } from './Chat'
-import { UserEntity } from './User'
-import { RoleEntity } from './Role'
+import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, ManyToOne, JoinColumn, OneToMany } from 'typeorm';
+import { Chat } from './Chat';
+import { User } from './User';
+import { Role } from './Role';
+import { UserTask } from './UserTask';
+import { ChatTask } from './ChatTask';
 
-// Сущность задачи
 @Entity('tasks')
-export class TaskEntity {
-	@PrimaryGeneratedColumn()
-	id!: number
+export class Task {
+  @PrimaryGeneratedColumn('increment')
+  id!: number;
 
-	@Column({ type: 'varchar' })
-	title!: string // Название задачи
+  @Column({ type: 'varchar', length: 255 })
+  title!: string;
 
-	@Column({ type: 'text', nullable: true })
-	description?: string // Описание задачи
+  @Column({ type: 'text', nullable: true })
+  description!: string | null;
 
-	@Column({ type: 'varchar' })
-	readableId!: string // Читаемый ID задачи (например: CHT-123 или PSN-456)
+  @CreateDateColumn()
+  createdAt!: Date;
 
-	@Column({ type: 'integer' })
-	localId!: number // Локальный ID задачи в рамках чата или пользователя (начинается с 1)
+  @Column({ name: 'assigned_role_id', type: 'int', nullable: true })
+  assignedRoleId!: number | null;
 
-	@Column({ type: 'timestamp', nullable: true })
-	deadline?: Date // Срок выполнения с датой и временем
+  @Column({ name: 'assigned_user_id', type: 'int', nullable: true })
+  assignedUserId!: number | null;
 
-	@Column({ type: 'boolean', default: false })
-	isCompleted!: boolean // Статус выполнения
+  @Column({ type: 'date', nullable: true })
+  deadline!: Date | null;
 
-	@Column({
-		type: 'enum',
-		enum: ['personal', 'group'],
-		default: 'personal',
-	})
-	type!: 'personal' | 'group' // Тип задачи
+  // Связи с основными сущностями
+  @ManyToOne(() => Chat, chat => chat.tasks, { nullable: true })
+  @JoinColumn({ name: 'chat_id' })
+  chat!: Chat | null;
 
-	@Column({ type: 'bigint', nullable: true })
-	chatId?: string // ID чата для групповых задач
+  // Для групповых задач - назначение на конкретного пользователя
+  @ManyToOne(() => User, { nullable: true })
+  @JoinColumn({ name: 'assigned_user_id' })
+  assignedUser!: User | null;
 
-	@Column({ type: 'bigint', nullable: true })
-	assignedUserId?: string // ID назначенного пользователя
+  @ManyToOne(() => Role, { nullable: true })
+  @JoinColumn({ name: 'assigned_role_id' })
+  assignedRole!: Role | null;
 
-	@Column({ type: 'integer', nullable: true })
-	assignedRoleId?: number // ID назначенной роли
+  // Связь один-ко-многим с UserTask (для личных задач)
+  @OneToMany(() => UserTask, userTask => userTask.task)
+  userTasks!: UserTask[];
 
-	@Column({ type: 'timestamp', default: () => 'CURRENT_TIMESTAMP' })
-	createdAt!: Date // Дата создания
-
-	@Column({ type: 'timestamp', default: () => 'CURRENT_TIMESTAMP', onUpdate: 'CURRENT_TIMESTAMP' })
-	updatedAt!: Date // Дата последнего обновления
-
-	// Чат для групповых задач
-	@ManyToOne(() => ChatEntity, chat => chat.tasks, { nullable: true, onDelete: 'CASCADE' })
-	@JoinColumn({ name: 'chatId' })
-	chat?: ChatEntity
-
-	// Назначенный пользователь
-	@ManyToOne(() => UserEntity, user => user.assignedTasks, { nullable: true, onDelete: 'SET NULL' })
-	@JoinColumn({ name: 'assignedUserId' })
-	assignedUser?: UserEntity
-
-	// Назначенная роль
-	@ManyToOne(() => RoleEntity, role => role.assignedTasks, { nullable: true, onDelete: 'SET NULL' })
-	@JoinColumn({ name: 'assignedRoleId' })
-	assignedRole?: RoleEntity
+  // Связь один-ко-многим с ChatTask (промежуточная таблица)
+  @OneToMany(() => ChatTask, chatTask => chatTask.task)
+  chatTasks!: ChatTask[];
 }

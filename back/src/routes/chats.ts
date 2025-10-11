@@ -1,232 +1,110 @@
-import { Router, Request, Response } from 'express'
-import { chatService } from '../server'
-import { CreateChatDto, UpdateChatDto } from '../services/chatService'
+import { Router } from 'express';
+import { AppDataSource } from '../configs/database';
+import { Chat } from '../entities/Chat';
+import { authenticateToken } from '../middleware/auth';
 
-const router: Router = Router()
+const router = Router();
 
 // GET /api/chats - получить все чаты
-router.get('/', async (req: Request, res: Response) => {
-	try {
-		const chats = await chatService.getAllChats()
-		
-		res.json({
-			success: true,
-			data: chats,
-			count: chats.length
-		})
-	} catch (error) {
-		console.error('Ошибка получения чатов:', error)
-		res.status(500).json({
-			success: false,
-			error: 'Ошибка получения чатов'
-		})
-	}
-})
+router.get('/', authenticateToken, async (req, res) => {
+  try {
+    const chatRepository = AppDataSource.getRepository(Chat);
+    const chats = await chatRepository.find({
+      relations: ['users', 'roles']
+    });
+    res.json(chats);
+  } catch (error) {
+    console.error('Error fetching chats:', error);
+    res.status(500).json({ error: 'Failed to fetch chats' });
+  }
+});
 
 // GET /api/chats/:id - получить чат по ID
-router.get('/:id', async (req: Request, res: Response) => {
-	try {
-		const id = req.params.id
-		const chat = await chatService.getChatById(id)
-		
-		if (!chat) {
-			return res.status(404).json({
-				success: false,
-				error: 'Чат не найден'
-			})
-		}
-		
-		res.json({
-			success: true,
-			data: chat
-		})
-	} catch (error) {
-		console.error('Ошибка получения чата:', error)
-		res.status(500).json({
-			success: false,
-			error: 'Ошибка получения чата'
-		})
-	}
-})
+router.get('/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const chatRepository = AppDataSource.getRepository(Chat);
+    const chat = await chatRepository.findOne({
+      where: { id: parseInt(id) },
+      relations: ['users', 'roles']
+    });
+
+    if (!chat) {
+      return res.status(404).json({ error: 'Chat not found' });
+    }
+
+    res.json(chat);
+  } catch (error) {
+    console.error('Error fetching chat:', error);
+    res.status(500).json({ error: 'Failed to fetch chat' });
+  }
+});
 
 // POST /api/chats - создать новый чат
-router.post('/', async (req: Request, res: Response) => {
-	try {
-		const { telegramId, title } = req.body
-		
-		if (!telegramId || !title) {
-			return res.status(400).json({
-				success: false,
-				error: 'TelegramId и title обязательны'
-			})
-		}
-		
-		const chat = await chatService.createChat({
-			telegramId: telegramId.toString(),
-			title
-		})
-		
-		res.status(201).json({
-			success: true,
-			data: chat
-		})
-	} catch (error) {
-		console.error('Ошибка создания чата:', error)
-		res.status(400).json({
-			success: false,
-			error: error instanceof Error ? error.message : 'Ошибка создания чата'
-		})
-	}
-})
+router.post('/', async (req, res) => {
+  try {
+    const { title, messageId } = req.body;
+    
+    if (!title || messageId === undefined) {
+      return res.status(400).json({ error: 'Title and messageId are required' });
+    }
+
+    const chatRepository = AppDataSource.getRepository(Chat);
+    const chat = chatRepository.create({
+      title,
+      messageId: parseInt(messageId)
+    });
+
+    const savedChat = await chatRepository.save(chat);
+    res.status(201).json(savedChat);
+  } catch (error) {
+    console.error('Error creating chat:', error);
+    res.status(500).json({ error: 'Failed to create chat' });
+  }
+});
 
 // PUT /api/chats/:id - обновить чат
-router.put('/:id', async (req: Request, res: Response) => {
-	try {
-		const id = req.params.id
-		const updateData = req.body
-		
-		const chat = await chatService.updateChat(id, updateData)
-		
-		if (!chat) {
-			return res.status(404).json({
-				success: false,
-				error: 'Чат не найден'
-			})
-		}
-		
-		res.json({
-			success: true,
-			data: chat
-		})
-	} catch (error) {
-		console.error('Ошибка обновления чата:', error)
-		res.status(400).json({
-			success: false,
-			error: error instanceof Error ? error.message : 'Ошибка обновления чата'
-		})
-	}
-})
+router.put('/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { title, messageId } = req.body;
+    
+    const chatRepository = AppDataSource.getRepository(Chat);
+    const chat = await chatRepository.findOne({
+      where: { id: parseInt(id) }
+    });
+
+    if (!chat) {
+      return res.status(404).json({ error: 'Chat not found' });
+    }
+
+    chat.title = title || chat.title;
+    chat.messageId = messageId !== undefined ? parseInt(messageId) : chat.messageId;
+
+    const updatedChat = await chatRepository.save(chat);
+    res.json(updatedChat);
+  } catch (error) {
+    console.error('Error updating chat:', error);
+    res.status(500).json({ error: 'Failed to update chat' });
+  }
+});
 
 // DELETE /api/chats/:id - удалить чат
-router.delete('/:id', async (req: Request, res: Response) => {
-	try {
-		const id = req.params.id
-		const success = await chatService.deleteChat(id)
-		
-		if (!success) {
-			return res.status(404).json({
-				success: false,
-				error: 'Чат не найден'
-			})
-		}
-		
-		res.json({
-			success: true,
-			message: 'Чат удален'
-		})
-	} catch (error) {
-		console.error('Ошибка удаления чата:', error)
-		res.status(500).json({
-			success: false,
-			error: 'Ошибка удаления чата'
-		})
-	}
-})
+router.delete('/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const chatRepository = AppDataSource.getRepository(Chat);
+    const result = await chatRepository.delete(parseInt(id));
 
-// GET /api/chats/:id/members - получить участников чата
-router.get('/:id/members', async (req: Request, res: Response) => {
-	try {
-		const chatId = req.params.id
-		const members = await chatService.getChatMembers(chatId)
-		
-		res.json({
-			success: true,
-			data: members,
-			count: members.length
-		})
-	} catch (error) {
-		console.error('Ошибка получения участников чата:', error)
-		res.status(500).json({
-			success: false,
-			error: 'Ошибка получения участников чата'
-		})
-	}
-})
+    if (result.affected === 0) {
+      return res.status(404).json({ error: 'Chat not found' });
+    }
 
-// POST /api/chats/:id/members - добавить участника в чат
-router.post('/:id/members', async (req: Request, res: Response) => {
-	try {
-		const chatId = req.params.id
-		const { userId } = req.body
-		
-		if (!userId) {
-			return res.status(400).json({
-				success: false,
-				error: 'userId обязателен'
-			})
-		}
-		
-		await chatService.addMember(chatId, userId)
-		
-		res.json({
-			success: true,
-			message: 'Участник добавлен в чат'
-		})
-	} catch (error) {
-		console.error('Ошибка добавления участника:', error)
-		res.status(400).json({
-			success: false,
-			error: error instanceof Error ? error.message : 'Ошибка добавления участника'
-		})
-	}
-})
+    res.status(204).send();
+  } catch (error) {
+    console.error('Error deleting chat:', error);
+    res.status(500).json({ error: 'Failed to delete chat' });
+  }
+});
 
-// DELETE /api/chats/:id/members/:userId - удалить участника из чата
-router.delete('/:id/members/:userId', async (req: Request, res: Response) => {
-	try {
-		const chatId = req.params.id
-		const userId = req.params.userId
-		
-		const success = await chatService.removeMember(chatId, userId)
-		
-		if (!success) {
-			return res.status(404).json({
-				success: false,
-				error: 'Участник не найден'
-			})
-		}
-		
-		res.json({
-			success: true,
-			message: 'Участник удален из чата'
-		})
-	} catch (error) {
-		console.error('Ошибка удаления участника:', error)
-		res.status(500).json({
-			success: false,
-			error: 'Ошибка удаления участника'
-		})
-	}
-})
-
-// GET /api/chats/:id/tasks - получить задачи чата
-router.get('/:id/tasks', async (req: Request, res: Response) => {
-	try {
-		const chatId = req.params.id
-		const tasks = await chatService.getChatTasks(chatId)
-		
-		res.json({
-			success: true,
-			data: tasks,
-			count: tasks.length
-		})
-	} catch (error) {
-		console.error('Ошибка получения задач чата:', error)
-		res.status(500).json({
-			success: false,
-			error: 'Ошибка получения задач чата'
-		})
-	}
-})
-
-export default router
+export const chatRoutes: Router = router;

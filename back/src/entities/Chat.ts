@@ -1,38 +1,36 @@
-import { Entity, PrimaryColumn, Column, OneToMany } from 'typeorm'
-import { TaskEntity } from './Task'
-import { ChatMemberEntity } from './ChatMember'
-import { RoleEntity } from './Role'
+import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, OneToMany } from 'typeorm';
+import { UserChatRole } from './UserChatRole';
+import { ChatRole } from './ChatRole';
+import { Task } from './Task';
+import { ChatTask } from './ChatTask';
 
-// Сущность чата Telegram
 @Entity('chats')
-export class ChatEntity {
-	@PrimaryColumn({ type: 'bigint' })
-	telegramId!: string // ID чата в Telegram как первичный ключ
+export class Chat {
+  @PrimaryGeneratedColumn('increment')
+  id!: number;
 
-	@Column({ type: 'varchar' })
-	title!: string // Название чата
+  @Column({ type: 'varchar', length: 255 })
+  title!: string;
 
-	@Column({ type: 'varchar', nullable: true })
-	username?: string // Username чата (если есть)
+  @CreateDateColumn()
+  createdAt!: Date;
 
-	@Column({ type: 'bigint', nullable: true })
-	welcomeMessageId?: number // ID приветственного сообщения
+  @Column({ type: 'int' })
+  messageId!: number;
 
-	@Column({ type: 'bigint', nullable: true })
-	warningMessageId?: number // ID сообщения с предупреждением
+  // Связь один-ко-многим с UserChatRole (назначенные роли пользователям)
+  @OneToMany(() => UserChatRole, userChatRole => userChatRole.chat)
+  userChatRoles!: UserChatRole[];
 
-	@Column({ type: 'timestamp', default: () => 'CURRENT_TIMESTAMP' })
-	createdAt!: Date // Дата создания
+  // Связь один-ко-многим с ChatRole (доступные роли в чате)
+  @OneToMany(() => ChatRole, chatRole => chatRole.chat)
+  chatRoles!: ChatRole[];
 
-	@Column({ type: 'timestamp', default: () => 'CURRENT_TIMESTAMP', onUpdate: 'CURRENT_TIMESTAMP' })
-	updatedAt!: Date // Дата последнего обновления
+  // Связь один-ко-многим с Task (задачи чата)
+  @OneToMany(() => Task, task => task.chat)
+  tasks!: Task[];
 
-	@OneToMany(() => TaskEntity, task => task.chat)
-	tasks?: TaskEntity[] // Групповые задачи чата
-
-	@OneToMany(() => ChatMemberEntity, membership => membership.chat)
-	members?: ChatMemberEntity[] // Участники чата
-
-	@OneToMany(() => RoleEntity, role => role.chat)
-	roles?: RoleEntity[] // Роли в чате
+  // Связь один-ко-многим с ChatTask (промежуточная таблица)
+  @OneToMany(() => ChatTask, chatTask => chatTask.chat)
+  chatTasks!: ChatTask[];
 }

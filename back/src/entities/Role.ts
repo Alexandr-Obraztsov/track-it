@@ -1,33 +1,28 @@
-import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, JoinColumn, OneToMany } from 'typeorm'
-import { ChatEntity } from './Chat'
-import { ChatMemberEntity } from './ChatMember'
-import { TaskEntity } from './Task'
+import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, OneToMany } from 'typeorm';
+import { UserChatRole } from './UserChatRole';
+import { ChatRole } from './ChatRole';
+import { Task } from './Task';
 
-// Сущность роли в чате
 @Entity('roles')
-export class RoleEntity {
-	@PrimaryGeneratedColumn()
-	id!: number
+export class Role {
+  @PrimaryGeneratedColumn('increment')
+  id!: number;
 
-	@Column({ type: 'varchar' })
-	name!: string // Название роли
+  @Column({ type: 'varchar', length: 255 })
+  title!: string;
 
-	@Column({ type: 'bigint' })
-	chatId!: string // ID чата
+  @CreateDateColumn()
+  createdAt!: Date;
 
-	@Column({ type: 'timestamp', default: () => 'CURRENT_TIMESTAMP' })
-	createdAt!: Date // Дата создания
+  // Связь один-ко-многим с UserChatRole (назначенные роли пользователям)
+  @OneToMany(() => UserChatRole, userChatRole => userChatRole.role)
+  userChatRoles!: UserChatRole[];
 
-	@Column({ type: 'timestamp', default: () => 'CURRENT_TIMESTAMP', onUpdate: 'CURRENT_TIMESTAMP' })
-	updatedAt!: Date // Дата последнего обновления
+  // Связь один-ко-многим с ChatRole (роли, доступные в чатах)
+  @OneToMany(() => ChatRole, chatRole => chatRole.role)
+  chatRoles!: ChatRole[];
 
-	@ManyToOne(() => ChatEntity, chat => chat.roles, { onDelete: 'CASCADE' })
-	@JoinColumn({ name: 'chatId' })
-	chat!: ChatEntity
-
-	@OneToMany(() => ChatMemberEntity, membership => membership.role)
-	members?: ChatMemberEntity[] // Участники с этой ролью
-
-	@OneToMany(() => TaskEntity, task => task.assignedRole)
-	assignedTasks?: TaskEntity[] // Задачи, назначенные на эту роль
+  // Связь один-ко-многим с Task (назначенные задачи)
+  @OneToMany(() => Task, task => task.assignedRole)
+  assignedTasks!: Task[];
 }
