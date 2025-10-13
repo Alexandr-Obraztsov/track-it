@@ -1,14 +1,14 @@
 import React from 'react';
 import { useAppSelector } from '../hooks/redux';
-import { useGetTasksQuery, useGetChatsQuery } from '../store/api/api';
+import { useGetTasksQuery } from '../store/api/tasksApi';
+import { useGetChatsQuery } from '../store/api/chatsApi';
+import type { Task, Chat } from '../types/api';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Button } from '../components/ui/button';
-import { 
-  CheckSquare, 
-  MessageSquare, 
-  TrendingUp,
-  Plus,
-  Calendar
+import {
+  CheckSquare,
+  MessageSquare,
+  Plus
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
@@ -18,9 +18,7 @@ export const DashboardPage: React.FC = () => {
   const { data: tasks = [], isLoading: tasksLoading } = useGetTasksQuery();
   const { data: chats = [], isLoading: chatsLoading } = useGetChatsQuery();
 
-  const completedTasks = tasks.filter((task: any) => task.status === 'completed').length;
-  const pendingTasks = tasks.filter((task: any) => task.status === 'pending').length;
-  const activeChats = chats.filter((chat: any) => chat.isActive).length;
+  const activeChats = chats.filter((chat: Chat) => chat.users && chat.users.length > 0).length;
 
   const stats = [
     {
@@ -29,20 +27,6 @@ export const DashboardPage: React.FC = () => {
       icon: CheckSquare,
       color: 'text-blue-600',
       bgColor: 'bg-blue-100',
-    },
-    {
-      title: 'Выполнено',
-      value: completedTasks,
-      icon: TrendingUp,
-      color: 'text-green-600',
-      bgColor: 'bg-green-100',
-    },
-    {
-      title: 'В процессе',
-      value: pendingTasks,
-      icon: Calendar,
-      color: 'text-yellow-600',
-      bgColor: 'bg-yellow-100',
     },
     {
       title: 'Активные чаты',
@@ -118,19 +102,21 @@ export const DashboardPage: React.FC = () => {
               </div>
             ) : tasks.length > 0 ? (
               <div className="space-y-2">
-                {tasks.slice(0, 3).map((task: any) => (
+                {tasks.slice(0, 3).map((task: Task) => (
                   <div key={task.id} className="flex items-center justify-between p-2 bg-gray-50 rounded-lg">
                     <div className="flex-1 min-w-0">
                       <p className="font-medium text-gray-900 text-sm truncate">{task.title}</p>
-                      <p className="text-xs text-gray-600 truncate">{task.description}</p>
+                      {task.description && (
+                        <p className="text-xs text-gray-600 truncate">{task.description}</p>
+                      )}
                     </div>
-                    <span className={`px-2 py-1 text-xs rounded-full ml-2 ${
-                      task.status === 'completed' 
-                        ? 'bg-green-100 text-green-800' 
-                        : 'bg-yellow-100 text-yellow-800'
-                    }`}>
-                      {task.status === 'completed' ? '✓' : '○'}
-                    </span>
+                    <div className="flex items-center gap-2 ml-2">
+                      {task.assignedUser && (
+                        <span className="px-2 py-1 text-xs rounded-full bg-blue-100 text-blue-800">
+                          {task.assignedUser.firstName}
+                        </span>
+                      )}
+                    </div>
                   </div>
                 ))}
                 {tasks.length > 3 && (
@@ -181,20 +167,22 @@ export const DashboardPage: React.FC = () => {
               </div>
             ) : chats.length > 0 ? (
               <div className="space-y-2">
-                {chats.slice(0, 3).map((chat: any) => (
+                {chats.slice(0, 3).map((chat: Chat) => (
                   <div key={chat.id} className="flex items-center justify-between p-2 bg-gray-50 rounded-lg">
                     <div className="flex-1 min-w-0">
-                      <p className="font-medium text-gray-900 text-sm">Чат #{chat.id}</p>
+                      <p className="font-medium text-gray-900 text-sm">
+                        {chat.title || `Чат #${chat.id}`}
+                      </p>
                       <p className="text-xs text-gray-600">
-                        {new Date(chat.updatedAt).toLocaleDateString()}
+                        {chat.users?.length || 0} участников
                       </p>
                     </div>
                     <span className={`px-2 py-1 text-xs rounded-full ml-2 ${
-                      chat.isActive 
-                        ? 'bg-green-100 text-green-800' 
+                      chat.users && chat.users.length > 0
+                        ? 'bg-green-100 text-green-800'
                         : 'bg-gray-100 text-gray-800'
                     }`}>
-                      {chat.isActive ? '●' : '○'}
+                      {chat.users && chat.users.length > 0 ? '●' : '○'}
                     </span>
                   </div>
                 ))}

@@ -1,5 +1,8 @@
 import React from 'react';
-import { useAppSelector } from '../hooks/redux';
+import { useNavigate } from 'react-router-dom';
+import { useAppDispatch } from '../hooks/redux';
+import { useAuth } from '../hooks/useAuth';
+import { clearUser } from '../store/slices/authSlice';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { 
@@ -7,11 +10,19 @@ import {
   Mail, 
   Calendar, 
   Settings,
-  Edit
+  Edit,
+  LogOut
 } from 'lucide-react';
 
 export const ProfilePage: React.FC = () => {
-  const { user } = useAppSelector((state) => state.auth);
+  const navigate = useNavigate();
+  const dispatch = useAppDispatch();
+  const { user } = useAuth();
+
+  const handleLogout = () => {
+    dispatch(clearUser());
+    navigate('/login');
+  };
 
   const formatDate = (timestamp: number) => {
     return new Date(timestamp * 1000).toLocaleDateString('ru-RU', {
@@ -133,6 +144,22 @@ export const ProfilePage: React.FC = () => {
                 </div>
                 <Button variant="outline" size="sm" className="text-xs">
                   Изменить
+                </Button>
+              </div>
+              
+              <div className="flex items-center justify-between p-3 bg-red-50 rounded-lg border border-red-200">
+                <div>
+                  <h4 className="font-medium text-red-900 text-sm">Выйти из аккаунта</h4>
+                  <p className="text-xs text-red-600">Завершить текущую сессию</p>
+                </div>
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  className="text-xs text-red-600 border-red-300 hover:bg-red-100"
+                  onClick={handleLogout}
+                >
+                  <LogOut className="w-3 h-3 mr-1" />
+                  Выйти
                 </Button>
               </div>
             </div>

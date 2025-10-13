@@ -1,40 +1,49 @@
 import React, { useState } from 'react';
 import { useAppDispatch } from '../hooks/redux';
-import { setUser } from '../store/slices/authSlice';
-import { useNavigate } from 'react-router-dom';
+import { setAuth } from '../store/slices/authSlice';
+import { useNavigate, useLocation } from 'react-router-dom';
+import { useTelegramAuthMutation } from '../store/api/authApi';
 import TelegramLoginButton from 'react-telegram-login';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { Alert, AlertDescription } from '../components/ui/alert';
 import { Loader2, MessageCircle } from 'lucide-react';
+import type { TelegramUser } from '../store/slices/authSlice';
+
+interface TelegramError {
+  message: string;
+  code?: string;
+}
 
 export const LoginPage: React.FC = () => {
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
-  const [isLoading, setIsLoading] = useState(false);
+  const location = useLocation();
+  const [telegramAuth, { isLoading }] = useTelegramAuthMutation();
   const [error, setError] = useState<string | null>(null);
 
-  const handleTelegramResponse = async (response: any) => {
-    setIsLoading(true);
+  // Получаем URL, откуда пользователь пришел
+  const from = (location.state as any)?.from?.pathname || '/';
+
+  const handleTelegramResponse = async (response: TelegramUser) => {
     setError(null);
-    
+
     try {
-      console.log('Данные пользователя:', response);
+      const authResult = await telegramAuth(response).unwrap();
       
-      // Сохраняем пользователя в Redux store
-      dispatch(setUser(response));
-      
-      // Перенаправляем на главную страницу
-      navigate('/');
-    } catch (err) {
-      setError('Произошла ошибка при авторизации');
-      console.error('Ошибка авторизации:', err);
-    } finally {
-      setIsLoading(false);
+      dispatch(setAuth({
+        user: authResult.user,
+        token: authResult.token
+      }));
+
+      navigate(from, { replace: true });
+    } catch (err: any) {
+      const errorMessage = err?.data?.error || 'Ошибка авторизации';
+      setError(errorMessage);
     }
   };
 
-  const handleTelegramError = (error: any) => {
+  const handleTelegramError = (error: TelegramError) => {
     setError('Ошибка авторизации через Telegram');
     console.error('Ошибка авторизации:', error);
   };

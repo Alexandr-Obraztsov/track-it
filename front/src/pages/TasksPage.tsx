@@ -1,5 +1,7 @@
-import React, { useState } from 'react';
-import { useGetTasksQuery, useCreateTaskMutation, useUpdateTaskMutation, useDeleteTaskMutation } from '../store/api/api';
+import React, { useState, useRef } from 'react';
+import { useGetPersonalTasksQuery, useCreateTaskMutation, useUpdateTaskMutation, useDeleteTaskMutation } from '../store/api/tasksApi';
+import { useExtractTasksMutation } from '../store/api/geminiApi';
+import type { Task, CreateTaskRequest, UpdateTaskRequest } from '../types/api';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
@@ -10,30 +12,43 @@ import {
   Edit, 
   Trash2, 
   Calendar,
-  Search
+  Search,
+  Mic,
+  MicOff,
+  Type,
+  Volume2
 } from 'lucide-react';
 
 export const TasksPage: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [showCreateForm, setShowCreateForm] = useState(false);
-  const [newTask, setNewTask] = useState({ title: '', description: '', priority: 'medium' });
-  const [editingTask, setEditingTask] = useState<any>(null);
+  const [newTask, setNewTask] = useState<CreateTaskRequest>({ title: '', description: '' });
+  const [editingTask, setEditingTask] = useState<Task | null>(null);
+  const [isRecording, setIsRecording] = useState(false);
+  const [textInput, setTextInput] = useState('');
+  const [showTextInput, setShowTextInput] = useState(false);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
 
-  const { data: tasks = [], isLoading } = useGetTasksQuery();
+  // Временный userId - в реальном приложении должен браться из контекста авторизации
+  const userId = '1';
+  
+  const { data: tasks = [], isLoading } = useGetPersonalTasksQuery(userId);
   const [createTask] = useCreateTaskMutation();
   const [updateTask] = useUpdateTaskMutation();
   const [deleteTask] = useDeleteTaskMutation();
+  const [extractTasks] = useExtractTasksMutation();
 
-  const filteredTasks = tasks.filter((task: any) =>
+  const filteredTasks = tasks.filter((task: Task) =>
     task.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    task.description.toLowerCase().includes(searchTerm.toLowerCase())
+    (task.description && task.description.toLowerCase().includes(searchTerm.toLowerCase()))
   );
 
   const handleCreateTask = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
       await createTask(newTask).unwrap();
-      setNewTask({ title: '', description: '', priority: 'medium' });
+      setNewTask({ title: '', description: '' });
       setShowCreateForm(false);
     } catch (error) {
       console.error('Ошибка создания задачи:', error);
@@ -45,49 +60,96 @@ export const TasksPage: React.FC = () => {
     if (!editingTask) return;
     
     try {
-      await updateTask({ id: editingTask.id, data: editingTask }).unwrap();
+      const updateData: UpdateTaskRequest = {
+        title: editingTask.title,
+        description: editingTask.description,
+      };
+      await updateTask({ id: editingTask.id.toString(), data: updateData }).unwrap();
       setEditingTask(null);
     } catch (error) {
       console.error('Ошибка обновления задачи:', error);
     }
   };
 
-  const handleDeleteTask = async (taskId: string) => {
+  const handleDeleteTask = async (taskId: number) => {
     if (window.confirm('Вы уверены, что хотите удалить эту задачу?')) {
       try {
-        await deleteTask(taskId).unwrap();
+        await deleteTask(taskId.toString()).unwrap();
       } catch (error) {
         console.error('Ошибка удаления задачи:', error);
       }
     }
   };
 
-  const toggleTaskStatus = async (task: any) => {
+
+  const startRecording = async () => {
     try {
-      await updateTask({ 
-        id: task.id, 
-        data: { ...task, status: task.status === 'completed' ? 'pending' : 'completed' }
-      }).unwrap();
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mediaRecorder = new MediaRecorder(stream);
+      mediaRecorderRef.current = mediaRecorder;
+      audioChunksRef.current = [];
+
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          audioChunksRef.current.push(event.data);
+        }
+      };
+
+      mediaRecorder.onstop = async () => {
+        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/wav' });
+        await processAudioInput(audioBlob);
+        stream.getTracks().forEach(track => track.stop());
+      };
+
+      mediaRecorder.start();
+      setIsRecording(true);
     } catch (error) {
-      console.error('Ошибка обновления статуса:', error);
+      console.error('Ошибка при записи аудио:', error);
+      alert('Не удалось получить доступ к микрофону');
     }
   };
 
-  const getPriorityColor = (priority: string) => {
-    switch (priority) {
-      case 'high': return 'bg-red-100 text-red-800';
-      case 'medium': return 'bg-yellow-100 text-yellow-800';
-      case 'low': return 'bg-green-100 text-green-800';
-      default: return 'bg-gray-100 text-gray-800';
+  const stopRecording = () => {
+    if (mediaRecorderRef.current && isRecording) {
+      mediaRecorderRef.current.stop();
+      setIsRecording(false);
     }
   };
 
-  const getPriorityLabel = (priority: string) => {
-    switch (priority) {
-      case 'high': return 'Высокий';
-      case 'medium': return 'Средний';
-      case 'low': return 'Низкий';
-      default: return 'Не указан';
+  const processAudioInput = async (audioBlob: Blob) => {
+    try {
+      const formData = new FormData();
+      formData.append('audioData', audioBlob);
+      formData.append('type', 'personal');
+      formData.append('userId', userId);
+
+      const result = await extractTasks({
+        audioData: audioBlob,
+        type: 'personal',
+        userId: parseInt(userId)
+      }).unwrap();
+
+      console.log('Задачи извлечены из аудио:', result);
+    } catch (error) {
+      console.error('Ошибка обработки аудио:', error);
+    }
+  };
+
+  const processTextInput = async () => {
+    if (!textInput.trim()) return;
+
+    try {
+      const result = await extractTasks({
+        text: textInput,
+        type: 'personal',
+        userId: parseInt(userId)
+      }).unwrap();
+
+      console.log('Задачи извлечены из текста:', result);
+      setTextInput('');
+      setShowTextInput(false);
+    } catch (error) {
+      console.error('Ошибка обработки текста:', error);
     }
   };
 
@@ -96,19 +158,80 @@ export const TasksPage: React.FC = () => {
       {/* Header */}
       <div className="space-y-3">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Задачи</h1>
+          <h1 className="text-2xl font-bold text-gray-900">Личные задачи</h1>
           <p className="text-gray-600 text-sm">
-            Управляйте своими задачами
+            Управляйте своими личными задачами
           </p>
         </div>
-        <Button 
-          onClick={() => setShowCreateForm(true)} 
-          className="w-full flex items-center justify-center gap-2"
-        >
-          <Plus className="w-4 h-4" />
-          Новая задача
-        </Button>
+        
+        {/* Action buttons */}
+        <div className="grid grid-cols-2 gap-2">
+          <Button 
+            onClick={() => setShowCreateForm(true)} 
+            className="flex items-center justify-center gap-2"
+          >
+            <Plus className="w-4 h-4" />
+            Создать задачу
+          </Button>
+          <Button 
+            onClick={() => setShowTextInput(!showTextInput)} 
+            variant="outline"
+            className="flex items-center justify-center gap-2"
+          >
+            <Type className="w-4 h-4" />
+            Текстом
+          </Button>
+        </div>
+        
+        <div className="flex gap-2">
+          <Button 
+            onClick={isRecording ? stopRecording : startRecording}
+            variant={isRecording ? "destructive" : "outline"}
+            className="flex-1 flex items-center justify-center gap-2"
+          >
+            {isRecording ? (
+              <>
+                <MicOff className="w-4 h-4" />
+                Остановить запись
+              </>
+            ) : (
+              <>
+                <Mic className="w-4 h-4" />
+                Голосом
+              </>
+            )}
+          </Button>
+        </div>
       </div>
+
+      {/* Text input for task creation */}
+      {showTextInput && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-sm">Создать задачи из текста</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              <textarea
+                value={textInput}
+                onChange={(e) => setTextInput(e.target.value)}
+                placeholder="Введите описание задач... Например: 'Нужно купить молоко, позвонить маме, подготовить отчет'"
+                className="w-full p-3 border border-gray-300 rounded-md resize-none"
+                rows={3}
+              />
+              <div className="flex gap-2">
+                <Button onClick={processTextInput} disabled={!textInput.trim()}>
+                  <Volume2 className="w-4 h-4 mr-2" />
+                  Создать задачи
+                </Button>
+                <Button variant="outline" onClick={() => setShowTextInput(false)}>
+                  Отмена
+                </Button>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Search */}
       <div className="relative">
@@ -142,22 +265,9 @@ export const TasksPage: React.FC = () => {
                 <Label htmlFor="description">Описание</Label>
                 <Input
                   id="description"
-                  value={newTask.description}
+                  value={newTask.description || ''}
                   onChange={(e) => setNewTask({ ...newTask, description: e.target.value })}
                 />
-              </div>
-              <div>
-                <Label htmlFor="priority">Приоритет</Label>
-                <select
-                  id="priority"
-                  value={newTask.priority}
-                  onChange={(e) => setNewTask({ ...newTask, priority: e.target.value })}
-                  className="w-full p-2 border border-gray-300 rounded-md"
-                >
-                  <option value="low">Низкий</option>
-                  <option value="medium">Средний</option>
-                  <option value="high">Высокий</option>
-                </select>
               </div>
               <div className="flex gap-2">
                 <Button type="submit">Создать</Button>
@@ -187,40 +297,34 @@ export const TasksPage: React.FC = () => {
             ))}
           </div>
         ) : filteredTasks.length > 0 ? (
-          filteredTasks.map((task: any) => (
-            <Card key={task.id} className={`${task.status === 'completed' ? 'opacity-75' : ''}`}>
+          filteredTasks.map((task: Task) => (
+            <Card key={task.id}>
               <CardContent className="p-4">
                 <div className="flex items-start space-x-3">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => toggleTaskStatus(task)}
-                    className="p-1 mt-0.5"
-                  >
-                    <CheckSquare className={`w-4 h-4 ${
-                      task.status === 'completed' ? 'text-green-600' : 'text-gray-400'
-                    }`} />
-                  </Button>
                   <div className="flex-1 min-w-0">
-                    <h3 className={`font-medium text-sm ${
-                      task.status === 'completed' ? 'line-through text-gray-500' : 'text-gray-900'
-                    }`}>
+                    <h3 className="font-medium text-sm text-gray-900">
                       {task.title}
                     </h3>
                     {task.description && (
                       <p className="text-gray-600 text-xs mt-1 line-clamp-2">{task.description}</p>
                     )}
                     <div className="flex items-center gap-2 mt-2 flex-wrap">
-                      <span className={`px-2 py-1 text-xs rounded-full ${getPriorityColor(task.priority)}`}>
-                        {getPriorityLabel(task.priority)}
-                      </span>
-                      <span className={`px-2 py-1 text-xs rounded-full ${
-                        task.status === 'completed' 
-                          ? 'bg-green-100 text-green-800' 
-                          : 'bg-yellow-100 text-yellow-800'
-                      }`}>
-                        {task.status === 'completed' ? '✓' : '○'}
-                      </span>
+                      {task.assignedUser && (
+                        <span className="px-2 py-1 text-xs rounded-full bg-blue-100 text-blue-800">
+                          {task.assignedUser.firstName}
+                        </span>
+                      )}
+                      {task.assignedRole && (
+                        <span className="px-2 py-1 text-xs rounded-full bg-purple-100 text-purple-800">
+                          {task.assignedRole.title}
+                        </span>
+                      )}
+                      {task.deadline && (
+                        <div className="flex items-center text-xs text-gray-500">
+                          <Calendar className="w-3 h-3 mr-1" />
+                          {new Date(task.deadline).toLocaleDateString()}
+                        </div>
+                      )}
                       {task.createdAt && (
                         <div className="flex items-center text-xs text-gray-500">
                           <Calendar className="w-3 h-3 mr-1" />
@@ -290,22 +394,9 @@ export const TasksPage: React.FC = () => {
                   <Label htmlFor="edit-description">Описание</Label>
                   <Input
                     id="edit-description"
-                    value={editingTask.description}
+                    value={editingTask.description || ''}
                     onChange={(e) => setEditingTask({ ...editingTask, description: e.target.value })}
                   />
-                </div>
-                <div>
-                  <Label htmlFor="edit-priority">Приоритет</Label>
-                  <select
-                    id="edit-priority"
-                    value={editingTask.priority}
-                    onChange={(e) => setEditingTask({ ...editingTask, priority: e.target.value })}
-                    className="w-full p-2 border border-gray-300 rounded-md"
-                  >
-                    <option value="low">Низкий</option>
-                    <option value="medium">Средний</option>
-                    <option value="high">Высокий</option>
-                  </select>
                 </div>
                 <div className="flex gap-2">
                   <Button type="submit">Сохранить</Button>

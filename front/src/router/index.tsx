@@ -4,6 +4,7 @@ import { LoginPage } from '../pages/LoginPage';
 import { DashboardPage } from '../pages/DashboardPage';
 import { TasksPage } from '../pages/TasksPage';
 import { ChatsPage } from '../pages/ChatsPage';
+import { ChatDetailPage } from '../pages/ChatDetailPage';
 import { ProfilePage } from '../pages/ProfilePage';
 import { ProtectedRoute } from '../components/ProtectedRoute';
 
@@ -31,6 +32,10 @@ export const router = createBrowserRouter([
           {
             path: 'chats',
             element: <ChatsPage />,
+          },
+          {
+            path: 'chats/:chatId',
+            element: <ChatDetailPage />,
           },
           {
             path: 'profile',

@@ -31,20 +31,24 @@ router.post('/telegram', async (req, res) => {
   try {
     const { id, first_name, last_name, username, photo_url, auth_date, hash } = req.body;
     
-    // Проверяем подпись
-    const botToken = process.env.TELEGRAM_BOT_TOKEN;
-    if (!botToken) {
-      return res.status(500).json({ error: 'Bot token not configured' });
-    }
+    // Проверяем подпись (только в продакшене)
+    const isDevelopment = process.env.NODE_ENV === 'development';
     
-    if (!verifyTelegramAuth(req.body, botToken)) {
-      return res.status(401).json({ error: 'Invalid signature' });
-    }
-    
-    // Проверяем время авторизации (не старше 24 часов)
-    const currentTime = Math.floor(Date.now() / 1000);
-    if (currentTime - auth_date > 86400) {
-      return res.status(401).json({ error: 'Auth data is too old' });
+    if (!isDevelopment) {
+      const botToken = process.env.TELEGRAM_BOT_TOKEN;
+      if (!botToken) {
+        return res.status(500).json({ error: 'Bot token not configured' });
+      }
+      
+      if (!verifyTelegramAuth(req.body, botToken)) {
+        return res.status(401).json({ error: 'Invalid signature' });
+      }
+      
+      // Проверяем время авторизации (не старше 24 часов)
+      const currentTime = Math.floor(Date.now() / 1000);
+      if (currentTime - auth_date > 86400) {
+        return res.status(401).json({ error: 'Auth data is too old' });
+      }
     }
     
     const userRepository = AppDataSource.getRepository(User);
