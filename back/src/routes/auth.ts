@@ -7,11 +7,21 @@ import { authenticateToken } from '../middleware/auth';
 
 const router: Router = Router();
 
-// Функция для проверки подписи Telegram
-function verifyTelegramAuth(authData: any, botToken: string): boolean {
-  const { hash, ...userData } = authData;
+function verifyTelegramAuth(authData: any, botToken: string): { isValid: boolean; error?: string } {
+  const { hash, auth_date, ...userData } = authData;
   
-  // Создаем строку для проверки
+  // Проверяем время авторизации (не старше 24 часов)
+  const currentTime = Math.floor(Date.now() / 1000);
+  const maxAge = 24 * 60 * 60; // 24 часа в секундах
+  
+  if (currentTime - auth_date > maxAge) {
+    return { 
+      isValid: false, 
+      error: `Auth data is too old. Age: ${Math.floor((currentTime - auth_date) / 3600)} hours` 
+    };
+  }
+  
+  // Создаем строку для проверки подписи
   const dataCheckString = Object.keys(userData)
     .sort()
     .map(key => `${key}=${userData[key]}`)
@@ -23,7 +33,14 @@ function verifyTelegramAuth(authData: any, botToken: string): boolean {
   // Вычисляем хеш
   const calculatedHash = crypto.HmacSHA256(dataCheckString, secretKey).toString();
   
-  return calculatedHash === hash;
+  if (calculatedHash !== hash) {
+    return { 
+      isValid: false, 
+      error: 'Invalid signature' 
+    };
+  }
+  
+  return { isValid: true };
 }
 
 // Эндпоинт для авторизации через Telegram
@@ -31,7 +48,15 @@ router.post('/telegram', async (req, res) => {
   try {
     const { id, first_name, last_name, username, photo_url, auth_date, hash } = req.body;
     
-    // Проверяем подпись (только в продакшене)
+    console.log('Telegram auth request:', {
+      id,
+      first_name,
+      username,
+      auth_date: new Date(auth_date * 1000).toISOString(),
+      hash: hash ? `${hash.substring(0, 8)}...` : 'none'
+    });
+    
+    // Проверяем подпись и время авторизации
     const isDevelopment = process.env.NODE_ENV === 'development';
     
     if (!isDevelopment) {
@@ -40,14 +65,19 @@ router.post('/telegram', async (req, res) => {
         return res.status(500).json({ error: 'Bot token not configured' });
       }
       
-      if (!verifyTelegramAuth(req.body, botToken)) {
-        return res.status(401).json({ error: 'Invalid signature' });
+      const verification = verifyTelegramAuth(req.body, botToken);
+      if (!verification.isValid) {
+        return res.status(401).json({ error: verification.error });
       }
-      
-      // Проверяем время авторизации (не старше 24 часов)
+    } else {
+      // В режиме разработки проверяем только время авторизации
       const currentTime = Math.floor(Date.now() / 1000);
-      if (currentTime - auth_date > 86400) {
-        return res.status(401).json({ error: 'Auth data is too old' });
+      const maxAge = 24 * 60 * 60; // 24 часа
+      
+      if (currentTime - auth_date > maxAge) {
+        return res.status(401).json({ 
+          error: `Auth data is too old. Age: ${Math.floor((currentTime - auth_date) / 3600)} hours` 
+        });
       }
     }
     

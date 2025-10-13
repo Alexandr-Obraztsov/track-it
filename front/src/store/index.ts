@@ -8,13 +8,7 @@ export const store = configureStore({
     api: apiReducer,
   },
   middleware: (getDefaultMiddleware) =>
-    getDefaultMiddleware({
-      serializableCheck: {
-        // Игнорируем несериализуемые значения в RTK Query
-        ignoredActions: ['api/executeMutation/rejected', 'api/executeQuery/rejected'],
-        ignoredPaths: ['api.mutations', 'api.queries'],
-      },
-    }).concat(apiMiddleware),
+    getDefaultMiddleware().concat(apiMiddleware),
 });
 
 export type RootState = ReturnType<typeof store.getState>;
