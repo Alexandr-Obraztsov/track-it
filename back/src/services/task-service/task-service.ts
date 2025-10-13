@@ -118,7 +118,7 @@ export class TaskService {
     
     const userTasks = await userTaskRepository.find({
       where: { userId },
-      relations: ['task']
+      relations: ['task', 'task.assignedUser', 'task.assignedRole']
     });
 
     return userTasks.map(ut => ut.task);
@@ -131,7 +131,7 @@ export class TaskService {
     const chatTaskRepository = AppDataSource.getRepository(ChatTask);
     const chatTasks = await chatTaskRepository.find({
       where: { chatId },
-      relations: ['task']
+      relations: ['task', 'task.assignedUser', 'task.assignedRole']
     });
     return chatTasks.map(ct => ct.task);
   }

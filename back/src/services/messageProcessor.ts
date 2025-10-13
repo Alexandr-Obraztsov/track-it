@@ -4,6 +4,7 @@ import { GeminiResult, TaskExtractionParams } from '../types';
 import { AudioUtils } from '../utils/audioUtils';
 import { Formatter } from '../utils/formatter';
 import { Chat } from '../entities/Chat';
+import { Task } from '../entities/Task';
 import { taskService } from './task-service/task-service';
 import { userManager } from './userManager';
 
@@ -150,7 +151,7 @@ export class MessageProcessor {
         }
         
         if (task.deadline) {
-          response += `⏰ <i>Срок: ${new Date(task.deadline).toLocaleString('ru-RU')}</i>\n`;
+          response += `⏰ <i>Дедлайн: ${new Date(task.deadline).toLocaleString('ru-RU')}</i>\n`;
         }
         
         if (task.assignedUserId || task.assignedRoleId) {
@@ -238,6 +239,89 @@ export class MessageProcessor {
 
     return response;
   }
+
+  /**
+   * Обрабатывает команду /tasks
+   */
+  async handleTasksCommand(msg: TelegramBot.Message): Promise<ProcessResult> {
+    try {
+      const isPersonal = msg.chat.type === 'private';
+
+      // Получаем или создаем пользователя и чат
+      const user = await userManager.getOrCreateUser(msg.from!);
+      
+      let chat: Chat | undefined;
+      if (!isPersonal) {
+        chat = await userManager.getOrCreateChat(msg.chat);
+      }
+
+      // Получаем задачи
+      const tasks = isPersonal 
+        ? await taskService.getUserPersonalTasks(user.id)
+        : await taskService.getChatTasks(chat!.id);
+
+      // Формируем ответное сообщение
+      const responseMessage = await this.formatTasksList(tasks, isPersonal);
+
+      return {
+        success: true,
+        responseMessage
+      };
+
+    } catch (error) {
+      console.error('❌ [MESSAGE_PROCESSOR] Error handling /tasks command:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error'
+      };
+    }
+  }
+
+  /**
+   * Форматирует список задач для отображения
+   */
+  private async formatTasksList(tasks: Task[], isPersonal: boolean): Promise<string> {
+    if (tasks.length === 0) {
+      const context = isPersonal ? 'личных' : 'групповых';
+      return `📋 <b>Список ${context} задач</b>\n━━━━━━━━━━━━━━━━━━━━\n\n🤷‍♂️ Задач пока нет`;
+    }
+
+    const context = isPersonal ? 'личные' : 'групповые';
+    let response = `📋 <b>Список ${context} задач</b>\n`;
+    response += '━━━━━━━━━━━━━━━━━━━━\n\n';
+
+    for (let index = 0; index < tasks.length; index++) {
+      const task = tasks[index];
+      response += `🎯 <b>${task.title}</b>\n`;
+      
+      if (task.description) {
+        response += `📝 ${task.description}\n`;
+      }
+      
+      if (task.deadline) {
+        response += `⏰ <i>Дедлайн: ${new Date(task.deadline).toLocaleString('ru-RU')}</i>\n`;
+      }
+      
+      if (task.assignedUser || task.assignedRole) {
+        response += `👤 <i>Назначено: `;
+        if (task.assignedUser) {
+          response += Formatter.tagUser(task.assignedUser);
+        }
+        if (task.assignedRole) {
+          response += `Роль #${task.assignedRole.id}`;
+        }
+        response += `</i>\n`;
+      }
+      
+      response += '\n';
+    }
+
+    response += '━━━━━━━━━━━━━━━━━━━━\n';
+    response += `📊 <i>Всего задач: ${tasks.length}</i>`;
+
+    return response;
+  }
+
 }
 
 export const messageProcessor = new MessageProcessor();

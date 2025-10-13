@@ -19,8 +19,37 @@ export class TelegramBotService {
   }
 
   private setupHandlers() {
-    // Универсальный обработчик всех сообщений
+    // Обработчик команды /tasks
+    this.bot.onText(/^\/tasks$/, async (msg) => {
+      console.log('📋 [TELEGRAM] /tasks command received:', {
+        messageId: msg.message_id,
+        chatId: msg.chat.id,
+        chatType: msg.chat.type,
+        userId: msg.from?.id,
+        username: msg.from?.username
+      });
+
+      try {
+        const result = await messageProcessor.handleTasksCommand(msg);
+        if (result.success && result.responseMessage) {
+          await this.sendMessage(msg.chat.id, result.responseMessage);
+        } else {
+          const errorMessage = result.error || 'Произошла ошибка при получении списка задач';
+          await this.sendMessage(msg.chat.id, `❌ ${errorMessage}`);
+        }
+      } catch (error) {
+        console.error('❌ [TELEGRAM] Error handling /tasks command:', error);
+        await this.bot.sendMessage(msg.chat.id, 'Произошла ошибка при получении списка задач');
+      }
+    });
+
+    // Универсальный обработчик всех сообщений (исключая команды)
     this.bot.on('message', async (msg) => {
+      // Пропускаем команды - они обрабатываются отдельными обработчиками
+      if (msg.text && msg.text.startsWith('/')) {
+        return;
+      }
+
       console.log('📨 [TELEGRAM] Message received:', {
         messageId: msg.message_id,
         chatId: msg.chat.id,
