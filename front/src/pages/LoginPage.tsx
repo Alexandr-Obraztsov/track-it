@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import TelegramLoginButton from 'react-telegram-login';
-import { useAppDispatch } from '../hooks/redux';
+import { useAppDispatch, useAppSelector } from '../hooks/redux';
 import { setAuth, setLoading } from '../store/slices/authSlice';
 import { useTelegramAuthMutation } from '../store/api/authApi';
 import type { TelegramUser } from '../store/slices/authSlice';
@@ -9,9 +10,17 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Loader2 } from 'lucide-react';
 
 const LoginPage = () => {
+  const navigate = useNavigate();
   const dispatch = useAppDispatch();
+  const { isAuthenticated } = useAppSelector((state) => state.auth);
   const [telegramAuth, { isLoading }] = useTelegramAuthMutation();
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      navigate('/dashboard');
+    }
+  }, [isAuthenticated, navigate]);
 
   const handleTelegramResponse = async (response: TelegramUser): Promise<void> => {
     try {

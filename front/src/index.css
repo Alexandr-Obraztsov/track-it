@@ -195,6 +195,11 @@
     @apply bg-background text-foreground;
     font-feature-settings: "rlig" 1, "calt" 1;
     letter-spacing: var(--tracking-normal);
+    overscroll-behavior: none;
+  }
+  
+  #root {
+    @apply bg-background min-h-screen;
   }
 }
 
