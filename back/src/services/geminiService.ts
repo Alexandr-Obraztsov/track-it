@@ -46,9 +46,14 @@ export class GeminiService {
       ]
 
       if (params.audioData) {
+        // Убеждаемся, что audioData это Buffer
+        const audioBuffer = Buffer.isBuffer(params.audioData) 
+          ? params.audioData 
+          : Buffer.from(params.audioData);
+          
         content.push({
           inlineData: {
-            data: params.audioData.toString('base64'),
+            data: audioBuffer.toString('base64'),
             mimeType: params.audioMimeType || 'audio/ogg'
           }
         });

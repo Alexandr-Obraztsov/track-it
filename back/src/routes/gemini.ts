@@ -5,13 +5,30 @@ import { AppDataSource } from '../configs/database';
 import { Chat } from '../entities/Chat';
 import { User } from '../entities/User';
 import { Task } from '../entities/Task';
+import multer from 'multer';
 
 const router = Router();
 
+// Настройка multer для обработки файлов в памяти
+const upload = multer({ 
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: 20 * 1024 * 1024 // 20MB лимит
+  }
+});
+
 // POST /api/gemini/extract - извлечение задач из текста или аудио
-router.post('/extract', async (req, res) => {
+router.post('/extract', upload.single('audioData'), async (req, res) => {
   try {
-    const { text, audioData, chatId, userId, type } = req.body;
+    const { text, chatId, userId, type } = req.body;
+    let audioData: Buffer | undefined;
+    let audioMimeType: string | undefined;
+
+    // Обрабатываем аудио файл если он есть
+    if (req.file) {
+      audioData = req.file.buffer;
+      audioMimeType = req.file.mimetype;
+    }
 
     let chat: Chat | null = null;
     let user: User | null = null;
@@ -55,8 +72,8 @@ router.post('/extract', async (req, res) => {
 
     // Создаем параметры для geminiService
     const params = type === 'group'
-      ? { text, audioData, chat: chat!, existingTasks, isPersonal: false as const }
-      : { text, audioData, user: user!, existingTasks, isPersonal: true as const };
+      ? { text, audioData, audioMimeType, chat: chat!, existingTasks, isPersonal: false as const }
+      : { text, audioData, audioMimeType, user: user!, existingTasks, isPersonal: true as const };
 
     const result = await geminiService.extractTasks(params);
     res.json(result);

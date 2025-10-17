@@ -1,10 +1,9 @@
 import { createApi, fetchBaseQuery } from '@reduxjs/toolkit/query/react';
-import { API_CONFIG } from '../../config/api';
 import type { RootState } from '../index';
 
 // Кастомный baseQuery для правильной обработки ошибок
 const baseQueryWithErrorHandling = fetchBaseQuery({
-  baseUrl: API_CONFIG.BASE_URL,
+  baseUrl: import.meta.env.VITE_API_URL || '/api',
   prepareHeaders: (headers, { getState }) => {
     headers.set('Content-Type', 'application/json');
     
@@ -18,12 +17,10 @@ const baseQueryWithErrorHandling = fetchBaseQuery({
   },
 });
 
-// Обертка для обработки ошибок
 const baseQueryWithReauth = async (args: any, api: any, extraOptions: any) => {
   let result = await baseQueryWithErrorHandling(args, api, extraOptions);
   
   if (result.error && result.error.status === 401) {
-    // Очищаем токен при ошибке авторизации
     localStorage.removeItem('auth_token');
   }
   

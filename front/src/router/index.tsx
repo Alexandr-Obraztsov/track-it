@@ -1,52 +1,10 @@
-import { createBrowserRouter, RouterProvider, Outlet } from 'react-router-dom';
-import { Layout } from '../components/Layout';
-import { LoginPage } from '../pages/LoginPage';
-import { DashboardPage } from '../pages/DashboardPage';
-import { TasksPage } from '../pages/TasksPage';
-import { ChatsPage } from '../pages/ChatsPage';
-import { ChatDetailPage } from '../pages/ChatDetailPage';
-import { ProfilePage } from '../pages/ProfilePage';
-import { ProtectedRoute } from '../components/ProtectedRoute';
+import LoginPage from '@/pages/LoginPage';
+import { createBrowserRouter } from 'react-router-dom';
 
 export const router = createBrowserRouter([
   {
     path: '/',
-    element: <Layout />,
-    children: [
-      {
-        path: '/login',
-        element: <LoginPage />,
-      },
-      {
-        path: '/',
-        element: <ProtectedRoute><Outlet /></ProtectedRoute>,
-        children: [
-          {
-            index: true,
-            element: <DashboardPage />,
-          },
-          {
-            path: 'tasks',
-            element: <TasksPage />,
-          },
-          {
-            path: 'chats',
-            element: <ChatsPage />,
-          },
-          {
-            path: 'chats/:chatId',
-            element: <ChatDetailPage />,
-          },
-          {
-            path: 'profile',
-            element: <ProfilePage />,
-          },
-        ],
-      },
-    ],
-  },
+    index: true,
+    element: <LoginPage />,
+  }
 ]);
-
-export const AppRouter = () => {
-  return <RouterProvider router={router} />;
-};
