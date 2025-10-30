@@ -11,9 +11,9 @@ export const geminiApi = baseApi.injectEndpoints({
           url: '/gemini/extract',
           method: 'POST',
           body: formData,
-          // Не устанавливаем Content-Type - браузер сделает это автоматически для FormData
+          // Важно: не устанавливаем Content-Type для FormData
           prepareHeaders: (headers: Headers) => {
-            // Удаляем Content-Type если он есть, чтобы браузер установил правильный с boundary
+            // Удаляем Content-Type чтобы браузер установил multipart/form-data с boundary
             headers.delete('Content-Type');
             return headers;
           },

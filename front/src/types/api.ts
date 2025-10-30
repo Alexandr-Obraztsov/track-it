@@ -60,12 +60,15 @@ export interface UpdateRoleRequest {
 }
 
 // Task types
+export type TaskStatus = 'backlog' | 'in_progress' | 'completed';
+
 export interface Task extends BaseEntity {
   title: string;
   description: string | null;
   assignedUserId: number | null;
   assignedRoleId: number | null;
   deadline: string | null;
+  status: TaskStatus;
   assignedUser?: User;
   assignedRole?: Role;
   chat?: Chat;
@@ -83,6 +86,7 @@ export interface CreateTaskRequest {
 export interface UpdateTaskRequest {
   title?: string;
   description?: string;
+  status?: TaskStatus;
   chatId?: number;
   assignedUserId?: number;
   assignedRoleId?: number;

@@ -7,7 +7,7 @@ export class ChatTask {
   @PrimaryGeneratedColumn('increment')
   id!: number;
 
-  @Column({ name: 'chat_id', type: 'int' })
+  @Column({ name: 'chat_id', type: 'bigint' })
   chatId!: number;
 
   @Column({ name: 'task_id', type: 'int' })

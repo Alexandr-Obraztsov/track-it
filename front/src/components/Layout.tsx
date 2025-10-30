@@ -1,6 +1,6 @@
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { useAppSelector } from '@/hooks/redux';
-import { Home, MessageSquare, CheckSquare, User } from 'lucide-react';
+import { MessageSquare, CheckSquare, User } from 'lucide-react';
 import { useEffect } from 'react';
 
 const Layout = () => {
@@ -19,9 +19,8 @@ const Layout = () => {
   }
 
   const navItems = [
-    { path: '/dashboard', icon: Home, label: 'Дашборд' },
-    { path: '/chats', icon: MessageSquare, label: 'Чаты' },
     { path: '/tasks', icon: CheckSquare, label: 'Задачи' },
+    { path: '/chats', icon: MessageSquare, label: 'Чаты' },
     { path: '/profile', icon: User, label: 'Профиль' }
   ];
 
@@ -30,7 +29,7 @@ const Layout = () => {
   return (
     <div className="flex min-h-screen flex-col bg-background">
       {/* Основной контент */}
-      <main className="flex-1 pb-16">
+      <main className="flex-1 flex flex-col pb-16">
         <Outlet />
       </main>
 

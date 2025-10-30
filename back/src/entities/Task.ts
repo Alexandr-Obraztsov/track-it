@@ -28,6 +28,13 @@ export class Task {
   @Column({ type: 'date', nullable: true })
   deadline!: Date | null;
 
+  @Column({ 
+    type: 'enum', 
+    enum: ['backlog', 'in_progress', 'completed'], 
+    default: 'backlog' 
+  })
+  status!: 'backlog' | 'in_progress' | 'completed';
+
   // Связи с основными сущностями
   @ManyToOne(() => Chat, chat => chat.tasks, { nullable: true })
   @JoinColumn({ name: 'chat_id' })

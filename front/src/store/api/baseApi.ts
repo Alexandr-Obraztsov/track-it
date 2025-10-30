@@ -14,9 +14,12 @@ const baseQueryWithErrorHandling = fetchBaseQuery({
     // Content-Type будет установлен автоматически:
     // - для JSON: application/json
     // - для FormData: multipart/form-data с boundary
+    // НЕ устанавливаем Content-Type для FormData - браузер сделает это сам
     
     return headers;
   },
+  // Отключаем автоматическую JSON сериализацию для FormData
+  jsonContentType: 'application/json',
 });
 
 const baseQueryWithReauth = async (args: any, api: any, extraOptions: any) => {

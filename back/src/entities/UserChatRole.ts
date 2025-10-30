@@ -11,7 +11,7 @@ export class UserChatRole {
   @Column({ name: 'user_id', type: 'int' })
   userId!: number;
 
-  @Column({ name: 'chat_id', type: 'int' })
+  @Column({ name: 'chat_id', type: 'bigint' })
   chatId!: number;
 
   @Column({ name: 'role_id', type: 'int' })

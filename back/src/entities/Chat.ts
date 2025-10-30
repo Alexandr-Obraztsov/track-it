@@ -1,4 +1,4 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, OneToMany } from 'typeorm';
+import { Entity, PrimaryColumn, Column, CreateDateColumn, OneToMany } from 'typeorm';
 import { UserChatRole } from './UserChatRole';
 import { ChatRole } from './ChatRole';
 import { Task } from './Task';
@@ -6,7 +6,7 @@ import { ChatTask } from './ChatTask';
 
 @Entity('chats')
 export class Chat {
-  @PrimaryGeneratedColumn('increment')
+  @PrimaryColumn({ type: 'bigint' })
   id!: number;
 
   @Column({ type: 'varchar', length: 255 })

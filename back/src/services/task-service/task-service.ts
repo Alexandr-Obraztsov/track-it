@@ -39,8 +39,8 @@ export class TaskService {
       const task = this.taskRepository.create({
         title: taskData.title,
         description: taskData.description,
-        assignedUserId: taskData.assignedUserId,
-        assignedRoleId: taskData.assignedRoleId,
+        assignedUserId: params.isPersonal ? params.user.id : taskData.assignedUserId,
+        assignedRoleId: params.isPersonal ? null : taskData.assignedRoleId,
         deadline: taskData.deadline ? new Date(taskData.deadline) : null,
       });
       const savedTask = await this.taskRepository.save(task);
@@ -121,7 +121,9 @@ export class TaskService {
       relations: ['task', 'task.assignedUser', 'task.assignedRole']
     });
 
-    return userTasks.map(ut => ut.task);
+    const tasks = userTasks.map(ut => ut.task);
+    
+    return tasks;
   }
 
   /**

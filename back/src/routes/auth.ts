@@ -48,13 +48,6 @@ router.post('/telegram', async (req, res) => {
   try {
     const { id, first_name, last_name, username, photo_url, auth_date, hash } = req.body;
     
-    console.log('Telegram auth request:', {
-      id,
-      first_name,
-      username,
-      auth_date: new Date(auth_date * 1000).toISOString(),
-      hash: hash ? `${hash.substring(0, 8)}...` : 'none'
-    });
     
     // Проверяем подпись и время авторизации
     const isDevelopment = process.env.NODE_ENV === 'development';

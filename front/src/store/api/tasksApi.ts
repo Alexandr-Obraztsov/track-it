@@ -1,6 +1,7 @@
 import { baseApi } from './baseApi';
 import type { 
   Task, 
+  TaskStatus,
   CreateTaskRequest, 
   UpdateTaskRequest 
 } from '../../types/api';
@@ -38,7 +39,11 @@ export const tasksApi = baseApi.injectEndpoints({
       }),
       invalidatesTags: ['Task'],
     }),
-    getPersonalTasks: builder.query<Task[], string>({
+    getPersonalTasks: builder.query<Task[], void>({
+      query: () => '/tasks/personal',
+      providesTags: ['Task'],
+    }),
+    getPersonalTasksById: builder.query<Task[], string>({
       query: (userId) => `/tasks/personal/${userId}`,
       providesTags: ['Task'],
     }),
@@ -50,6 +55,14 @@ export const tasksApi = baseApi.injectEndpoints({
       query: (userId) => `/tasks/assigned/${userId}`,
       providesTags: ['Task'],
     }),
+    updateTaskStatus: builder.mutation<Task, { id: number; status: TaskStatus }>({
+      query: ({ id, status }) => ({
+        url: `/tasks/${id}/status`,
+        method: 'PATCH',
+        body: { status },
+      }),
+      invalidatesTags: ['Task'],
+    }),
   }),
 });
 
@@ -60,6 +73,8 @@ export const {
   useUpdateTaskMutation,
   useDeleteTaskMutation,
   useGetPersonalTasksQuery,
+  useGetPersonalTasksByIdQuery,
   useGetChatTasksQuery,
   useGetAssignedTasksQuery,
+  useUpdateTaskStatusMutation,
 } = tasksApi;

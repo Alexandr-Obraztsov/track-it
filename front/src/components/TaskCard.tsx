@@ -1,8 +1,24 @@
-import { useState, useRef, useEffect } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
-import { Trash2, Calendar } from 'lucide-react';
 import { type Task } from '@/types/api';
+import { useUpdateTaskStatusMutation } from '@/store/api/tasksApi';
+import { Calendar, Trash2 } from 'lucide-react';
+import { motion } from 'framer-motion';
+import { Button } from '@/components/ui/button';
+import { useNavigate } from 'react-router-dom';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
+import { useState } from 'react';
 
 interface TaskCardProps {
   task: Task;
@@ -10,150 +26,152 @@ interface TaskCardProps {
 }
 
 export const TaskCard = ({ task, onDelete }: TaskCardProps) => {
-  const [touchStart, setTouchStart] = useState(0);
-  const [touchEnd, setTouchEnd] = useState(0);
-  const [offsetX, setOffsetX] = useState(0);
-  const [isDragging, setIsDragging] = useState(false);
-  const [showDelete, setShowDelete] = useState(false);
-  const cardRef = useRef<HTMLDivElement>(null);
+  const navigate = useNavigate();
+  const [updateTaskStatus] = useUpdateTaskStatusMutation();
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
 
-  const minSwipeDistance = 50;
-  const deleteThreshold = 100;
-
-  const handleTouchStart = (e: React.TouchEvent) => {
-    setTouchEnd(0);
-    setTouchStart(e.targetTouches[0].clientX);
-    setIsDragging(true);
-  };
-
-  const handleTouchMove = (e: React.TouchEvent) => {
-    const currentTouch = e.targetTouches[0].clientX;
-    setTouchEnd(currentTouch);
-    const distance = touchStart - currentTouch;
-    
-    // Ограничиваем свайп только вправо (влево от элемента)
-    if (distance > 0) {
-      setOffsetX(-Math.min(distance, 150));
+  const handleStatusChange = async (checked: boolean, e?: React.MouseEvent) => {
+    if (e) {
+      e.stopPropagation();
     }
-  };
-
-  const handleTouchEnd = () => {
-    setIsDragging(false);
-    
-    if (!touchStart || !touchEnd) {
-      return;
+    try {
+      const newStatus = checked ? 'completed' : 'backlog';
+      await updateTaskStatus({ id: task.id, status: newStatus });
+    } catch (error) {
+      console.error('Failed to update task status:', error);
     }
-
-    const distance = touchStart - touchEnd;
-    const isSwipe = distance > minSwipeDistance;
-
-    if (isSwipe && distance > deleteThreshold) {
-      setShowDelete(true);
-      setOffsetX(-150);
-    } else if (isSwipe) {
-      setShowDelete(true);
-      setOffsetX(-80);
-    } else {
-      setShowDelete(false);
-      setOffsetX(0);
-    }
-  };
-
-  const handleDelete = () => {
-    onDelete(task.id);
   };
 
   const handleCardClick = () => {
-    if (showDelete) {
-      setShowDelete(false);
-      setOffsetX(0);
-    }
+    // При клике на карточку открываем страницу редактирования
+    navigate(`/tasks/${task.id}`);
   };
 
-  // Закрываем при клике вне карточки
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (cardRef.current && !cardRef.current.contains(event.target as Node) && showDelete) {
-        setShowDelete(false);
-        setOffsetX(0);
-      }
-    };
+  const handleDeleteClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setShowDeleteDialog(true);
+  };
 
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
-  }, [showDelete]);
+  const handleConfirmDelete = () => {
+    onDelete(task.id);
+    setShowDeleteDialog(false);
+  };
 
-  const formatDate = (dateString: string | null) => {
-    if (!dateString) return null;
-    const date = new Date(dateString);
-    return date.toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' });
+  const isCompleted = task.status === 'completed';
+  
+  const formatDeadline = (deadline: string) => {
+    const date = new Date(deadline);
+    const now = new Date();
+    const isOverdue = date < now && !isCompleted;
+    
+    const dateStr = date.toLocaleDateString('ru-RU', { 
+      day: '2-digit', 
+      month: '2-digit',
+      year: date.getFullYear() !== now.getFullYear() ? 'numeric' : undefined
+    });
+    
+    const timeStr = date.toLocaleTimeString('ru-RU', {
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+    
+    return {
+      text: `${dateStr} ${timeStr}`,
+      isOverdue
+    };
   };
 
   return (
-    <div ref={cardRef} className="relative overflow-hidden">
-      {/* Фон с кнопкой удаления */}
-      <div className="absolute inset-0 flex items-center justify-end bg-destructive">
-        <button
-          onClick={handleDelete}
-          className="flex items-center gap-2 px-6 text-destructive-foreground h-full"
-        >
-          <Trash2 className="h-5 w-5" />
-          <span className="font-medium">Удалить</span>
-        </button>
-      </div>
-
-      {/* Карточка задачи */}
-      <Card
-        className="relative cursor-pointer transition-transform touch-pan-y"
-        style={{
-          transform: `translateX(${offsetX}px)`,
-          transition: isDragging ? 'none' : 'transform 0.3s ease-out'
-        }}
-        onTouchStart={handleTouchStart}
-        onTouchMove={handleTouchMove}
-        onTouchEnd={handleTouchEnd}
-        onClick={handleCardClick}
-      >
-        <CardContent className="p-4">
-          <div className="space-y-2">
-            <div className="flex items-start justify-between gap-2">
-              <h3 className="font-semibold text-foreground line-clamp-2">
+    <motion.div
+      layout
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: -20 }}
+      transition={{ 
+        layout: { duration: 0.3, ease: "easeInOut" },
+        opacity: { duration: 0.2 },
+        y: { duration: 0.2 }
+      }}
+    >
+      <Card className={`transition-all duration-200 cursor-pointer group ${
+        isCompleted ? 'bg-muted/30' : 'hover:shadow-sm'
+      }`} onClick={handleCardClick}>
+      <CardContent>
+        <div className="flex items-center gap-3">
+          <Checkbox
+            checked={isCompleted}
+            className="mt-0.5 shrink-0"
+            onCheckedChange={(checked) => handleStatusChange(!!checked)}
+            onClick={(e) => e.stopPropagation()}
+          />
+          
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center justify-between gap-2">
+              <p className={`text-sm leading-tight flex-1 ${
+                isCompleted 
+                  ? 'line-through text-muted-foreground' 
+                  : 'text-foreground'
+              }`}>
                 {task.title}
-              </h3>
-              {task.deadline && (
-                <Badge variant="secondary" className="flex items-center gap-1 shrink-0">
-                  <Calendar className="h-3 w-3" />
-                  <span className="text-xs">{formatDate(task.deadline)}</span>
-                </Badge>
-              )}
+              </p>
+              
+              <div className="flex items-center gap-2 shrink-0">
+                {task.deadline && (
+                  <Badge 
+                    variant={formatDeadline(task.deadline).isOverdue ? 'destructive' : 'secondary'}
+                    className="text-xs"
+                  >
+                    <Calendar className="w-3 h-3 mr-1" />
+                    {formatDeadline(task.deadline).text}
+                  </Badge>
+                )}
+                
+                <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+                  <AlertDialogTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-6 w-6 transition-all"
+                      onClick={handleDeleteClick}
+                    >
+                      <Trash2 className="h-3 w-3 text-destructive" />
+                    </Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent onClick={(e) => e.stopPropagation()}>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Удалить задачу?</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        Вы уверены, что хотите удалить задачу "{task.title}"? 
+                        Это действие нельзя отменить.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Отмена</AlertDialogCancel>
+                      <AlertDialogAction
+                        onClick={handleConfirmDelete}
+                        className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                      >
+                        Удалить
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+              </div>
             </div>
             
             {task.description && (
-              <p className="text-sm text-muted-foreground line-clamp-2">
+              <p className={`text-xs mt-1 leading-tight ${
+                isCompleted 
+                  ? 'text-muted-foreground/60' 
+                  : 'text-muted-foreground'
+              }`}>
                 {task.description}
               </p>
             )}
-            
-            {(task.assignedUser || task.assignedRole) && (
-              <div className="flex gap-2 pt-1">
-                {task.assignedUser && (
-                  <Badge variant="outline" className="text-xs">
-                    {task.assignedUser.firstName}
-                  </Badge>
-                )}
-                {task.assignedRole && (
-                  <Badge variant="outline" className="text-xs">
-                    {task.assignedRole.title}
-                  </Badge>
-                )}
-              </div>
-            )}
           </div>
-        </CardContent>
-      </Card>
-    </div>
+        </div>
+      </CardContent>
+    </Card>
+    </motion.div>
   );
 };
-

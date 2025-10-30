@@ -3,20 +3,21 @@ import { Button } from '@/components/ui/button';
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Mic, Loader2, CheckCircle2, AlertCircle } from 'lucide-react';
 import { useExtractTasksMutation } from '@/store/api/geminiApi';
-import { useAppSelector } from '@/hooks/redux';
+import { useAppSelector, useAppDispatch } from '@/hooks/redux';
+import { tasksApi } from '@/store/api/tasksApi';
 
 export const VoiceRecordButton = () => {
   const { user } = useAppSelector((state) => state.auth);
+  const dispatch = useAppDispatch();
   const [isRecording, setIsRecording] = useState(false);
   const [showResult, setShowResult] = useState(false);
-  const [result, setResult] = useState<{ success: boolean; message: string } | null>(null);
+  const [result, setResult] = useState<{ success: boolean; message: string; tasks?: string[] } | null>(null);
   const [recordingTime, setRecordingTime] = useState(0);
   
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -89,7 +90,7 @@ export const VoiceRecordButton = () => {
         timerRef.current = null;
       }
       
-      setRecordingTime(0);
+      // НЕ сбрасываем время здесь - это будет сделано после отправки
     }
   };
 
@@ -101,21 +102,39 @@ export const VoiceRecordButton = () => {
     try {
       const formData = new FormData();
       formData.append('type', 'personal');
-      formData.append('userId', user.id.toString());
       formData.append('audioData', audioBlob, 'recording.webm');
 
-      const response = await extractTasks(formData as any).unwrap();
+      const response = await extractTasks(formData).unwrap();
       
       const newTasksCount = response.newTasks?.length || 0;
       const updatedTasksCount = response.updatedTasks?.length || 0;
       
+      // Обновляем кэш личных задач
+      if (newTasksCount > 0 || updatedTasksCount > 0) {
+        dispatch(tasksApi.util.invalidateTags(['Task']));
+      }
+      
       let message = '';
+      const taskTitles: string[] = [];
+      
       if (newTasksCount > 0) {
-        message += `Создано задач: ${newTasksCount}`;
+        message += `Создано: ${newTasksCount}`;
+        // Собираем заголовки новых задач
+        response.newTasks?.forEach(task => {
+          if (task.title) {
+            taskTitles.push(task.title);
+          }
+        });
       }
       if (updatedTasksCount > 0) {
         if (message) message += ', ';
-        message += `Обновлено задач: ${updatedTasksCount}`;
+        message += `Обновлено: ${updatedTasksCount}`;
+        // Собираем заголовки обновленных задач
+        response.updatedTasks?.forEach(task => {
+          if (task.title) {
+            taskTitles.push(`${task.title} (обновлена)`);
+          }
+        });
       }
       if (!message) {
         message = 'Задачи не найдены в записи';
@@ -123,7 +142,8 @@ export const VoiceRecordButton = () => {
 
       setResult({
         success: true,
-        message: message
+        message: message,
+        tasks: taskTitles
       });
     } catch (err: any) {
       console.error('Error sending audio:', err);
@@ -144,27 +164,18 @@ export const VoiceRecordButton = () => {
         success: false,
         message: errorMessage
       });
+    } finally {
+      // Сбрасываем время записи в любом случае
+      setRecordingTime(0);
     }
   };
 
-  const handleMouseDown = (e: React.MouseEvent) => {
-    e.preventDefault();
-    startRecording();
-  };
-
-  const handleMouseUp = (e: React.MouseEvent) => {
-    e.preventDefault();
-    stopRecording();
-  };
-
-  const handleTouchStart = (e: React.TouchEvent) => {
-    e.preventDefault();
-    startRecording();
-  };
-
-  const handleTouchEnd = (e: React.TouchEvent) => {
-    e.preventDefault();
-    stopRecording();
+  const handleClick = () => {
+    if (isRecording) {
+      stopRecording();
+    } else {
+      startRecording();
+    }
   };
 
   const formatTime = (seconds: number) => {
@@ -180,19 +191,15 @@ export const VoiceRecordButton = () => {
 
   return (
     <>
-      {/* Плавающая кнопка */}
-      <div className="fixed bottom-20 right-6 z-40">
+      {/* Кнопка записи */}
+      <div className="relative">
         <Button
           size="lg"
           variant={isRecording ? 'destructive' : 'default'}
-          className={`h-14 w-14 rounded-full shadow-xl transition-all duration-200 ${
+          className={`h-14 w-14 rounded-lg shadow-xl transition-all duration-200 ${
             isRecording ? 'scale-110 ring-4 ring-destructive/20' : 'hover:scale-105'
           }`}
-          onMouseDown={handleMouseDown}
-          onMouseUp={handleMouseUp}
-          onMouseLeave={stopRecording}
-          onTouchStart={handleTouchStart}
-          onTouchEnd={handleTouchEnd}
+          onClick={handleClick}
           disabled={isLoading}
         >
           <Mic className="h-6 w-6" />
@@ -216,11 +223,8 @@ export const VoiceRecordButton = () => {
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>
-              {isLoading ? 'Обработка аудио...' : result?.success ? 'Готово!' : 'Ошибка'}
+              {isLoading ? 'Обработка...' : result?.success ? 'Готово!' : 'Ошибка'}
             </DialogTitle>
-            <DialogDescription>
-              {isLoading ? 'Gemini анализирует вашу запись' : null}
-            </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-4">
@@ -228,7 +232,7 @@ export const VoiceRecordButton = () => {
               <div className="flex flex-col items-center justify-center py-6">
                 <Loader2 className="h-12 w-12 animate-spin text-primary mb-4" />
                 <p className="text-sm text-muted-foreground">
-                  Пожалуйста, подождите...
+                  Подождите...
                 </p>
               </div>
             )}
@@ -255,6 +259,23 @@ export const VoiceRecordButton = () => {
                     {result.message}
                   </AlertDescription>
                 </Alert>
+
+                {/* Список созданных задач */}
+                {result.success && result.tasks && result.tasks.length > 0 && (
+                  <div className="space-y-2">
+                    <h4 className="text-sm font-medium text-muted-foreground">Создано:</h4>
+                    <div className="space-y-1">
+                      {result.tasks.map((taskTitle, index) => (
+                        <div 
+                          key={index}
+                          className="text-sm p-2 bg-muted/30 rounded-md border-l-2 border-primary/50"
+                        >
+                          {taskTitle}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
 
                 <div className="flex justify-center">
                   <Button onClick={handleCloseResult}>

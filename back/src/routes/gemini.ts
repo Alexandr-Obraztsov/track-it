@@ -5,6 +5,7 @@ import { AppDataSource } from '../configs/database';
 import { Chat } from '../entities/Chat';
 import { User } from '../entities/User';
 import { Task } from '../entities/Task';
+import { authenticateToken } from '../middleware/auth';
 import multer from 'multer';
 
 const router = Router();
@@ -18,9 +19,10 @@ const upload = multer({
 });
 
 // POST /api/gemini/extract - извлечение задач из текста или аудио
-router.post('/extract', upload.single('audioData'), async (req, res) => {
+router.post('/extract', authenticateToken, upload.single('audioData'), async (req: any, res) => {
   try {
-    const { text, chatId, userId, type } = req.body;
+    const { text, chatId, type } = req.body;
+    const userId = req.user.userId; // Получаем userId из JWT токена
     let audioData: Buffer | undefined;
     let audioMimeType: string | undefined;
 
@@ -75,8 +77,16 @@ router.post('/extract', upload.single('audioData'), async (req, res) => {
       ? { text, audioData, audioMimeType, chat: chat!, existingTasks, isPersonal: false as const }
       : { text, audioData, audioMimeType, user: user!, existingTasks, isPersonal: true as const };
 
-    const result = await geminiService.extractTasks(params);
-    res.json(result);
+    const geminiResult = await geminiService.extractTasks(params);
+    
+    // Сохраняем задачи в базу данных
+    const saveParams = type === 'group'
+      ? { geminiResult, chat: chat!, isPersonal: false as const }
+      : { geminiResult, user: user!, isPersonal: true as const };
+    
+    const savedTasks = await taskManager.saveTasks(saveParams);
+    
+    res.json(geminiResult);
   } catch (error) {
     res.status(500).json({ error: 'Failed to extract tasks' });
   }

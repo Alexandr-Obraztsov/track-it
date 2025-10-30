@@ -1,8 +1,8 @@
 import LoginPage from '@/pages/LoginPage';
 import Layout from '@/components/Layout';
-import DashboardPage from '@/pages/DashboardPage';
 import ChatsPage from '@/pages/ChatsPage';
 import TasksPage from '@/pages/TasksPage';
+import TaskEditPage from '@/pages/TaskEditPage';
 import ProfilePage from '@/pages/ProfilePage';
 import { createBrowserRouter, Navigate } from 'react-router-dom';
 
@@ -17,11 +17,7 @@ export const router = createBrowserRouter([
     children: [
       {
         index: true,
-        element: <Navigate to="/dashboard" replace />,
-      },
-      {
-        path: 'dashboard',
-        element: <DashboardPage />,
+        element: <Navigate to="/tasks" replace />,
       },
       {
         path: 'chats',
@@ -30,6 +26,10 @@ export const router = createBrowserRouter([
       {
         path: 'tasks',
         element: <TasksPage />,
+      },
+      {
+        path: 'tasks/:id',
+        element: <TaskEditPage />,
       },
       {
         path: 'profile',

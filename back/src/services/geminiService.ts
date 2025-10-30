@@ -50,11 +50,19 @@ export class GeminiService {
         const audioBuffer = Buffer.isBuffer(params.audioData) 
           ? params.audioData 
           : Buffer.from(params.audioData);
+        
+        // Gemini поддерживает: audio/wav, audio/mp3, audio/aiff, audio/aac, audio/ogg, audio/flac
+        let mimeType = params.audioMimeType || 'audio/webm';
+        
+        // Конвертируем webm в поддерживаемый формат
+        if (mimeType === 'audio/webm') {
+          mimeType = 'audio/ogg'; // webm обычно содержит ogg
+        }
           
         content.push({
           inlineData: {
             data: audioBuffer.toString('base64'),
-            mimeType: params.audioMimeType || 'audio/ogg'
+            mimeType: mimeType
           }
         });
       }
@@ -68,6 +76,10 @@ export class GeminiService {
       return JSON.parse(jsonString);
     } catch (error) {
       console.error('Error extracting tasks:', error);
+      if (error instanceof Error) {
+        console.error('Error details:', error.message);
+        console.error('Error stack:', error.stack);
+      }
       return { newTasks: [], updatedTasks: [] };
     }
   }

@@ -31,6 +31,14 @@ export class MessageProcessor {
     msg: TelegramBot.Message
   ): Promise<ProcessResult> {
     try {
+      // Проверяем наличие отправителя
+      if (!msg.from) {
+        return {
+          success: false,
+          error: 'Message without sender'
+        };
+      }
+
       const isPersonal = msg.chat.type === 'private';
 
       // Определяем тип сообщения и извлекаем контент
@@ -44,7 +52,7 @@ export class MessageProcessor {
       }
 
       // Получаем или создаем пользователя и чат
-      const user = await userManager.getOrCreateUser(msg.from!);
+      const user = await userManager.getOrCreateUser(msg.from);
       
       let chat: Chat | undefined;
       if (!isPersonal) {
@@ -245,10 +253,18 @@ export class MessageProcessor {
    */
   async handleTasksCommand(msg: TelegramBot.Message): Promise<ProcessResult> {
     try {
+      // Проверяем наличие отправителя
+      if (!msg.from) {
+        return {
+          success: false,
+          error: 'Message without sender'
+        };
+      }
+
       const isPersonal = msg.chat.type === 'private';
 
       // Получаем или создаем пользователя и чат
-      const user = await userManager.getOrCreateUser(msg.from!);
+      const user = await userManager.getOrCreateUser(msg.from);
       
       let chat: Chat | undefined;
       if (!isPersonal) {

@@ -7,7 +7,7 @@ export class ChatRole {
   @PrimaryGeneratedColumn('increment')
   id!: number;
 
-  @Column({ name: 'chat_id', type: 'int' })
+  @Column({ name: 'chat_id', type: 'bigint' })
   chatId!: number;
 
   @Column({ name: 'role_id', type: 'int' })

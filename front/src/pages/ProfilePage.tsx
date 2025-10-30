@@ -1,16 +1,28 @@
 import { useAppSelector, useAppDispatch } from '@/hooks/redux';
-import { PageHeader } from '@/components/PageHeader';
-import { Card, CardContent } from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Separator } from '@/components/ui/separator';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { logout } from '@/store/slices/authSlice';
-import { LogOut, User as UserIcon, AtSign, Hash } from 'lucide-react';
+import { useGetPersonalTasksQuery } from '@/store/api/tasksApi';
+import { 
+  LogOut, 
+  User as UserIcon, 
+  AtSign, 
+  Hash, 
+  Calendar,
+  Shield,
+  Settings,
+  Bell,
+  Loader2
+} from 'lucide-react';
 
 const ProfilePage = () => {
   const dispatch = useAppDispatch();
   const { user } = useAppSelector((state) => state.auth);
+  
+  // Получаем личные задачи пользователя
+  const { data: personalTasks, isLoading: tasksLoading, error: tasksError } = useGetPersonalTasksQuery();
 
   const handleLogout = () => {
     dispatch(logout());
@@ -23,103 +35,144 @@ const ProfilePage = () => {
     return `${firstName}${lastName}`.toUpperCase() || user.username?.[0]?.toUpperCase() || '?';
   };
 
+  // Подсчет статистики задач
+  const getTaskStats = () => {
+    if (!personalTasks) {
+      return { total: 0, completed: 0, inProgress: 0 };
+    }
+
+    const total = personalTasks.length;
+    const completed = personalTasks.filter(task => task.status === 'completed').length;
+    const inProgress = personalTasks.filter(task => task.status === 'backlog').length;
+
+    return { total, completed, inProgress };
+  };
+
+  const taskStats = getTaskStats();
+
   return (
     <>
-      <PageHeader
-        title="Профиль"
-        description="Информация о вашем аккаунте"
-      />
-      
-      <div className="container mx-auto p-6 space-y-6 max-w-2xl">
-      {/* Профиль карточка */}
-      <Card className="border-border">
-        <CardContent className="pt-6">
-          <div className="flex flex-col items-center space-y-4">
-            {/* Аватар */}
-            <Avatar className="h-24 w-24 border-4 border-primary/10">
-              <AvatarImage src={user?.photo_url} alt={user?.first_name} />
-              <AvatarFallback className="text-2xl font-bold bg-primary/10 text-primary">
-                {getInitials()}
-              </AvatarFallback>
-            </Avatar>
-
-            {/* Имя и username */}
-            <div className="text-center space-y-1">
-              <h1 className="text-2xl font-bold tracking-tight text-foreground">
-                {user?.first_name} {user?.last_name}
-              </h1>
-              {user?.username && (
-                <p className="text-sm text-muted-foreground">
-                  @{user.username}
-                </p>
-              )}
-            </div>
-
-            {/* Badge Telegram */}
-            <Badge variant="secondary" className="text-xs">
-              Telegram Account
-            </Badge>
-          </div>
-
-          <Separator className="my-6" />
-
-          {/* Информация */}
-          <div className="space-y-4">
-            <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
-              Информация
-            </h2>
-            
-            <div className="space-y-3">
-              <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/50">
-                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10">
-                  <UserIcon className="h-5 w-5 text-primary" />
-                </div>
-                <div className="flex-1">
-                  <p className="text-xs text-muted-foreground">Имя</p>
-                  <p className="font-medium text-foreground">
-                    {user?.first_name} {user?.last_name}
-                  </p>
+      <div className="container mx-auto p-4 space-y-4 max-w-4xl">
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+          
+          {/* Карточка профиля */}
+          <Card className="md:col-span-2 lg:col-span-2">
+            <CardHeader className="pb-3">
+              <CardTitle className="flex items-center gap-2 text-lg">
+                <UserIcon className="h-4 w-4" />
+                Профиль
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex items-start gap-3">
+                <Avatar className="h-16 w-16 border-2 border-primary/10">
+                  <AvatarImage src={user?.photo_url} alt={user?.first_name} />
+                  <AvatarFallback className="text-lg font-bold bg-primary/10 text-primary">
+                    {getInitials()}
+                  </AvatarFallback>
+                </Avatar>
+                
+                <div className="flex-1 space-y-1">
+                  <div>
+                    <h2 className="text-lg font-bold tracking-tight">
+                      {user?.first_name} {user?.last_name}
+                    </h2>
+                    {user?.username && (
+                      <p className="text-sm text-muted-foreground">
+                        @{user.username}
+                      </p>
+                    )}
+                  </div>
+                  
+                  <div className="flex flex-wrap gap-1">
+                    <Badge variant="secondary" className="text-xs h-5">
+                      <Shield className="h-3 w-3 mr-1" />
+                      Telegram
+                    </Badge>
+                    <Badge variant="outline" className="text-xs h-5">
+                      <Hash className="h-3 w-3 mr-1" />
+                      ID: {user?.id}
+                    </Badge>
+                  </div>
                 </div>
               </div>
 
-              {user?.username && (
-                <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/50">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10">
-                    <AtSign className="h-5 w-5 text-primary" />
+              <div className="grid gap-2">
+                <div className="flex items-center gap-2 p-2 rounded-md bg-muted/30 border">
+                  <div className="flex h-6 w-6 items-center justify-center rounded-full bg-primary/10">
+                    <UserIcon className="h-3 w-3 text-primary" />
                   </div>
-                  <div className="flex-1">
-                    <p className="text-xs text-muted-foreground">Username</p>
-                    <p className="font-medium text-foreground">@{user.username}</p>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs text-muted-foreground">Полное имя</p>
+                    <p className="text-sm font-medium truncate">
+                      {user?.first_name} {user?.last_name}
+                    </p>
                   </div>
                 </div>
-              )}
 
-              <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/50">
-                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10">
-                  <Hash className="h-5 w-5 text-primary" />
-                </div>
-                <div className="flex-1">
-                  <p className="text-xs text-muted-foreground">ID</p>
-                  <p className="font-medium text-foreground font-mono">{user?.id}</p>
-                </div>
+                {user?.username && (
+                  <div className="flex items-center gap-2 p-2 rounded-md bg-muted/30 border">
+                    <div className="flex h-6 w-6 items-center justify-center rounded-full bg-primary/10">
+                      <AtSign className="h-3 w-3 text-primary" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs text-muted-foreground">Username</p>
+                      <p className="text-sm font-medium truncate">@{user.username}</p>
+                    </div>
+                  </div>
+                )}
               </div>
-            </div>
-          </div>
+            </CardContent>
+          </Card>
 
-          <Separator className="my-6" />
+          {/* Карточка настроек */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-lg">
+                <Settings className="h-4 w-4" />
+                Настройки
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              <Button variant="outline" className="w-full justify-start h-9" disabled>
+                <Bell className="h-3 w-3 mr-2" />
+                Уведомления
+                <Badge variant="secondary" className="ml-auto text-xs h-4">
+                  Скоро
+                </Badge>
+              </Button>
+              
+              <Button variant="outline" className="w-full justify-start h-9" disabled>
+                <Settings className="h-3 w-3 mr-2" />
+                Предпочтения
+                <Badge variant="secondary" className="ml-auto text-xs h-4">
+                  Скоро
+                </Badge>
+              </Button>
+            </CardContent>
+          </Card>
 
-          {/* Кнопка выхода */}
-          <Button 
-            variant="destructive" 
-            className="w-full"
-            onClick={handleLogout}
-            size="lg"
-          >
-            <LogOut className="h-4 w-4 mr-2" />
-            Выйти из аккаунта
-          </Button>
-        </CardContent>
-      </Card>
+          {/* Карточка действий */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-lg">
+                <LogOut className="h-4 w-4" />
+                Действия
+              </CardTitle>
+              <CardDescription>
+              <Button 
+                variant="destructive" 
+                className="w-full h-9"
+                onClick={handleLogout}
+              >
+                <LogOut className="h-3 w-3 mr-2" />
+                Выйти из аккаунта
+              </Button>
+              </CardDescription>
+            </CardHeader>
+          </Card>
+
+        </div>
       </div>
     </>
   );
