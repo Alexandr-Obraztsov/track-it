@@ -32,13 +32,6 @@ export const ProfilePage = () => {
     loadProfile();
   }, []);
 
-  const handleSaveProfile = async (userData: Partial<User>) => {
-    // TODO: Сохранить профиль на бекенде
-    if (user) {
-      setUser({ ...user, ...userData });
-    }
-  };
-
   const handleSaveNotifications = async (settings: NotificationSettings) => {
     // TODO: Сохранить настройки уведомлений на бекенде
     setNotificationSettings(settings);
@@ -52,7 +45,6 @@ export const ProfilePage = () => {
     <Profile
       user={user}
       notificationSettings={notificationSettings}
-      onSaveProfile={handleSaveProfile}
       onSaveNotifications={handleSaveNotifications}
       loading={loading}
     />

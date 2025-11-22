@@ -202,5 +202,12 @@ export const mockNotificationSettings: NotificationSettings = {
   taskComment: true,
   dailyDigest: false,
   weeklyReport: true,
+  deadlineReminderHours: 24,
+  overdueTasksReminder: true,
+  overdueTasksList: true,
+  overdueReminderFrequency: 'daily',
+  newTaskNotification: true,
+  statusChangeNotification: true,
+  taskUpdateNotification: true,
 };
 

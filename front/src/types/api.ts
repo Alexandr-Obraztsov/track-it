@@ -64,5 +64,13 @@ export interface NotificationSettings {
   taskComment: boolean;
   dailyDigest: boolean;
   weeklyReport: boolean;
+  // Новые настройки
+  deadlineReminderHours: number; // За сколько часов до дедлайна показывать уведомление
+  overdueTasksReminder: boolean; // Напоминания о просроченных задачах
+  overdueTasksList: boolean; // Показывать список просроченных задач
+  overdueReminderFrequency: 'daily' | 'weekly' | 'never'; // Частота напоминаний о просроченных
+  newTaskNotification: boolean; // Уведомления о новых задачах в группах
+  statusChangeNotification: boolean; // Уведомления об изменении статуса задач
+  taskUpdateNotification: boolean; // Уведомления об обновлении задач
 }
 

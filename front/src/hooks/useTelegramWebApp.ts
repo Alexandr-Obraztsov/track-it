@@ -117,6 +117,8 @@ export const useTelegramWebApp = () => {
       tg.expand();
 
       setWebApp(tg as unknown as TelegramWebApp);
+      tg.setHeaderColor('#121212');
+      tg.setBackgroundColor('#121212');
       
       // Преобразуем пользователя Telegram в наш формат
       const tgUser = tg.initDataUnsafe?.user;
@@ -137,23 +139,6 @@ export const useTelegramWebApp = () => {
         setUser(user);
       }
       setIsReady(true);
-
-      // Настройка темы Telegram
-      if (tg.themeParams) {
-        const bgColor = tg.themeParams.bg_color || '#121212';
-        document.documentElement.style.setProperty(
-          '--tg-theme-bg-color',
-          bgColor
-        );
-        document.documentElement.style.setProperty(
-          '--tg-theme-text-color',
-          tg.themeParams.text_color || '#ffffff'
-        );
-        
-        // Устанавливаем цвет заголовка и нижней панели в цвет фона
-        tg.setHeaderColor(bgColor);
-        tg.setNavigationBarColor(bgColor);
-      }
     } else {
       // Мок для разработки вне Telegram
       const mockUser: TelegramUser = {

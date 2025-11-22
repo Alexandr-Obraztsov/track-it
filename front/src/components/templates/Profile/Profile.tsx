@@ -9,21 +9,26 @@ import {
   Divider,
   Switch,
   FormControlLabel,
-  TextField,
   Button,
+  Select,
+  MenuItem,
+  FormControl,
+  InputLabel,
   useTheme,
   useMediaQuery,
 } from '@mui/material';
 import {
   Notifications,
   Save,
+  Schedule,
+  Assignment,
+  Warning,
 } from '@mui/icons-material';
 import type { User, NotificationSettings } from '../../../types/api';
 
 export interface ProfileProps {
   user: User;
   notificationSettings: NotificationSettings;
-  onSaveProfile?: (user: Partial<User>) => void;
   onSaveNotifications?: (settings: NotificationSettings) => void;
   loading?: boolean;
 }
@@ -31,7 +36,6 @@ export interface ProfileProps {
 export const Profile: React.FC<ProfileProps> = ({
   user,
   notificationSettings: initialSettings,
-  onSaveProfile,
   onSaveNotifications,
   loading = false,
 }) => {
@@ -39,11 +43,6 @@ export const Profile: React.FC<ProfileProps> = ({
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   
   const [notificationSettings, setNotificationSettings] = useState<NotificationSettings>(initialSettings);
-  const [profileData, setProfileData] = useState({
-    firstName: user.firstName,
-    lastName: user.lastName || '',
-    username: user.username || '',
-  });
 
   const handleNotificationChange = (key: keyof NotificationSettings) => {
     setNotificationSettings((prev) => ({
@@ -52,21 +51,22 @@ export const Profile: React.FC<ProfileProps> = ({
     }));
   };
 
-  const handleProfileChange = (field: keyof typeof profileData) => (
-    event: React.ChangeEvent<HTMLInputElement>
+  const handleNumberChange = (key: keyof NotificationSettings) => (
+    event: { target: { value: string } }
   ) => {
-    setProfileData((prev) => ({
+    setNotificationSettings((prev) => ({
       ...prev,
-      [field]: event.target.value,
+      [key]: Number(event.target.value),
     }));
   };
 
-  const handleSaveProfile = () => {
-    onSaveProfile?.({
-      firstName: profileData.firstName,
-      lastName: profileData.lastName || null,
-      username: profileData.username || null,
-    });
+  const handleSelectChange = (key: keyof NotificationSettings) => (
+    event: { target: { value: string } }
+  ) => {
+    setNotificationSettings((prev) => ({
+      ...prev,
+      [key]: event.target.value,
+    }));
   };
 
   const handleSaveNotifications = () => {
@@ -147,78 +147,6 @@ export const Profile: React.FC<ProfileProps> = ({
               </Box>
             </Box>
 
-            <Divider sx={{ my: 1.5 }} />
-
-            <Stack spacing={1.5}>
-              <TextField
-                label="Имя"
-                value={profileData.firstName}
-                onChange={handleProfileChange('firstName')}
-                fullWidth
-                size="small"
-                sx={{
-                  '& .MuiOutlinedInput-root': {
-                    borderRadius: 1.5,
-                    fontSize: '0.875rem',
-                  },
-                  '& .MuiInputLabel-root': {
-                    fontSize: '0.875rem',
-                  },
-                }}
-              />
-
-              <TextField
-                label="Фамилия"
-                value={profileData.lastName}
-                onChange={handleProfileChange('lastName')}
-                fullWidth
-                size="small"
-                sx={{
-                  '& .MuiOutlinedInput-root': {
-                    borderRadius: 1.5,
-                    fontSize: '0.875rem',
-                  },
-                  '& .MuiInputLabel-root': {
-                    fontSize: '0.875rem',
-                  },
-                }}
-              />
-
-              <TextField
-                label="Username"
-                value={profileData.username}
-                onChange={handleProfileChange('username')}
-                fullWidth
-                placeholder="без username"
-                size="small"
-                sx={{
-                  '& .MuiOutlinedInput-root': {
-                    borderRadius: 1.5,
-                    fontSize: '0.875rem',
-                  },
-                  '& .MuiInputLabel-root': {
-                    fontSize: '0.875rem',
-                  },
-                }}
-              />
-
-              <Button
-                variant="contained"
-                startIcon={<Save />}
-                onClick={handleSaveProfile}
-                disabled={loading}
-                fullWidth={isMobile}
-                size="small"
-                sx={{
-                  borderRadius: 1.5,
-                  mt: 0.5,
-                  py: 0.75,
-                  fontSize: '0.875rem',
-                }}
-              >
-                Сохранить изменения
-              </Button>
-            </Stack>
           </CardContent>
         </Card>
 
@@ -247,45 +175,127 @@ export const Profile: React.FC<ProfileProps> = ({
 
             <Divider sx={{ mb: 1.5 }} />
 
-            <Stack spacing={1.5}>
-              {[
-                {
-                  key: 'taskAssigned' as const,
-                  title: 'Назначение задач',
-                  description: 'Уведомления при назначении задач на вас',
-                },
-                {
-                  key: 'taskCompleted' as const,
-                  title: 'Завершение задач',
-                  description: 'Уведомления при завершении задач в ваших группах',
-                },
-                {
-                  key: 'taskDeadline' as const,
-                  title: 'Дедлайны задач',
-                  description: 'Уведомления о приближающихся дедлайнах',
-                },
-                {
-                  key: 'taskComment' as const,
-                  title: 'Комментарии к задачам',
-                  description: 'Уведомления о новых комментариях к вашим задачам',
-                },
-                {
-                  key: 'dailyDigest' as const,
-                  title: 'Ежедневная сводка',
-                  description: 'Ежедневный отчет о задачах в ваших группах',
-                },
-                {
-                  key: 'weeklyReport' as const,
-                  title: 'Еженедельный отчет',
-                  description: 'Еженедельный отчет о прогрессе в группах',
-                },
-              ].map((item, index, array) => (
-                <React.Fragment key={item.key}>
+            <Stack spacing={2}>
+              {/* Основные уведомления */}
+              <Box>
+                <Typography
+                  variant="body2"
+                  sx={{
+                    fontWeight: 600,
+                    fontSize: '0.75rem',
+                    mb: 1,
+                    color: 'text.secondary',
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.5px',
+                  }}
+                >
+                  Основные уведомления
+                </Typography>
+                <Stack spacing={1}>
+                  {[
+                    {
+                      key: 'taskAssigned' as const,
+                      title: 'Назначение задач',
+                      description: 'Уведомления при назначении задач на вас',
+                    },
+                    {
+                      key: 'newTaskNotification' as const,
+                      title: 'Новые задачи',
+                      description: 'Уведомления о новых задачах в ваших группах',
+                    },
+                    {
+                      key: 'statusChangeNotification' as const,
+                      title: 'Изменение статуса',
+                      description: 'Уведомления об изменении статуса задач',
+                    },
+                    {
+                      key: 'taskUpdateNotification' as const,
+                      title: 'Обновление задач',
+                      description: 'Уведомления об обновлении задач',
+                    },
+                    {
+                      key: 'taskComment' as const,
+                      title: 'Комментарии',
+                      description: 'Уведомления о новых комментариях к вашим задачам',
+                    },
+                    {
+                      key: 'taskCompleted' as const,
+                      title: 'Завершение задач',
+                      description: 'Уведомления при завершении задач в ваших группах',
+                    },
+                  ].map((item) => (
+                    <FormControlLabel
+                      key={item.key}
+                      control={
+                        <Switch
+                          checked={notificationSettings[item.key] as boolean}
+                          onChange={() => handleNotificationChange(item.key)}
+                          color="primary"
+                          size="small"
+                        />
+                      }
+                      label={
+                        <Box sx={{ ml: 1 }}>
+                          <Typography
+                            variant="body2"
+                            sx={{
+                              fontWeight: 500,
+                              fontSize: '0.8rem',
+                            }}
+                          >
+                            {item.title}
+                          </Typography>
+                          <Typography
+                            variant="caption"
+                            color="text.secondary"
+                            sx={{
+                              fontSize: '0.7rem',
+                              display: 'block',
+                              mt: 0.25,
+                            }}
+                          >
+                            {item.description}
+                          </Typography>
+                        </Box>
+                      }
+                      sx={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'flex-start',
+                        m: 0,
+                        width: '100%',
+                        flexDirection: 'row-reverse',
+                      }}
+                    />
+                  ))}
+                </Stack>
+              </Box>
+
+              <Divider />
+
+              {/* Настройки дедлайнов */}
+              <Box>
+                <Box display="flex" alignItems="center" gap={0.75} mb={1}>
+                  <Schedule sx={{ fontSize: '1rem', color: 'primary.main' }} />
+                  <Typography
+                    variant="body2"
+                    sx={{
+                      fontWeight: 600,
+                      fontSize: '0.75rem',
+                      color: 'text.secondary',
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.5px',
+                    }}
+                  >
+                    Дедлайны
+                  </Typography>
+                </Box>
+                <Stack spacing={1.5}>
                   <FormControlLabel
                     control={
                       <Switch
-                        checked={notificationSettings[item.key]}
-                        onChange={() => handleNotificationChange(item.key)}
+                        checked={notificationSettings.taskDeadline}
+                        onChange={() => handleNotificationChange('taskDeadline')}
                         color="primary"
                         size="small"
                       />
@@ -296,10 +306,10 @@ export const Profile: React.FC<ProfileProps> = ({
                           variant="body2"
                           sx={{
                             fontWeight: 500,
-                            fontSize: '0.875rem',
+                            fontSize: '0.8rem',
                           }}
                         >
-                          {item.title}
+                          Уведомления о дедлайнах
                         </Typography>
                         <Typography
                           variant="caption"
@@ -310,7 +320,7 @@ export const Profile: React.FC<ProfileProps> = ({
                             mt: 0.25,
                           }}
                         >
-                          {item.description}
+                          Получать уведомления о приближающихся дедлайнах
                         </Typography>
                       </Box>
                     }
@@ -323,9 +333,244 @@ export const Profile: React.FC<ProfileProps> = ({
                       flexDirection: 'row-reverse',
                     }}
                   />
-                  {index < array.length - 1 && <Divider />}
-                </React.Fragment>
-              ))}
+                  
+                  {notificationSettings.taskDeadline && (
+                    <FormControl fullWidth size="small">
+                      <InputLabel sx={{ fontSize: '0.8rem' }}>
+                        Напоминать за
+                      </InputLabel>
+                      <Select
+                        value={notificationSettings.deadlineReminderHours}
+                        onChange={handleNumberChange('deadlineReminderHours')}
+                        label="Напоминать за"
+                        sx={{
+                          fontSize: '0.8rem',
+                          borderRadius: 1.5,
+                        }}
+                      >
+                        <MenuItem value={1}>1 час</MenuItem>
+                        <MenuItem value={3}>3 часа</MenuItem>
+                        <MenuItem value={6}>6 часов</MenuItem>
+                        <MenuItem value={12}>12 часов</MenuItem>
+                        <MenuItem value={24}>1 день</MenuItem>
+                        <MenuItem value={48}>2 дня</MenuItem>
+                        <MenuItem value={72}>3 дня</MenuItem>
+                        <MenuItem value={168}>1 неделя</MenuItem>
+                      </Select>
+                    </FormControl>
+                  )}
+                </Stack>
+              </Box>
+
+              <Divider />
+
+              {/* Просроченные задачи */}
+              <Box>
+                <Box display="flex" alignItems="center" gap={0.75} mb={1}>
+                  <Warning sx={{ fontSize: '1rem', color: 'warning.main' }} />
+                  <Typography
+                    variant="body2"
+                    sx={{
+                      fontWeight: 600,
+                      fontSize: '0.75rem',
+                      color: 'text.secondary',
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.5px',
+                    }}
+                  >
+                    Просроченные задачи
+                  </Typography>
+                </Box>
+                <Stack spacing={1.5}>
+                  <FormControlLabel
+                    control={
+                      <Switch
+                        checked={notificationSettings.overdueTasksReminder}
+                        onChange={() => handleNotificationChange('overdueTasksReminder')}
+                        color="primary"
+                        size="small"
+                      />
+                    }
+                    label={
+                      <Box sx={{ ml: 1 }}>
+                        <Typography
+                          variant="body2"
+                          sx={{
+                            fontWeight: 500,
+                            fontSize: '0.8rem',
+                          }}
+                        >
+                          Напоминания о просроченных задачах
+                        </Typography>
+                        <Typography
+                          variant="caption"
+                          color="text.secondary"
+                          sx={{
+                            fontSize: '0.7rem',
+                            display: 'block',
+                            mt: 0.25,
+                          }}
+                        >
+                          Получать напоминания о задачах с просроченным дедлайном
+                        </Typography>
+                      </Box>
+                    }
+                    sx={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'flex-start',
+                      m: 0,
+                      width: '100%',
+                      flexDirection: 'row-reverse',
+                    }}
+                  />
+
+                  {notificationSettings.overdueTasksReminder && (
+                    <>
+                      <FormControlLabel
+                        control={
+                          <Switch
+                            checked={notificationSettings.overdueTasksList}
+                            onChange={() => handleNotificationChange('overdueTasksList')}
+                            color="primary"
+                            size="small"
+                          />
+                        }
+                        label={
+                          <Box sx={{ ml: 1 }}>
+                            <Typography
+                              variant="body2"
+                              sx={{
+                                fontWeight: 500,
+                                fontSize: '0.8rem',
+                              }}
+                            >
+                              Список просроченных задач
+                            </Typography>
+                            <Typography
+                              variant="caption"
+                              color="text.secondary"
+                              sx={{
+                                fontSize: '0.7rem',
+                                display: 'block',
+                                mt: 0.25,
+                              }}
+                            >
+                              Включать список просроченных задач в уведомления
+                            </Typography>
+                          </Box>
+                        }
+                        sx={{
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'flex-start',
+                          m: 0,
+                          width: '100%',
+                          flexDirection: 'row-reverse',
+                        }}
+                      />
+
+                      <FormControl fullWidth size="small">
+                        <InputLabel sx={{ fontSize: '0.8rem' }}>
+                          Частота напоминаний
+                        </InputLabel>
+                        <Select
+                          value={notificationSettings.overdueReminderFrequency}
+                          onChange={handleSelectChange('overdueReminderFrequency')}
+                          label="Частота напоминаний"
+                          sx={{
+                            fontSize: '0.8rem',
+                            borderRadius: 1.5,
+                          }}
+                        >
+                          <MenuItem value="daily">Ежедневно</MenuItem>
+                          <MenuItem value="weekly">Еженедельно</MenuItem>
+                          <MenuItem value="never">Никогда</MenuItem>
+                        </Select>
+                      </FormControl>
+                    </>
+                  )}
+                </Stack>
+              </Box>
+
+              <Divider />
+
+              {/* Отчеты */}
+              <Box>
+                <Box display="flex" alignItems="center" gap={0.75} mb={1}>
+                  <Assignment sx={{ fontSize: '1rem', color: 'primary.main' }} />
+                  <Typography
+                    variant="body2"
+                    sx={{
+                      fontWeight: 600,
+                      fontSize: '0.75rem',
+                      color: 'text.secondary',
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.5px',
+                    }}
+                  >
+                    Отчеты
+                  </Typography>
+                </Box>
+                <Stack spacing={1}>
+                  {[
+                    {
+                      key: 'dailyDigest' as const,
+                      title: 'Ежедневная сводка',
+                      description: 'Ежедневный отчет о задачах в ваших группах',
+                    },
+                    {
+                      key: 'weeklyReport' as const,
+                      title: 'Еженедельный отчет',
+                      description: 'Еженедельный отчет о прогрессе в группах',
+                    },
+                  ].map((item) => (
+                    <FormControlLabel
+                      key={item.key}
+                      control={
+                        <Switch
+                          checked={notificationSettings[item.key] as boolean}
+                          onChange={() => handleNotificationChange(item.key)}
+                          color="primary"
+                          size="small"
+                        />
+                      }
+                      label={
+                        <Box sx={{ ml: 1 }}>
+                          <Typography
+                            variant="body2"
+                            sx={{
+                              fontWeight: 500,
+                              fontSize: '0.8rem',
+                            }}
+                          >
+                            {item.title}
+                          </Typography>
+                          <Typography
+                            variant="caption"
+                            color="text.secondary"
+                            sx={{
+                              fontSize: '0.7rem',
+                              display: 'block',
+                              mt: 0.25,
+                            }}
+                          >
+                            {item.description}
+                          </Typography>
+                        </Box>
+                      }
+                      sx={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'flex-start',
+                        m: 0,
+                        width: '100%',
+                        flexDirection: 'row-reverse',
+                      }}
+                    />
+                  ))}
+                </Stack>
+              </Box>
 
               <Button
                 variant="contained"
