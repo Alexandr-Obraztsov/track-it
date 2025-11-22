@@ -134,7 +134,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
             )}
           </Box>
 
-          <Box sx={{ flexShrink: 0 }}>
+          <Box sx={{ flexShrink: 0 }} data-task-actions>
             <TaskActions
               onEdit={onEdit ? () => onEdit(id) : undefined}
               onComment={onComment ? () => onComment(id) : undefined}

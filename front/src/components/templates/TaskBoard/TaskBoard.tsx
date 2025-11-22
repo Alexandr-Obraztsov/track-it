@@ -19,7 +19,7 @@ import {
   DragOverlay,
   closestCenter,
   KeyboardSensor,
-  PointerSensor,
+  MouseSensor,
   TouchSensor,
   useSensor,
   useSensors,
@@ -30,6 +30,7 @@ import {
 } from '@dnd-kit/core';
 import { TaskCard, type TaskCardProps } from '../../organisms/TaskCard';
 import { TaskForm } from '../../organisms/TaskForm';
+import { TaskDetailsDialog } from '../../organisms/TaskDetailsDialog';
 import type { Task, User } from '../../../types/api';
 import { authApi } from '../../../api/auth';
 
@@ -64,6 +65,8 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [showOnlyMyTasks, setShowOnlyMyTasks] = useState(false);
+  const [selectedTask, setSelectedTask] = useState<Task | null>(null);
+  const [openTaskDetails, setOpenTaskDetails] = useState(false);
   
   // Состояние сворачивания колонок
   const getCollapsedStateKey = () => `taskBoard_collapsed_${chatId}`;
@@ -147,16 +150,20 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({
   const [activeTask, setActiveTask] = useState<Task | null>(null);
 
   // Настройка сенсоров для drag-and-drop
+  // Используем разные сенсоры для мобильных и десктопа
   const sensors = useSensors(
-    useSensor(PointerSensor, {
+    useSensor(MouseSensor, {
+      // На десктопе активируем после движения мыши на 8px
       activationConstraint: {
         distance: 8,
       },
     }),
     useSensor(TouchSensor, {
+      // На мобильных используем задержку 300ms с допуском 8px
+      // Это позволяет отличить перетаскивание от прокрутки
       activationConstraint: {
-        delay: 200,
-        tolerance: 5,
+        delay: 300,
+        tolerance: 8,
       },
     }),
     useSensor(KeyboardSensor)
@@ -235,20 +242,36 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({
         }
       : undefined;
 
+    const handleCardClick = (e: React.MouseEvent) => {
+      // Предотвращаем открытие попапа при клике на кнопки действий
+      const target = e.target as HTMLElement;
+      if (target.closest('[data-task-actions]')) {
+        return;
+      }
+      // Не открываем попап если это было перетаскивание
+      if (isDragging) {
+        return;
+      }
+      setSelectedTask(task);
+      setOpenTaskDetails(true);
+    };
+
     return (
       <Box
         ref={setNodeRef}
         style={style}
+        onClick={handleCardClick}
         {...attributes}
         {...listeners}
         sx={{
-          touchAction: 'none',
-          WebkitTouchCallout: 'none',
-          WebkitUserSelect: 'none',
-          userSelect: 'none',
-          opacity: isDragging ? 0.5 : 1,
+          opacity: isDragging ? 0 : 1,
+          visibility: isDragging ? 'hidden' : 'visible',
+          position: 'relative',
           cursor: isDragging ? 'grabbing' : 'grab',
-          zIndex: isDragging ? 1000 : 1,
+          touchAction: isDragging ? 'none' : 'auto', // Отключаем стандартные жесты для лучшего контроля
+          userSelect: 'none',
+          WebkitUserSelect: 'none',
+          WebkitTouchCallout: 'none', // Отключаем контекстное меню на iOS
         }}
       >
         <TaskCard {...convertTaskToCardProps(task)} />
@@ -286,6 +309,7 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({
         }}
       >
         <Box
+          onClick={onToggle}
           sx={{
             mb: 2,
             pb: 1.5,
@@ -294,24 +318,32 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({
             display: 'flex',
             alignItems: 'center',
             gap: 1,
+            cursor: 'pointer',
+            userSelect: 'none',
+            WebkitUserSelect: 'none',
+            transition: 'opacity 0.2s ease',
+            '&:hover': {
+              opacity: 0.8,
+            },
+            '&:active': {
+              opacity: 0.6,
+            },
           }}
         >
-          <IconButton
-            size="small"
-            onClick={onToggle}
+          <Box
             sx={{
               padding: 0.5,
               color: color,
-              '&:hover': {
-                backgroundColor: `${color}15`,
-              },
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
               '& .MuiSvgIcon-root': {
                 fontSize: '1rem',
               },
             }}
           >
             {isCollapsed ? <ExpandLess /> : <ExpandMore />}
-          </IconButton>
+          </Box>
           <Typography
             variant="subtitle2"
             sx={{
@@ -319,6 +351,7 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({
               color: color,
               fontSize: '0.875rem',
               flex: 1,
+              pointerEvents: 'none',
             }}
           >
             {title}
@@ -332,6 +365,7 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({
               color: color,
               fontSize: '0.75rem',
               fontWeight: 600,
+              pointerEvents: 'none',
             }}
           >
             {columnTasks.length}
@@ -544,9 +578,21 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({
             </Stack>
           )}
         </Box>
-        <DragOverlay>
+        <DragOverlay
+          style={{
+            cursor: 'grabbing',
+          }}
+        >
           {activeTask ? (
-            <Box sx={{ opacity: 0.8, transform: 'rotate(5deg)' }}>
+            <Box
+              sx={{
+                opacity: 0.9,
+                transform: 'rotate(2deg)',
+                boxShadow: '0 8px 24px rgba(0, 0, 0, 0.4)',
+                borderRadius: 2,
+                overflow: 'hidden',
+              }}
+            >
               <TaskCard {...convertTaskToCardProps(activeTask)} />
             </Box>
           ) : null}
@@ -592,6 +638,19 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({
             : undefined
         }
         assignedUsers={assignedUsers}
+      />
+
+      {/* Task Details Dialog */}
+      <TaskDetailsDialog
+        open={openTaskDetails}
+        task={selectedTask}
+        onClose={() => {
+          setOpenTaskDetails(false);
+          setSelectedTask(null);
+        }}
+        onEdit={handleEditTask}
+        onDelete={onTaskDelete}
+        onComment={onTaskComment}
       />
     </Box>
   );
