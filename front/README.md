@@ -1,135 +1,106 @@
-# Track It Frontend
+# Track-It Frontend
 
-Мобильное веб-приложение для управления задачами с интеграцией Telegram бота.
+Frontend приложение для управления задачами, построенное на React, TypeScript, Material-UI и Storybook.
 
-## Особенности
+## Структура проекта
 
-- **Мобильный дизайн** - оптимизировано только для мобильных устройств
-- **Bottom Navigation** - удобная навигация внизу экрана
-- **Адаптивные компоненты** - все элементы подстроены под мобильные экраны
-- **Touch-friendly** - большие кнопки и элементы для удобного использования
+Проект организован по принципу **Atomic Design**:
+
+```
+src/
+├── components/
+│   ├── atoms/          # Базовые компоненты
+│   │   ├── Button/
+│   │   │   ├── Button.tsx
+│   │   │   ├── Button.stories.tsx  # Story рядом с компонентом
+│   │   │   └── index.ts
+│   │   ├── Chip/
+│   │   └── IconButton/
+│   ├── molecules/      # Комбинации атомов
+│   │   ├── StatusChip/
+│   │   │   ├── StatusChip.tsx
+│   │   │   ├── StatusChip.stories.tsx  # Story рядом с компонентом
+│   │   │   └── index.ts
+│   │   ├── UserChip/
+│   │   ├── DeadlineChip/
+│   │   └── TaskActions/
+│   ├── organisms/      # Комплексные компоненты
+│   │   ├── TaskCard/
+│   │   │   ├── TaskCard.tsx
+│   │   │   ├── TaskCard.stories.tsx  # Story рядом с компонентом
+│   │   │   └── index.ts
+│   │   ├── TaskForm/
+│   │   └── TaskList/
+│   └── templates/      # Шаблоны страниц (будут добавлены)
+├── pages/              # Страницы приложения
+├── hooks/              # React хуки
+├── utils/              # Утилиты
+├── types/              # TypeScript типы
+├── api/                # API клиенты
+└── theme/              # Тема MUI
+```
+
+## Компоненты
+
+### Atoms (Атомы)
+Базовые, неделимые компоненты:
+- `Button` - кнопка
+- `Chip` - чип/тег
+- `IconButton` - кнопка с иконкой
+
+### Molecules (Молекулы)
+Комбинации атомов:
+- `StatusChip` - чип статуса задачи
+- `UserChip` - чип пользователя
+- `DeadlineChip` - чип дедлайна
+- `TaskActions` - действия с задачей (редактирование, удаление)
+
+### Organisms (Организмы)
+Комплексные компоненты:
+- `TaskCard` - карточка задачи
+- `TaskForm` - форма создания/редактирования задачи
+- `TaskList` - список задач с табами
+
+## Установка и запуск
+
+```bash
+# Установка зависимостей
+pnpm install
+
+# Запуск dev сервера
+pnpm dev
+
+# Запуск Storybook
+pnpm storybook
+
+# Сборка для production
+pnpm build
+```
 
 ## Технологии
 
 - **React 19** - UI библиотека
 - **TypeScript** - типизация
-- **Redux Toolkit** - управление состоянием
-- **RTK Query** - работа с API
-- **React Router** - маршрутизация
-- **shadcn/ui** - компоненты UI
-- **Tailwind CSS** - стилизация
+- **Material-UI v7** - компоненты и тема
 - **Vite** - сборщик
+- **Storybook** - документация компонентов
+- **date-fns** - работа с датами
 
-## Установка
+## Storybook
 
-1. Установите зависимости:
-```bash
-pnpm install
+Все stories находятся **в той же папке, что и компонент**, что обеспечивает лучшую организацию кода:
+- Каждый компонент имеет свою папку
+- Story файл (`Component.stories.tsx`) находится рядом с компонентом
+- Это упрощает навигацию и поддержку кода
+
+Пример структуры:
+```
+components/
+  molecules/
+    StatusChip/
+      StatusChip.tsx
+      StatusChip.stories.tsx  ← Story здесь
+      index.ts
 ```
 
-2. Создайте файл `.env` в корне проекта:
-```env
-VITE_API_BASE_URL=http://localhost:3000/api
-VITE_TELEGRAM_BOT_NAME=track_it_tasks_bot
-```
-
-3. Запустите dev сервер:
-```bash
-pnpm dev
-```
-
-## Структура проекта
-
-```
-src/
-├── components/          # React компоненты
-│   ├── ui/             # shadcn/ui компоненты
-│   ├── Layout.tsx      # Основной layout
-│   └── ProtectedRoute.tsx # Защищенные маршруты
-├── pages/              # Страницы приложения
-│   ├── LoginPage.tsx   # Страница авторизации
-│   ├── DashboardPage.tsx # Главная страница
-│   ├── TasksPage.tsx   # Управление задачами
-│   ├── ChatsPage.tsx   # Чаты с ботом
-│   └── ProfilePage.tsx # Профиль пользователя
-├── store/              # Redux store
-│   ├── api/           # RTK Query API
-│   ├── slices/        # Redux слайсы
-│   └── index.ts       # Конфигурация store
-├── hooks/              # Кастомные хуки
-├── router/             # Конфигурация маршрутов
-└── types/              # TypeScript типы
-```
-
-## Функциональность
-
-### Авторизация
-- Вход через Telegram
-- Сохранение данных пользователя в Redux
-- Защищенные маршруты
-
-### Управление задачами
-- Создание, редактирование, удаление задач
-- Фильтрация и поиск
-- Отметка выполнения
-- Приоритеты задач
-- Мобильный интерфейс с большими кнопками
-
-### Чаты
-- Просмотр истории чатов с ботом
-- Отправка сообщений
-- Создание новых чатов
-- Адаптивный дизайн сообщений
-
-### Профиль
-- Просмотр информации о пользователе
-- Настройки аккаунта
-- Управление профилем
-- Компактный мобильный интерфейс
-
-### Навигация
-- Bottom Navigation с 4 основными разделами
-- Sticky header с информацией о пользователе
-- Быстрый доступ к функциям
-
-## API Endpoints
-
-Приложение использует следующие API endpoints:
-
-- `GET /users` - получение списка пользователей
-- `GET /tasks` - получение списка задач
-- `POST /tasks` - создание задачи
-- `PUT /tasks/:id` - обновление задачи
-- `DELETE /tasks/:id` - удаление задачи
-- `GET /chats` - получение списка чатов
-- `POST /gemini/message` - отправка сообщения
-
-## Разработка
-
-### Добавление новых компонентов shadcn/ui
-
-```bash
-npx shadcn@latest add [component-name]
-```
-
-### Добавление новых API endpoints
-
-1. Добавьте endpoint в `src/store/api/api.ts`
-2. Экспортируйте соответствующие хуки
-3. Используйте хуки в компонентах
-
-### Стилизация
-
-Проект использует Tailwind CSS с shadcn/ui компонентами. Все стили находятся в `src/index.css`.
-
-## Сборка
-
-```bash
-pnpm build
-```
-
-## Линтинг
-
-```bash
-pnpm lint
-```
+Запуск Storybook: `pnpm storybook`

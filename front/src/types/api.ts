@@ -1,171 +1,68 @@
-// Base types
-export interface BaseEntity {
-  id: number;
-  createdAt: string;
-  updatedAt: string;
-}
+// API Types based on backend structure
 
-// User types
-export interface User extends BaseEntity {
-  username: string;
+export interface User {
+  id: number;
+  telegramId: number | null;
+  username: string | null;
   firstName: string;
   lastName: string | null;
-  chats?: Chat[];
-  roles?: Role[];
+  photoUrl: string | null;
+  createdAt: string;
 }
 
-export interface CreateUserRequest {
-  username: string;
-  firstName: string;
-  lastName?: string;
-}
-
-export interface UpdateUserRequest {
-  username?: string;
-  firstName?: string;
-  lastName?: string;
-}
-
-// Chat types
-export interface Chat extends BaseEntity {
+export interface Role {
+  id: number;
   title: string;
-  messageId: number;
-  users?: User[];
-  roles?: Role[];
+  createdAt: string;
 }
 
-export interface CreateChatRequest {
-  title: string;
-  messageId: number;
-}
-
-export interface UpdateChatRequest {
-  title?: string;
-  messageId?: number;
-}
-
-// Role types
-export interface Role extends BaseEntity {
-  title: string;
-  users?: User[];
-  chats?: Chat[];
-}
-
-export interface CreateRoleRequest {
-  title: string;
-}
-
-export interface UpdateRoleRequest {
-  title?: string;
-}
-
-// Task types
-export type TaskStatus = 'backlog' | 'in_progress' | 'completed';
-
-export interface Task extends BaseEntity {
+export interface Task {
+  id: number;
   title: string;
   description: string | null;
   assignedUserId: number | null;
   assignedRoleId: number | null;
   deadline: string | null;
-  status: TaskStatus;
-  assignedUser?: User;
-  assignedRole?: Role;
-  chat?: Chat;
+  status: 'backlog' | 'in_progress' | 'completed';
+  createdAt: string;
+  assignedUser?: User | null;
+  assignedRole?: Role | null;
 }
 
-export interface CreateTaskRequest {
+export interface UserChatRole {
+  id: number;
+  userId: number;
+  chatId: number;
+  roleId: number;
+  createdAt: string;
+  user?: User;
+  role?: Role;
+}
+
+export interface ChatRole {
+  id: number;
+  chatId: number;
+  roleId: number;
+  createdAt: string;
+  role?: Role;
+}
+
+export interface Chat {
+  id: number;
   title: string;
-  description?: string;
-  chatId?: number;
-  assignedUserId?: number;
-  assignedRoleId?: number;
-  deadline?: string;
+  messageId: number;
+  createdAt: string;
+  userChatRoles?: UserChatRole[];
+  chatRoles?: ChatRole[];
+  tasks?: Task[];
 }
 
-export interface UpdateTaskRequest {
-  title?: string;
-  description?: string;
-  status?: TaskStatus;
-  chatId?: number;
-  assignedUserId?: number;
-  assignedRoleId?: number;
-  deadline?: string;
+export interface NotificationSettings {
+  taskAssigned: boolean;
+  taskCompleted: boolean;
+  taskDeadline: boolean;
+  taskComment: boolean;
+  dailyDigest: boolean;
+  weeklyReport: boolean;
 }
 
-// Gemini types
-export interface ExtractTasksRequest {
-  text?: string;
-  audioData?: Blob;
-  type: 'personal' | 'group';
-  userId?: number;
-  chatId?: number;
-}
-
-export interface GeminiTask {
-  title: string;
-  description?: string;
-  assignedUserId?: number;
-  assignedRoleId?: number;
-  deadline?: string;
-}
-
-export interface UpdatedTask {
-  id: number;
-  title?: string;
-  description?: string;
-  assignedUserId?: number;
-  assignedRoleId?: number;
-  deadline?: string;
-}
-
-export interface ExtractTasksResponse {
-  newTasks: GeminiTask[];
-  updatedTasks: UpdatedTask[];
-  message: string;
-}
-
-// Auth types
-export interface TelegramAuthRequest {
-  id: number;
-  first_name: string;
-  last_name?: string;
-  username?: string;
-  photo_url?: string;
-  auth_date: number;
-  hash: string;
-}
-
-export interface TelegramAuthResponse {
-  token: string;
-  user: {
-    id: number;
-    first_name: string;
-    last_name?: string;
-    username?: string;
-    photo_url?: string;
-    auth_date: number;
-    hash: string;
-  };
-}
-
-export interface ProfileResponse {
-  id: number;
-  first_name: string;
-  last_name?: string;
-  username?: string;
-  photo_url?: string;
-}
-
-// API Response types
-export interface ApiError {
-  error: string;
-  message?: string;
-}
-
-export interface PaginatedResponse<T> {
-  data: T[];
-  total: number;
-  page: number;
-  limit: number;
-}

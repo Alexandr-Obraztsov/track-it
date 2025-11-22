@@ -32,13 +32,7 @@ export class GeminiService {
     const currentTime = new Date();
 
     try {
-      let prompt: string;
-      
-      if (params.isPersonal) {
-        prompt = GEMINI_PROMPTS.extractPersonalTasks(params.text || '', currentTime, params.user, params.existingTasks || []);
-      } else {
-        prompt = GEMINI_PROMPTS.extractGroupTasks(params.text || '', currentTime, params.chat, params.existingTasks || []);
-      }
+      const prompt = GEMINI_PROMPTS.extractGroupTasks(params.text || '', currentTime, params.chat, params.existingTasks || []);
       
 
       const content: Part[] = [

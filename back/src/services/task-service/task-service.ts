@@ -1,8 +1,6 @@
 import { AppDataSource } from '../../configs/database';
 import { Task } from '../../entities/Task';
-import { User } from '../../entities/User';
 import { Chat } from '../../entities/Chat';
-import { UserTask } from '../../entities/UserTask';
 import { Task as GeminiTask, UpdatedTask } from '../../types';
 import { SaveTaskParams } from './types';
 import { ChatTask } from '../../entities/ChatTask';
@@ -10,7 +8,6 @@ import { ChatTask } from '../../entities/ChatTask';
 
 export class TaskService {
   private taskRepository = AppDataSource.getRepository(Task);
-  private userTaskRepository = AppDataSource.getRepository(UserTask);
   private chatTaskRepository = AppDataSource.getRepository(ChatTask);
   /**
    * Сохраняет задачи из результата Gemini в базу данных
@@ -39,25 +36,18 @@ export class TaskService {
       const task = this.taskRepository.create({
         title: taskData.title,
         description: taskData.description,
-        assignedUserId: params.isPersonal ? params.user.id : taskData.assignedUserId,
-        assignedRoleId: params.isPersonal ? null : taskData.assignedRoleId,
+        assignedUserId: taskData.assignedUserId,
+        assignedRoleId: taskData.assignedRoleId,
         deadline: taskData.deadline ? new Date(taskData.deadline) : null,
+        chat: params.chat,
       });
       const savedTask = await this.taskRepository.save(task);
 
-      if (params.isPersonal) {
-        const userTask = this.userTaskRepository.create({
-          userId: params.user.id,
-          taskId: savedTask.id
-        });
-        await this.userTaskRepository.save(userTask);
-      } else {
-        const chatTask = this.chatTaskRepository.create({
-          chatId: params.chat.id,
-          taskId: savedTask.id
-        });
-        await this.chatTaskRepository.save(chatTask);
-      }
+      const chatTask = this.chatTaskRepository.create({
+        chatId: params.chat.id,
+        taskId: savedTask.id
+      });
+      await this.chatTaskRepository.save(chatTask);
 
       result.push(savedTask);
     }
@@ -111,23 +101,7 @@ export class TaskService {
 
 
   /**
-   * Получает личные задачи пользователя
-   */
-  async getUserPersonalTasks(userId: number): Promise<Task[]> {
-    const userTaskRepository = AppDataSource.getRepository(UserTask);
-    
-    const userTasks = await userTaskRepository.find({
-      where: { userId },
-      relations: ['task', 'task.assignedUser', 'task.assignedRole']
-    });
-
-    const tasks = userTasks.map(ut => ut.task);
-    
-    return tasks;
-  }
-
-  /**
-   * Получает групповые задачи чата
+   * Получает задачи чата
    */
   async getChatTasks(chatId: number): Promise<Task[]> {
     const chatTaskRepository = AppDataSource.getRepository(ChatTask);

@@ -1,126 +1,167 @@
 import { Router } from 'express';
 import { AppDataSource } from '../configs/database';
 import { User } from '../entities/User';
-import crypto from 'crypto-js';
+import { validate } from '@tma.js/init-data-node';
 import jwt from 'jsonwebtoken';
 import { authenticateToken } from '../middleware/auth';
 
 const router: Router = Router();
 
-function verifyTelegramAuth(authData: any, botToken: string): { isValid: boolean; error?: string } {
-  const { hash, auth_date, ...userData } = authData;
-  
-  // Проверяем время авторизации (не старше 24 часов)
-  const currentTime = Math.floor(Date.now() / 1000);
-  const maxAge = 24 * 60 * 60; // 24 часа в секундах
-  
-  if (currentTime - auth_date > maxAge) {
-    return { 
-      isValid: false, 
-      error: `Auth data is too old. Age: ${Math.floor((currentTime - auth_date) / 3600)} hours` 
-    };
-  }
-  
-  // Создаем строку для проверки подписи
-  const dataCheckString = Object.keys(userData)
-    .sort()
-    .map(key => `${key}=${userData[key]}`)
-    .join('\n');
-  
-  // Создаем секретный ключ
-  const secretKey = crypto.HmacSHA256(botToken, 'WebAppData').toString();
-  
-  // Вычисляем хеш
-  const calculatedHash = crypto.HmacSHA256(dataCheckString, secretKey).toString();
-  
-  if (calculatedHash !== hash) {
-    return { 
-      isValid: false, 
-      error: 'Invalid signature' 
-    };
-  }
-  
-  return { isValid: true };
-}
-
-// Эндпоинт для авторизации через Telegram
+// Эндпоинт для авторизации через Telegram WebApp
 router.post('/telegram', async (req, res) => {
   try {
-    const { id, first_name, last_name, username, photo_url, auth_date, hash } = req.body;
+    // Логируем запрос для отладки
+    console.log('🔐 Auth request:', {
+      origin: req.headers.origin || 'no origin',
+      userAgent: req.headers['user-agent'] || 'no user-agent',
+      hasInitData: !!req.body.initData,
+      initDataLength: req.body.initData?.length || 0,
+      ip: req.ip || req.socket.remoteAddress,
+      timestamp: new Date().toISOString(),
+    });
     
+    const { initData } = req.body;
     
-    // Проверяем подпись и время авторизации
-    const isDevelopment = process.env.NODE_ENV === 'development';
+    if (!initData) {
+      console.error('❌ Missing initData in request');
+      console.error('Request body:', req.body);
+      console.error('Request headers:', {
+        'content-type': req.headers['content-type'],
+        origin: req.headers.origin,
+      });
+      return res.status(400).json({ error: 'initData is required' });
+    }
+
+    const botToken = process.env.TELEGRAM_BOT_TOKEN;
+    if (!botToken) {
+      return res.status(500).json({ error: 'Bot token not configured' });
+    }
+
+    // Парсим initData для получения данных пользователя
+    const params = new URLSearchParams(initData);
+    const userParam = params.get('user');
+    const hashParam = params.get('hash');
     
-    if (!isDevelopment) {
-      const botToken = process.env.TELEGRAM_BOT_TOKEN;
-      if (!botToken) {
-        return res.status(500).json({ error: 'Bot token not configured' });
-      }
-      
-      const verification = verifyTelegramAuth(req.body, botToken);
-      if (!verification.isValid) {
-        return res.status(401).json({ error: verification.error });
-      }
-    } else {
-      // В режиме разработки проверяем только время авторизации
-      const currentTime = Math.floor(Date.now() / 1000);
-      const maxAge = 24 * 60 * 60; // 24 часа
-      
-      if (currentTime - auth_date > maxAge) {
-        return res.status(401).json({ 
-          error: `Auth data is too old. Age: ${Math.floor((currentTime - auth_date) / 3600)} hours` 
+    let userData: any = null;
+    
+    // Парсим данные пользователя
+    if (userParam) {
+      try {
+        userData = JSON.parse(decodeURIComponent(userParam));
+      } catch (error) {
+        console.error('❌ Failed to parse user data:', error);
+        return res.status(400).json({ 
+          error: 'Invalid user data in initData',
+          details: 'Failed to parse user parameter'
         });
       }
+    } else {
+      return res.status(400).json({ 
+        error: 'User data not found in initData',
+        details: 'Missing user parameter in initData'
+      });
     }
     
+    // Валидируем initData только если есть hash (реальный запрос от Telegram)
+    const isDevelopment = process.env.NODE_ENV === 'development';
+    const skipValidation = process.env.SKIP_INITDATA_VALIDATION === 'true';
+    
+    if (hashParam && !skipValidation) {
+      try {
+        // Валидируем initData с помощью токена бота
+        validate(initData, botToken);
+        console.log('✅ initData validated successfully');
+      } catch (error: any) {
+        console.error('❌ initData validation failed:', {
+          message: error.message,
+          hasHash: !!hashParam,
+          hasUser: !!userParam,
+          initDataLength: initData.length,
+          isDevelopment,
+          skipValidation,
+        });
+        
+        // В режиме разработки или если установлен флаг, пропускаем валидацию
+        if (!isDevelopment && !skipValidation) {
+          return res.status(401).json({ 
+            error: 'Invalid initData',
+            details: error.message || 'Hash validation failed. Set SKIP_INITDATA_VALIDATION=true to skip validation in development.'
+          });
+        } else {
+          console.warn('⚠️ Skipping initData validation (development mode or SKIP_INITDATA_VALIDATION=true)');
+        }
+      }
+    } else {
+      if (hashParam && skipValidation) {
+        console.warn('⚠️ Hash present but validation skipped (SKIP_INITDATA_VALIDATION=true)');
+      } else if (!hashParam) {
+        console.warn('⚠️ No hash in initData - using without validation');
+      }
+    }
+
+    if (!userData || !userData.id) {
+      return res.status(400).json({ error: 'User data not found in initData' });
+    }
+
     const userRepository = AppDataSource.getRepository(User);
     
     // Ищем или создаем пользователя
-    let user = await userRepository.findOne({ where: { telegramId: id } });
+    let user = await userRepository.findOne({ where: { telegramId: userData.id } });
     
     if (!user) {
       user = userRepository.create({
-        telegramId: id,
-        firstName: first_name,
-        lastName: last_name,
-        username: username,
-        photoUrl: photo_url,
+        telegramId: userData.id,
+        firstName: userData.first_name || '',
+        lastName: userData.last_name || null,
+        username: userData.username || null,
+        photoUrl: userData.photo_url || null,
       });
       await userRepository.save(user);
     } else {
       // Обновляем данные пользователя
-      user.firstName = first_name;
-      user.lastName = last_name;
-      user.username = username;
-      user.photoUrl = photo_url;
+      user.firstName = userData.first_name || user.firstName;
+      user.lastName = userData.last_name || user.lastName;
+      user.username = userData.username || user.username;
+      user.photoUrl = userData.photo_url || user.photoUrl;
       await userRepository.save(user);
     }
     
     // Создаем JWT токен
     const jwtSecret = process.env.JWT_SECRET || 'your-secret-key';
     const token = jwt.sign(
-      { userId: user.id, telegramId: id },
+      { userId: user.id, telegramId: user.telegramId },
       jwtSecret,
       { expiresIn: '30d' }
     );
     
+    console.log('✅ Auth successful:', {
+      userId: user.id,
+      telegramId: user.telegramId,
+      username: user.username,
+    });
+
     res.json({
       user: {
-        id: user.telegramId,
-        first_name: user.firstName,
-        last_name: user.lastName,
+        id: user.id,
+        telegramId: user.telegramId,
+        firstName: user.firstName,
+        lastName: user.lastName,
         username: user.username,
-        photo_url: user.photoUrl,
-        auth_date: auth_date,
-        hash: hash
+        photoUrl: user.photoUrl,
       },
       token
     });
     
-  } catch (error) {
-    console.error('Telegram auth error:', error);
-    res.status(500).json({ error: 'Internal server error' });
+  } catch (error: any) {
+    console.error('❌ Telegram auth error:', {
+      message: error.message,
+      stack: error.stack,
+      name: error.name,
+    });
+    res.status(500).json({ 
+      error: 'Internal server error',
+      details: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
   }
 });
 
@@ -135,11 +176,12 @@ router.get('/profile', authenticateToken, async (req: any, res) => {
     }
     
     res.json({
-      id: user.telegramId,
-      first_name: user.firstName,
-      last_name: user.lastName,
+      id: user.id,
+      telegramId: user.telegramId,
+      firstName: user.firstName,
+      lastName: user.lastName,
       username: user.username,
-      photo_url: user.photoUrl,
+      photoUrl: user.photoUrl,
     });
   } catch (error) {
     console.error('Profile error:', error);

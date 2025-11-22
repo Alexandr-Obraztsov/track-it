@@ -39,8 +39,6 @@ export class MessageProcessor {
         };
       }
 
-      const isPersonal = msg.chat.type === 'private';
-
       // Определяем тип сообщения и извлекаем контент
       const processedMessage = await this.extractMessageContent(bot, msg);
 
@@ -53,37 +51,22 @@ export class MessageProcessor {
 
       // Получаем или создаем пользователя и чат
       const { user, isNewUser } = await userManager.getOrCreateUser(msg.from);
-      
-      let chat: Chat | undefined;
-      if (!isPersonal) {
-        chat = await userManager.getOrCreateChat(msg.chat);
-      }
+      const chat = await userManager.getOrCreateChat(msg.chat);
 
       // Получаем существующие задачи
-      const existingTasks = isPersonal 
-        ? await taskService.getUserPersonalTasks(user.id)
-        : await taskService.getChatTasks(chat!.id);
+      const existingTasks = await taskService.getChatTasks(chat.id);
 
       const geminiResult = await geminiService.extractTasks({
         ...processedMessage,
-        isPersonal,
-        user,
-        chat: chat,
+        chat,
         existingTasks
       } as TaskExtractionParams);
 
       // Сохраняем задачи в базу данных
-      const savedResult = isPersonal 
-        ? await taskService.saveTasks({
-            geminiResult,
-            isPersonal: true,
-            user
-          })
-        : await taskService.saveTasks({
-            geminiResult,
-            isPersonal: false,
-            chat: chat!
-          });
+      const savedResult = await taskService.saveTasks({
+        geminiResult,
+        chat
+      });
 
       // Формируем ответное сообщение
       const responseMessage = await this.formatResponseMessage(geminiResult);
@@ -261,23 +244,15 @@ export class MessageProcessor {
         };
       }
 
-      const isPersonal = msg.chat.type === 'private';
-
       // Получаем или создаем пользователя и чат
       const { user } = await userManager.getOrCreateUser(msg.from);
-      
-      let chat: Chat | undefined;
-      if (!isPersonal) {
-        chat = await userManager.getOrCreateChat(msg.chat);
-      }
+      const chat = await userManager.getOrCreateChat(msg.chat);
 
       // Получаем задачи
-      const tasks = isPersonal 
-        ? await taskService.getUserPersonalTasks(user.id)
-        : await taskService.getChatTasks(chat!.id);
+      const tasks = await taskService.getChatTasks(chat.id);
 
       // Формируем ответное сообщение
-      const responseMessage = await this.formatTasksList(tasks, isPersonal);
+      const responseMessage = await this.formatTasksList(tasks);
 
       return {
         success: true,
@@ -296,14 +271,12 @@ export class MessageProcessor {
   /**
    * Форматирует список задач для отображения
    */
-  private async formatTasksList(tasks: Task[], isPersonal: boolean): Promise<string> {
+  private async formatTasksList(tasks: Task[]): Promise<string> {
     if (tasks.length === 0) {
-      const context = isPersonal ? 'личных' : 'групповых';
-      return `📋 <b>Список ${context} задач</b>\n━━━━━━━━━━━━━━━━━━━━\n\n🤷‍♂️ Задач пока нет`;
+      return `📋 <b>Список задач</b>\n━━━━━━━━━━━━━━━━━━━━\n\n🤷‍♂️ Задач пока нет`;
     }
 
-    const context = isPersonal ? 'личные' : 'групповые';
-    let response = `📋 <b>Список ${context} задач</b>\n`;
+    let response = `📋 <b>Список задач</b>\n`;
     response += '━━━━━━━━━━━━━━━━━━━━\n\n';
 
     for (let index = 0; index < tasks.length; index++) {

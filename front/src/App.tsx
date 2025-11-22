@@ -1,17 +1,14 @@
-import { Provider } from 'react-redux';
-import { store } from './store';
-import { router } from './router';
+import { ThemeProvider, CssBaseline } from '@mui/material';
 import { RouterProvider } from 'react-router-dom';
-import { useTheme } from './hooks/useTheme';
+import { theme } from './theme';
+import { router } from './router';
 
 function App() {
-  // Автоматическое переключение темы
-  useTheme();
-
   return (
-    <Provider store={store}>
+    <ThemeProvider theme={theme}>
+      <CssBaseline />
       <RouterProvider router={router} />
-    </Provider>
+    </ThemeProvider>
   );
 }
 

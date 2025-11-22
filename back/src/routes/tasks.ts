@@ -6,16 +6,6 @@ import { authenticateToken } from '../middleware/auth';
 
 const router = Router();
 
-// GET /api/tasks/personal - личные задачи пользователя
-router.get('/personal', authenticateToken, async (req: any, res) => {
-  try {
-    const tasks = await taskManager.getUserPersonalTasks(req.user.userId);
-    res.json(tasks);
-  } catch (error) {
-    res.status(500).json({ error: 'Failed to fetch tasks' });
-  }
-});
-
 // GET /api/tasks/chat/:chatId - задачи чата
 router.get('/chat/:chatId', async (req, res) => {
   try {

@@ -3,7 +3,6 @@ import { geminiService } from '../services/geminiService';
 import { taskManager } from '../services/task-service/task-service';
 import { AppDataSource } from '../configs/database';
 import { Chat } from '../entities/Chat';
-import { User } from '../entities/User';
 import { Task } from '../entities/Task';
 import { authenticateToken } from '../middleware/auth';
 import multer from 'multer';
@@ -21,10 +20,15 @@ const upload = multer({
 // POST /api/gemini/extract - извлечение задач из текста или аудио
 router.post('/extract', authenticateToken, upload.single('audioData'), async (req: any, res) => {
   try {
-    const { text, chatId, type } = req.body;
-    const userId = req.user.userId; // Получаем userId из JWT токена
+    const { text, chatId } = req.body;
     let audioData: Buffer | undefined;
     let audioMimeType: string | undefined;
+
+    if (!chatId) {
+      return res.status(400).json({ 
+        error: 'chatId is required' 
+      });
+    }
 
     // Обрабатываем аудио файл если он есть
     if (req.file) {
@@ -32,59 +36,34 @@ router.post('/extract', authenticateToken, upload.single('audioData'), async (re
       audioMimeType = req.file.mimetype;
     }
 
-    let chat: Chat | null = null;
-    let user: User | null = null;
+    const chatRepository = AppDataSource.getRepository(Chat);
+    const chat = await chatRepository.findOne({
+      where: { id: parseInt(chatId) },
+      relations: ['userChatRoles', 'userChatRoles.user', 'chatRoles', 'chatRoles.role']
+    });
 
-    if (type === 'group' && chatId) {
-      const chatRepository = AppDataSource.getRepository(Chat);
-      chat = await chatRepository.findOne({
-        where: { id: parseInt(chatId) },
-        relations: ['userChatRoles', 'userChatRoles.user', 'chatRoles', 'chatRoles.role']
-      });
-
-      if (!chat) {
-        return res.status(404).json({ error: 'Chat not found' });
-      }
-    } else if (type === 'personal' && userId) {
-      const userRepository = AppDataSource.getRepository(User);
-      user = await userRepository.findOne({
-        where: { id: parseInt(userId) }
-      });
-
-      if (!user) {
-        return res.status(404).json({ error: 'User not found' });
-      }
-    } else {
-      return res.status(400).json({ 
-        error: 'Invalid parameters. For group tasks: type=group, chatId required. For personal tasks: type=personal, userId required.' 
-      });
+    if (!chat) {
+      return res.status(404).json({ error: 'Chat not found' });
     }
 
     // Получаем существующие задачи для контекста
     let existingTasks: Task[] = [];
     try {
-      if (type === 'group' && chat) {
-        existingTasks = await taskManager.getChatTasks(chat.id);
-      } else if (type === 'personal' && user) {
-        existingTasks = await taskManager.getUserPersonalTasks(user.id);
-      }
+      existingTasks = await taskManager.getChatTasks(chat.id);
     } catch (error) {
       console.error('Error fetching existing tasks:', error);
     }
 
     // Создаем параметры для geminiService
-    const params = type === 'group'
-      ? { text, audioData, audioMimeType, chat: chat!, existingTasks, isPersonal: false as const }
-      : { text, audioData, audioMimeType, user: user!, existingTasks, isPersonal: true as const };
+    const params = { text, audioData, audioMimeType, chat, existingTasks };
 
     const geminiResult = await geminiService.extractTasks(params);
     
     // Сохраняем задачи в базу данных
-    const saveParams = type === 'group'
-      ? { geminiResult, chat: chat!, isPersonal: false as const }
-      : { geminiResult, user: user!, isPersonal: true as const };
-    
-    const savedTasks = await taskManager.saveTasks(saveParams);
+    const savedTasks = await taskManager.saveTasks({
+      geminiResult,
+      chat
+    });
     
     res.json(geminiResult);
   } catch (error) {

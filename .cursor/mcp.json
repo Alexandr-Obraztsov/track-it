@@ -1,11 +1,8 @@
 {
   "mcpServers": {
-    "shadcn": {
+    "playwright": {
       "command": "npx",
-      "args": [
-        "shadcn@latest",
-        "mcp"
-      ]
+      "args": ["-y", "@executeautomation/playwright-mcp-server"]
     }
   }
 }

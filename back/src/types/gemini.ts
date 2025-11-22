@@ -26,13 +26,5 @@ export type TaskExtractionParams = {
   audioData?: Buffer;
   audioMimeType?: string;
   existingTasks: Task[];
-} & (
-  { 
-    isPersonal: false; 
-    chat: Chat;
-  } |
-  { 
-    isPersonal: true; 
-    user: User;
-  }
-);
+  chat: Chat;
+};
