@@ -7,11 +7,6 @@ import {
   Stack,
 } from '@mui/material';
 import type { Theme } from '@mui/material';
-import {
-  CheckCircle,
-  RadioButtonUnchecked,
-} from '@mui/icons-material';
-import { IconButton } from '../../atoms/IconButton';
 import { StatusChip } from '../../molecules/StatusChip';
 import { UserChip } from '../../molecules/UserChip';
 import { DeadlineChip } from '../../molecules/DeadlineChip';
@@ -29,7 +24,6 @@ export interface TaskCardProps {
     username?: string | null;
   } | null;
   deadline?: string | null;
-  onStatusChange?: (id: number, status: 'backlog' | 'in_progress' | 'completed') => void;
   onEdit?: (id: number) => void;
   onComment?: (id: number) => void;
   onDelete?: (id: number) => void;
@@ -42,22 +36,10 @@ export const TaskCard: React.FC<TaskCardProps> = ({
   status,
   assignedUser,
   deadline,
-  onStatusChange,
   onEdit,
   onComment,
   onDelete,
 }) => {
-  const handleStatusToggle = () => {
-    if (!onStatusChange) return;
-    
-    if (status === 'completed') {
-      onStatusChange(id, 'in_progress');
-    } else if (status === 'in_progress') {
-      onStatusChange(id, 'completed');
-    } else {
-      onStatusChange(id, 'in_progress');
-    }
-  };
 
   return (
     <Card
@@ -98,28 +80,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
       <CardContent sx={{ p: 1.5, '&:last-child': { pb: 1.5 } }}>
         <Box display="flex" alignItems="flex-start" justifyContent="space-between" gap={1.5}>
           <Box flex={1} minWidth={0}>
-            <Box display="flex" alignItems="center" gap={1.5} mb={description ? 1 : 0.5}>
-              <IconButton
-                size="small"
-                onClick={handleStatusToggle}
-                color={status === 'completed' ? 'success' : 'default'}
-                sx={{
-                  padding: 0.5,
-                  transition: 'all 0.2s ease',
-                  '&:hover': {
-                    transform: 'scale(1.1)',
-                  },
-                  '& .MuiSvgIcon-root': {
-                    fontSize: '1.125rem',
-                  },
-                }}
-              >
-                {status === 'completed' ? (
-                  <CheckCircle color="success" />
-                ) : (
-                  <RadioButtonUnchecked />
-                )}
-              </IconButton>
+            <Box display="flex" alignItems="center" gap={1} mb={description ? 1 : 0.5}>
               <Typography
                 variant="subtitle2"
                 component="h3"
@@ -145,7 +106,6 @@ export const TaskCard: React.FC<TaskCardProps> = ({
                 sx={{
                   mb: 1,
                   lineHeight: 1.5,
-                  pl: 5,
                   fontSize: '0.75rem',
                   opacity: 0.8,
                 }}
@@ -159,7 +119,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
                 direction="row"
                 spacing={1}
                 flexWrap="wrap"
-                sx={{ pl: 5, gap: 0.75 }}
+                sx={{ gap: 0.75 }}
               >
                 {assignedUser && (
                   <UserChip

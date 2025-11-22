@@ -14,6 +14,20 @@ import {
   ExpandLess,
   FilterList,
 } from '@mui/icons-material';
+import {
+  DndContext,
+  DragOverlay,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  TouchSensor,
+  useSensor,
+  useSensors,
+  useDraggable,
+  useDroppable,
+  type DragEndEvent,
+  type DragStartEvent,
+} from '@dnd-kit/core';
 import { TaskCard, type TaskCardProps } from '../../organisms/TaskCard';
 import { TaskForm } from '../../organisms/TaskForm';
 import type { Task, User } from '../../../types/api';
@@ -130,6 +144,56 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({
     setEditingTask(null);
   };
 
+  const [activeTask, setActiveTask] = useState<Task | null>(null);
+
+  // Настройка сенсоров для drag-and-drop
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 8,
+      },
+    }),
+    useSensor(TouchSensor, {
+      activationConstraint: {
+        delay: 200,
+        tolerance: 5,
+      },
+    }),
+    useSensor(KeyboardSensor)
+  );
+
+  const handleDragStart = (event: DragStartEvent) => {
+    const { active } = event;
+    const task = tasks.find((t) => t.id === Number(active.id));
+    if (task) {
+      setActiveTask(task);
+    }
+  };
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    setActiveTask(null);
+
+    if (!over || !onStatusChange) return;
+
+    const taskId = Number(active.id);
+    const overId = over.id.toString();
+
+    // Проверяем, что over.id - это статус колонки (backlog, in_progress, completed)
+    const validStatuses: ('backlog' | 'in_progress' | 'completed')[] = ['backlog', 'in_progress', 'completed'];
+    if (!validStatuses.includes(overId as any)) {
+      return;
+    }
+
+    const newStatus = overId as 'backlog' | 'in_progress' | 'completed';
+
+    // Проверяем, что статус действительно изменился
+    const task = tasks.find((t) => t.id === taskId);
+    if (task && task.status !== newStatus) {
+      onStatusChange(taskId, newStatus);
+    }
+  };
+
   const convertTaskToCardProps = (task: Task): TaskCardProps => ({
     id: task.id,
     title: task.title,
@@ -144,130 +208,200 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({
         }
       : null,
     deadline: task.deadline,
-    onStatusChange: onStatusChange,
     onEdit: handleEditTask,
     onComment: onTaskComment,
     onDelete: onTaskDelete,
   });
 
+  // Компонент для перетаскиваемой карточки
+  const DraggableTaskCard = ({ task }: { task: Task }) => {
+    const {
+      attributes,
+      listeners,
+      setNodeRef,
+      transform,
+      isDragging,
+    } = useDraggable({
+      id: task.id.toString(),
+      data: {
+        type: 'task',
+        task,
+      },
+    });
+
+    const style = transform
+      ? {
+          transform: `translate3d(${transform.x}px, ${transform.y}px, 0)`,
+        }
+      : undefined;
+
+    return (
+      <Box
+        ref={setNodeRef}
+        style={style}
+        {...attributes}
+        {...listeners}
+        sx={{
+          touchAction: 'none',
+          WebkitTouchCallout: 'none',
+          WebkitUserSelect: 'none',
+          userSelect: 'none',
+          opacity: isDragging ? 0.5 : 1,
+          cursor: isDragging ? 'grabbing' : 'grab',
+          zIndex: isDragging ? 1000 : 1,
+        }}
+      >
+        <TaskCard {...convertTaskToCardProps(task)} />
+      </Box>
+    );
+  };
+
+  // Компонент для колонки с drop-зоной
   const Column = ({
     title,
     tasks: columnTasks,
     color,
+    status,
     isCollapsed,
     onToggle,
   }: {
     title: string;
     tasks: Task[];
     color: string;
+    status: 'backlog' | 'in_progress' | 'completed';
     isCollapsed: boolean;
     onToggle: () => void;
-  }) => (
-    <Box
-      sx={{
-        flex: 1,
-        minWidth: { xs: '100%', md: 0 },
-        display: 'flex',
-        flexDirection: 'column',
-        maxHeight: { xs: 'none', md: 'calc(100vh - 250px)' },
-      }}
-    >
+  }) => {
+    const { setNodeRef, isOver } = useDroppable({
+      id: status,
+    });
+
+    return (
       <Box
         sx={{
-          mb: 2,
-          pb: 1.5,
-          borderBottom: '1.5px solid',
-          borderColor: color,
+          flex: 1,
+          minWidth: { xs: '100%', md: 0 },
           display: 'flex',
-          alignItems: 'center',
-          gap: 1,
+          flexDirection: 'column',
         }}
       >
-        <IconButton
-          size="small"
-          onClick={onToggle}
-          sx={{
-            padding: 0.5,
-            color: color,
-            '&:hover': {
-              backgroundColor: `${color}15`,
-            },
-            '& .MuiSvgIcon-root': {
-              fontSize: '1rem',
-            },
-          }}
-        >
-          {isCollapsed ? <ExpandLess /> : <ExpandMore />}
-        </IconButton>
-        <Typography
-          variant="subtitle2"
-          sx={{
-            fontWeight: 600,
-            color: color,
-            fontSize: '0.875rem',
-            flex: 1,
-          }}
-        >
-          {title}
-        </Typography>
         <Box
           sx={{
-            px: 1,
-            py: 0.25,
-            borderRadius: 1.5,
-            backgroundColor: `${color}20`,
-            color: color,
-            fontSize: '0.75rem',
-            fontWeight: 600,
+            mb: 2,
+            pb: 1.5,
+            borderBottom: '1.5px solid',
+            borderColor: color,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 1,
           }}
         >
-          {columnTasks.length}
+          <IconButton
+            size="small"
+            onClick={onToggle}
+            sx={{
+              padding: 0.5,
+              color: color,
+              '&:hover': {
+                backgroundColor: `${color}15`,
+              },
+              '& .MuiSvgIcon-root': {
+                fontSize: '1rem',
+              },
+            }}
+          >
+            {isCollapsed ? <ExpandLess /> : <ExpandMore />}
+          </IconButton>
+          <Typography
+            variant="subtitle2"
+            sx={{
+              fontWeight: 600,
+              color: color,
+              fontSize: '0.875rem',
+              flex: 1,
+            }}
+          >
+            {title}
+          </Typography>
+          <Box
+            sx={{
+              px: 1,
+              py: 0.25,
+              borderRadius: 1.5,
+              backgroundColor: `${color}20`,
+              color: color,
+              fontSize: '0.75rem',
+              fontWeight: 600,
+            }}
+          >
+            {columnTasks.length}
+          </Box>
         </Box>
-      </Box>
-      {!isCollapsed && (
-        <Stack
-          spacing={1.5}
-          sx={{
-            flex: 1,
-            overflowY: { xs: 'visible', md: 'auto' },
-            pr: { xs: 0, md: 0.5 },
-            // Скрываем скроллбар, но оставляем возможность прокрутки
-            scrollbarWidth: 'none', // Firefox
-            msOverflowStyle: 'none', // IE и Edge
-            '&::-webkit-scrollbar': {
-              display: 'none', // Chrome, Safari, Opera
-            },
-          }}
-        >
-          {columnTasks.length === 0 ? (
-            <Box
+        {!isCollapsed && (
+          <Box
+            ref={setNodeRef}
+            sx={{
+              flex: 1,
+              minHeight: isOver ? 150 : 100,
+              borderRadius: 2,
+              p: isOver ? 1.5 : 1,
+              backgroundColor: isOver ? `${color}15` : 'rgba(255, 255, 255, 0.02)',
+              border: isOver ? `2px solid ${color}` : '2px dashed transparent',
+              transition: 'all 0.2s ease',
+            }}
+          >
+            <Stack
+              spacing={1.5}
               sx={{
-                textAlign: 'center',
-                py: 6,
-                px: 3,
-                borderRadius: 2,
-                backgroundColor: 'rgba(255, 255, 255, 0.05)',
-                border: '2px dashed',
-                borderColor: 'rgba(255, 255, 255, 0.15)',
+                flex: 1,
+                overflowY: { xs: 'visible', md: 'auto' },
+                pr: { xs: 0, md: 0.5 },
+                minHeight: isOver && columnTasks.length === 0 ? 120 : 100,
+                // Скрываем скроллбар, но оставляем возможность прокрутки
+                scrollbarWidth: 'none', // Firefox
+                msOverflowStyle: 'none', // IE и Edge
+                '&::-webkit-scrollbar': {
+                  display: 'none', // Chrome, Safari, Opera
+                },
               }}
             >
-              <Typography
-                variant="body1"
-                color="text.secondary"
-                sx={{ fontSize: '0.875rem' }}
-              >
-                Нет задач
-              </Typography>
-            </Box>
-          ) : (
-            columnTasks.map((task) => (
-              <TaskCard key={task.id} {...convertTaskToCardProps(task)} />
-            ))
-          )}
-        </Stack>
-      )}
-    </Box>
-  );
+              {columnTasks.length === 0 ? (
+                <Box
+                  sx={{
+                    textAlign: 'center',
+                    py: 6,
+                    px: 3,
+                    borderRadius: 2,
+                    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+                    border: '2px dashed',
+                    borderColor: 'rgba(255, 255, 255, 0.15)',
+                    minHeight: 80,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  <Typography
+                    variant="body1"
+                    color="text.secondary"
+                    sx={{
+                      fontSize: '0.875rem',
+                    }}
+                  >
+                    Нет задач
+                  </Typography>
+                </Box>
+              ) : (
+                columnTasks.map((task) => (
+                  <DraggableTaskCard key={task.id} task={task} />
+                ))
+              )}
+            </Stack>
+          </Box>
+        )}
+      </Box>
+    );
+  };
 
   return (
     <Box
@@ -330,73 +464,94 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({
       </Box>
 
       {/* Board */}
-             <Box
-               sx={{
-                 flex: 1,
-                 overflow: { xs: 'auto', md: 'hidden' },
-                 p: { xs: 2, sm: 2.5 },
-               }}
-             >
-        {isMobile ? (
-          // Mobile: Vertical stack
-          <Stack spacing={2}>
-            <Column
-              title="Очередь"
-              tasks={backlogTasks}
-              color="rgba(255, 255, 255, 0.5)"
-              isCollapsed={collapsedColumns.backlog}
-              onToggle={() => toggleColumn('backlog')}
-            />
-            <Column
-              title="В работе"
-              tasks={inProgressTasks}
-              color={theme.palette.primary.main}
-              isCollapsed={collapsedColumns.in_progress}
-              onToggle={() => toggleColumn('in_progress')}
-            />
-            <Column
-              title="Выполнено"
-              tasks={completedTasks}
-              color={theme.palette.success.main}
-              isCollapsed={collapsedColumns.completed}
-              onToggle={() => toggleColumn('completed')}
-            />
-          </Stack>
-        ) : (
-          // Desktop: Horizontal columns
-          <Stack
-            direction="row"
-            spacing={2}
-            sx={{
-              width: '100%',
-              height: '100%',
-              alignItems: 'flex-start',
-            }}
-          >
-            <Column
-              title="Очередь"
-              tasks={backlogTasks}
-              color="rgba(255, 255, 255, 0.5)"
-              isCollapsed={collapsedColumns.backlog}
-              onToggle={() => toggleColumn('backlog')}
-            />
-            <Column
-              title="В работе"
-              tasks={inProgressTasks}
-              color={theme.palette.primary.main}
-              isCollapsed={collapsedColumns.in_progress}
-              onToggle={() => toggleColumn('in_progress')}
-            />
-            <Column
-              title="Выполнено"
-              tasks={completedTasks}
-              color={theme.palette.success.main}
-              isCollapsed={collapsedColumns.completed}
-              onToggle={() => toggleColumn('completed')}
-            />
-          </Stack>
-        )}
-      </Box>
+      <DndContext
+        sensors={sensors}
+        collisionDetection={closestCenter}
+        onDragStart={handleDragStart}
+        onDragEnd={handleDragEnd}
+        modifiers={[]}
+      >
+        <Box
+          sx={{
+            flex: 1,
+            overflow: { xs: 'auto', md: 'hidden' },
+            p: { xs: 2, sm: 2.5 },
+          }}
+        >
+          {isMobile ? (
+            // Mobile: Vertical stack
+            <Stack spacing={2}>
+              <Column
+                title="Очередь"
+                tasks={backlogTasks}
+                color="rgba(255, 255, 255, 0.5)"
+                status="backlog"
+                isCollapsed={collapsedColumns.backlog}
+                onToggle={() => toggleColumn('backlog')}
+              />
+              <Column
+                title="В работе"
+                tasks={inProgressTasks}
+                color={theme.palette.primary.main}
+                status="in_progress"
+                isCollapsed={collapsedColumns.in_progress}
+                onToggle={() => toggleColumn('in_progress')}
+              />
+              <Column
+                title="Выполнено"
+                tasks={completedTasks}
+                color={theme.palette.success.main}
+                status="completed"
+                isCollapsed={collapsedColumns.completed}
+                onToggle={() => toggleColumn('completed')}
+              />
+            </Stack>
+          ) : (
+            // Desktop: Horizontal columns
+            <Stack
+              direction="row"
+              spacing={2}
+              sx={{
+                width: '100%',
+                height: '100%',
+                alignItems: 'flex-start',
+              }}
+            >
+              <Column
+                title="Очередь"
+                tasks={backlogTasks}
+                color="rgba(255, 255, 255, 0.5)"
+                status="backlog"
+                isCollapsed={collapsedColumns.backlog}
+                onToggle={() => toggleColumn('backlog')}
+              />
+              <Column
+                title="В работе"
+                tasks={inProgressTasks}
+                color={theme.palette.primary.main}
+                status="in_progress"
+                isCollapsed={collapsedColumns.in_progress}
+                onToggle={() => toggleColumn('in_progress')}
+              />
+              <Column
+                title="Выполнено"
+                tasks={completedTasks}
+                color={theme.palette.success.main}
+                status="completed"
+                isCollapsed={collapsedColumns.completed}
+                onToggle={() => toggleColumn('completed')}
+              />
+            </Stack>
+          )}
+        </Box>
+        <DragOverlay>
+          {activeTask ? (
+            <Box sx={{ opacity: 0.8, transform: 'rotate(5deg)' }}>
+              <TaskCard {...convertTaskToCardProps(activeTask)} />
+            </Box>
+          ) : null}
+        </DragOverlay>
+      </DndContext>
 
       {/* FAB */}
       <Fab
