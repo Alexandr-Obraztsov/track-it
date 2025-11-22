@@ -1,6 +1,8 @@
 import dotenv from 'dotenv';
 import TelegramBot from 'node-telegram-bot-api';
 import { messageProcessor } from '../services/messageProcessor';
+import { userManager } from '../services/userManager';
+import { Formatter } from '../utils/formatter';
 
 // Загружаем переменные окружения
 dotenv.config();
@@ -19,6 +21,131 @@ export class TelegramBotService {
   }
 
   private setupHandlers() {
+    // Обработчик новых участников группы
+    this.bot.on('new_chat_members', async (msg) => {
+      if (!msg.new_chat_members || !msg.from) {
+        return;
+      }
+
+      // Обрабатываем каждого нового участника
+      for (const newMember of msg.new_chat_members) {
+        // Пропускаем ботов
+        if (newMember.is_bot) {
+          continue;
+        }
+
+        try {
+          const { user, isNewUser } = await userManager.getOrCreateUser(newMember);
+          
+          if (isNewUser) {
+            // Создаем или получаем чат
+            const chat = await userManager.getOrCreateChat(msg.chat);
+            
+            const welcomeMessage = `👋 Привет, ${newMember.first_name || 'пользователь'}! Я бот для управления задачами.\n\n` +
+              `Теперь ты зарегистрирован в системе. Я буду помогать тебе и команде отслеживать задачи.\n\n` +
+              `💡 <b>Как использовать:</b>\n` +
+              `• В личном чате просто отправляй сообщения - я автоматически создам задачи\n` +
+              `• В группе отвечай на сообщения командой /check для создания задач\n` +
+              `• Используй /tasks для просмотра списка задач\n` +
+              `• Используй /users для просмотра участников группы`;
+            
+            try {
+              await this.sendMessage(msg.chat.id, welcomeMessage);
+            } catch (error) {
+              console.error('❌ [TELEGRAM] Error sending welcome message:', error);
+            }
+          }
+        } catch (error) {
+          console.error('❌ [TELEGRAM] Error handling new chat member:', error);
+        }
+      }
+    });
+
+    // Обработчик команды /users - показывает участников группы, которых знает бот
+    this.bot.onText(/^\/users(@\w+)?$/, async (msg) => {
+      console.log('👥 [TELEGRAM] /users command received:', {
+        messageId: msg.message_id,
+        chatId: msg.chat.id,
+        chatType: msg.chat.type,
+        userId: msg.from?.id
+      });
+
+      try {
+        if (msg.chat.type === 'private') {
+          await this.sendMessage(msg.chat.id, 'ℹ️ Эта команда доступна только в групповых чатах');
+          return;
+        }
+
+        // Получаем чат
+        const chat = await userManager.getOrCreateChat(msg.chat);
+        
+        // Получаем пользователей из userChatRoles (те, у кого есть роли в чате)
+        const chatUsersFromRoles = await userManager.getChatUsers(chat.id);
+        
+        // Также получаем задачи чата для поиска пользователей, назначенных на задачи
+        const { taskService } = await import('../services/task-service/task-service');
+        const chatTasks = await taskService.getChatTasks(chat.id);
+        
+        // Собираем уникальных пользователей
+        const userIds = new Set<number>();
+        
+        // Добавляем пользователей из ролей
+        chatUsersFromRoles.forEach(user => userIds.add(user.id));
+        
+        // Добавляем пользователей, назначенных на задачи
+        chatTasks.forEach(task => {
+          if (task.assignedUser) {
+            userIds.add(task.assignedUser.id);
+          }
+        });
+
+        if (userIds.size === 0) {
+          await this.sendMessage(
+            msg.chat.id,
+            '👥 <b>Участники группы</b>\n━━━━━━━━━━━━━━━━━━━━\n\n' +
+            '🤷‍♂️ Пока никого нет в базе. Участники добавятся автоматически при:\n' +
+            '• Добавлении бота в группу\n' +
+            '• Обработке сообщений через /check\n' +
+            '• Назначении задач на участников'
+          );
+          return;
+        }
+
+        // Получаем информацию о пользователях
+        const users = await Promise.all(
+          Array.from(userIds).map(id => userManager.getUserById(id))
+        );
+        const validUsers = users.filter((u): u is NonNullable<typeof u> => u !== null);
+
+        let message = '👥 <b>Участники группы</b>\n';
+        message += '━━━━━━━━━━━━━━━━━━━━\n\n';
+
+        if (validUsers.length === 0) {
+          message += '🤷‍♂️ Пока никого нет в базе.';
+        } else {
+          validUsers.forEach((user, index) => {
+            if (user) {
+              const displayName = user.firstName + (user.lastName ? ` ${user.lastName}` : '');
+              const username = user.username ? `@${user.username}` : `ID: ${user.id}`;
+              message += `${index + 1}. ${displayName} (${username})\n`;
+            }
+          });
+        }
+
+        message += '\n━━━━━━━━━━━━━━━━━━━━\n';
+        message += `📊 <i>Всего: ${validUsers.length}</i>`;
+
+        await this.sendMessage(msg.chat.id, message);
+      } catch (error) {
+        console.error('❌ [TELEGRAM] Error handling /users command:', error);
+        try {
+          await this.sendMessage(msg.chat.id, 'Произошла ошибка при получении списка участников');
+        } catch (sendError) {
+          console.error('❌ [TELEGRAM] Error sending error message:', sendError);
+        }
+      }
+    });
+
     // Обработчик команды /tasks
     // Регулярное выражение учитывает как /tasks, так и /tasks@bot_username
     this.bot.onText(/^\/tasks(@\w+)?$/, async (msg) => {
@@ -103,7 +230,7 @@ export class TelegramBotService {
 
       // Обрабатываем исходное сообщение
       try {
-        await this.handleMessage(originalMessage);
+        await this.handleMessage(originalMessage, true);
       } catch (error) {
         console.error('❌ [TELEGRAM] Error handling /check reply message:', error);
         try {
@@ -172,7 +299,7 @@ export class TelegramBotService {
       });
 
       try {
-        await this.handleMessage(msg);
+        await this.handleMessage(msg, true);
       } catch (error) {
         console.error('❌ [TELEGRAM] Error handling message:', error);
         try {
@@ -249,11 +376,35 @@ export class TelegramBotService {
     return 'unknown_system';
   }
 
-  private async handleMessage(msg: TelegramBot.Message) {
+  private async handleMessage(msg: TelegramBot.Message, showWelcomeMessage: boolean = true) {
     // Дополнительная проверка на наличие отправителя
     if (!msg.from) {
       console.warn('⚠️ [TELEGRAM] Message without sender in handleMessage');
       return;
+    }
+
+    // Проверяем, новый ли это пользователь (только в личных чатах или если showWelcomeMessage = true)
+    if (showWelcomeMessage && msg.chat.type === 'private') {
+      try {
+        const { isNewUser } = await userManager.getOrCreateUser(msg.from);
+        if (isNewUser) {
+          const welcomeMessage = `👋 Привет, ${msg.from.first_name || 'пользователь'}! Я бот для управления задачами.\n\n` +
+            `Я буду автоматически создавать задачи из твоих сообщений. Просто пиши мне, что нужно сделать!\n\n` +
+            `💡 <b>Примеры:</b>\n` +
+            `• "Купить молоко до завтра"\n` +
+            `• "Исправить баг в коде"\n` +
+            `• "Подготовить презентацию к пятнице"\n\n` +
+            `Используй /tasks для просмотра всех задач.`;
+          
+          try {
+            await this.sendMessage(msg.chat.id, welcomeMessage);
+          } catch (error) {
+            console.error('❌ [TELEGRAM] Error sending welcome message:', error);
+          }
+        }
+      } catch (error) {
+        console.error('❌ [TELEGRAM] Error checking new user:', error);
+      }
     }
 
     const messageType = this.getMessageType(msg);

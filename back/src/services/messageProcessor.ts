@@ -52,7 +52,7 @@ export class MessageProcessor {
       }
 
       // Получаем или создаем пользователя и чат
-      const user = await userManager.getOrCreateUser(msg.from);
+      const { user, isNewUser } = await userManager.getOrCreateUser(msg.from);
       
       let chat: Chat | undefined;
       if (!isPersonal) {
@@ -264,7 +264,7 @@ export class MessageProcessor {
       const isPersonal = msg.chat.type === 'private';
 
       // Получаем или создаем пользователя и чат
-      const user = await userManager.getOrCreateUser(msg.from);
+      const { user } = await userManager.getOrCreateUser(msg.from);
       
       let chat: Chat | undefined;
       if (!isPersonal) {

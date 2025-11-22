@@ -16,12 +16,15 @@ export class UserManager {
 
   /**
    * Получает или создает пользователя
+   * @returns объект с пользователем и флагом isNewUser
    */
-  async getOrCreateUser(from: TelegramBot.User): Promise<User> {
+  async getOrCreateUser(from: TelegramBot.User): Promise<{ user: User; isNewUser: boolean }> {
     try {
       let user = await this.userRepository.findOne({ where: { telegramId: from.id } });
+      let isNewUser = false;
 
       if (!user) {
+        isNewUser = true;
         user = this.userRepository.create({
           telegramId: from.id,
           username: from.username || `user_${from.id}`,
@@ -55,7 +58,7 @@ export class UserManager {
         }
       }
 
-      return user;
+      return { user, isNewUser };
 
     } catch (error) {
       console.error('❌ [USER_MANAGER] Error getting/creating user:', error);
