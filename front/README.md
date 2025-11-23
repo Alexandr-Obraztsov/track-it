@@ -67,6 +67,9 @@ src/
 # Установка зависимостей
 pnpm install
 
+# Создайте файл .env на основе .env.example
+cp .env.example .env
+
 # Запуск dev сервера
 pnpm dev
 
@@ -76,6 +79,34 @@ pnpm storybook
 # Сборка для production
 pnpm build
 ```
+
+## Конфигурация
+
+### Переменные окружения
+
+Создайте файл `.env` в корне проекта `front/`:
+
+```env
+# API Configuration
+VITE_API_URL=http://localhost:3001/api
+
+# Mock Mode
+# Set to 'true', '1', or 'yes' to use mock data instead of real API
+# Default: false (uses real API)
+VITE_USE_MOCKS=false
+```
+
+### Режим моков
+
+Для разработки можно использовать моки вместо реального API:
+
+- `VITE_USE_MOCKS=false` (по умолчанию) - использует реальный API
+- `VITE_USE_MOCKS=true` - использует моки из `src/mocks/data.ts`
+
+Это полезно для:
+- Разработки без запущенного бекенда
+- Тестирования UI без подключения к базе данных
+- Демонстрации функциональности
 
 ## Технологии
 

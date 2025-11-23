@@ -1,18 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import {
   Box,
-  Typography,
-  Stack,
   Fab,
-  IconButton,
   useTheme,
   useMediaQuery,
 } from '@mui/material';
 import {
   Add,
-  ExpandMore,
-  ExpandLess,
-  FilterList,
 } from '@mui/icons-material';
 import {
   DndContext,
@@ -23,14 +17,15 @@ import {
   TouchSensor,
   useSensor,
   useSensors,
-  useDraggable,
-  useDroppable,
   type DragEndEvent,
   type DragStartEvent,
 } from '@dnd-kit/core';
 import { TaskCard, type TaskCardProps } from '../../organisms/TaskCard';
 import { TaskForm } from '../../organisms/TaskForm';
 import { TaskDetailsDialog } from '../../organisms/TaskDetailsDialog';
+import { DraggableTaskCard } from '../../organisms/DraggableTaskCard';
+import { TaskBoardHeader } from '../../molecules/TaskBoardHeader';
+import { TaskBoardContent } from './TaskBoardContent';
 import type { Task, User } from '../../../types/api';
 import { authApi } from '../../../api/auth';
 
@@ -67,6 +62,14 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({
   const [showOnlyMyTasks, setShowOnlyMyTasks] = useState(false);
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [openTaskDetails, setOpenTaskDetails] = useState(false);
+  
+  // Локальное состояние задач для оптимистичного обновления
+  const [localTasks, setLocalTasks] = useState<Task[]>(tasks);
+  
+  // Синхронизируем локальное состояние с пропсами
+  useEffect(() => {
+    setLocalTasks(tasks);
+  }, [tasks]);
   
   // Состояние сворачивания колонок
   const getCollapsedStateKey = () => `taskBoard_collapsed_${chatId}`;
@@ -110,8 +113,8 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({
 
   // Фильтруем задачи по текущему пользователю
   const filteredTasks = showOnlyMyTasks && currentUser
-    ? tasks.filter((task) => task.assignedUser?.id === currentUser.id)
-    : tasks;
+    ? localTasks.filter((task) => task.assignedUser?.id === currentUser.id)
+    : localTasks;
 
   const backlogTasks = filteredTasks.filter((t) => t.status === 'backlog');
   const inProgressTasks = filteredTasks.filter((t) => t.status === 'in_progress');
@@ -122,19 +125,34 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({
     setOpenForm(true);
   };
 
-  const handleEditTask = (taskId: number) => {
-    const task = tasks.find((t) => t.id === taskId);
-    if (task) {
-      setEditingTask(task);
-      setOpenForm(true);
-    }
-  };
-
-  const handleSaveTask = (taskData: any) => {
+  const handleSaveTask = async (taskData: any) => {
     if (editingTask) {
-      onTaskEdit?.(editingTask.id, taskData);
+      // Оптимистичное обновление для редактирования
+      setLocalTasks((prev) =>
+        prev.map((t) =>
+          t.id === editingTask.id
+            ? {
+                ...t,
+                title: taskData.title,
+                description: taskData.description || null,
+                assignedUserId: taskData.assignedUserId || null,
+                deadline: taskData.deadline ? taskData.deadline.toISOString() : null,
+              }
+            : t
+        )
+      );
+      try {
+        await onTaskEdit?.(editingTask.id, taskData);
+      } catch (error) {
+        console.error('Failed to update task:', error);
+        // Откатываем изменения в случае ошибки
+        setLocalTasks((prev) =>
+          prev.map((t) => (t.id === editingTask.id ? editingTask : t))
+        );
+      }
     } else {
-      onTaskCreate?.({
+      // Для создания задачи просто вызываем callback
+      await onTaskCreate?.({
         title: taskData.title,
         description: taskData.description || null,
         assignedUserId: taskData.assignedUserId || null,
@@ -171,7 +189,7 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({
 
   const handleDragStart = (event: DragStartEvent) => {
     const { active } = event;
-    const task = tasks.find((t) => t.id === Number(active.id));
+    const task = localTasks.find((t) => t.id === Number(active.id));
     if (task) {
       setActiveTask(task);
     }
@@ -195,9 +213,21 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({
     const newStatus = overId as 'backlog' | 'in_progress' | 'completed';
 
     // Проверяем, что статус действительно изменился
-    const task = tasks.find((t) => t.id === taskId);
+    const task = localTasks.find((t) => t.id === taskId);
     if (task && task.status !== newStatus) {
-      onStatusChange(taskId, newStatus);
+      // Оптимистичное обновление: сразу обновляем локальное состояние
+      setLocalTasks((prev) =>
+        prev.map((t) => (t.id === taskId ? { ...t, status: newStatus } : t))
+      );
+      
+      // Асинхронно синхронизируем с сервером
+      Promise.resolve(onStatusChange(taskId, newStatus)).catch((error: any) => {
+        console.error('Failed to update task status:', error);
+        // В случае ошибки откатываем изменения
+        setLocalTasks((prev) =>
+          prev.map((t) => (t.id === taskId ? { ...t, status: task.status } : t))
+        );
+      });
     }
   };
 
@@ -220,284 +250,46 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({
     onDelete: onTaskDelete,
   });
 
-  // Компонент для перетаскиваемой карточки
-  const DraggableTaskCard = ({ task }: { task: Task }) => {
-    const {
-      attributes,
-      listeners,
-      setNodeRef,
-      transform,
-      isDragging,
-    } = useDraggable({
-      id: task.id.toString(),
-      data: {
-        type: 'task',
-        task,
-      },
-    });
-
-    const style = transform
-      ? {
-          transform: `translate3d(${transform.x}px, ${transform.y}px, 0)`,
-        }
-      : undefined;
-
-    const handleCardClick = (e: React.MouseEvent) => {
-      // Предотвращаем открытие попапа при клике на кнопки действий
-      const target = e.target as HTMLElement;
-      if (target.closest('[data-task-actions]')) {
-        return;
-      }
-      // Не открываем попап если это было перетаскивание
-      if (isDragging) {
-        return;
-      }
-      setSelectedTask(task);
-      setOpenTaskDetails(true);
-    };
-
-    return (
-      <Box
-        ref={setNodeRef}
-        style={style}
-        onClick={handleCardClick}
-        {...attributes}
-        {...listeners}
-        sx={{
-          opacity: isDragging ? 0 : 1,
-          visibility: isDragging ? 'hidden' : 'visible',
-          position: 'relative',
-          cursor: isDragging ? 'grabbing' : 'grab',
-          touchAction: isDragging ? 'none' : 'auto', // Отключаем стандартные жесты для лучшего контроля
-          userSelect: 'none',
-          WebkitUserSelect: 'none',
-          WebkitTouchCallout: 'none', // Отключаем контекстное меню на iOS
-        }}
-      >
-        <TaskCard {...convertTaskToCardProps(task)} />
-      </Box>
-    );
+  const handleEditTask = (taskId: number) => {
+    const task = localTasks.find((t) => t.id === taskId);
+    if (task) {
+      setEditingTask(task);
+      setOpenForm(true);
+    }
   };
 
-  // Компонент для колонки с drop-зоной
-  const Column = ({
-    title,
-    tasks: columnTasks,
-    color,
-    status,
-    isCollapsed,
-    onToggle,
-  }: {
-    title: string;
-    tasks: Task[];
-    color: string;
-    status: 'backlog' | 'in_progress' | 'completed';
-    isCollapsed: boolean;
-    onToggle: () => void;
-  }) => {
-    const { setNodeRef, isOver } = useDroppable({
-      id: status,
-    });
-
-    return (
-      <Box
-        sx={{
-          flex: 1,
-          minWidth: { xs: '100%', md: 0 },
-          display: 'flex',
-          flexDirection: 'column',
-        }}
-      >
-        <Box
-          onClick={onToggle}
-          sx={{
-            mb: 2,
-            pb: 1.5,
-            borderBottom: '1.5px solid',
-            borderColor: color,
-            display: 'flex',
-            alignItems: 'center',
-            gap: 1,
-            cursor: 'pointer',
-            userSelect: 'none',
-            WebkitUserSelect: 'none',
-            transition: 'opacity 0.2s ease',
-            '&:hover': {
-              opacity: 0.8,
-            },
-            '&:active': {
-              opacity: 0.6,
-            },
-          }}
-        >
-          <Box
-            sx={{
-              padding: 0.5,
-              color: color,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              '& .MuiSvgIcon-root': {
-                fontSize: '1rem',
-              },
-            }}
-          >
-            {isCollapsed ? <ExpandLess /> : <ExpandMore />}
-          </Box>
-          <Typography
-            variant="subtitle2"
-            sx={{
-              fontWeight: 600,
-              color: color,
-              fontSize: '0.875rem',
-              flex: 1,
-              pointerEvents: 'none',
-            }}
-          >
-            {title}
-          </Typography>
-          <Box
-            sx={{
-              px: 1,
-              py: 0.25,
-              borderRadius: 1.5,
-              backgroundColor: `${color}20`,
-              color: color,
-              fontSize: '0.75rem',
-              fontWeight: 600,
-              pointerEvents: 'none',
-            }}
-          >
-            {columnTasks.length}
-          </Box>
-        </Box>
-        {!isCollapsed && (
-          <Box
-            ref={setNodeRef}
-            sx={{
-              flex: 1,
-              minHeight: isOver ? 150 : 100,
-              borderRadius: 2,
-              p: isOver ? 1.5 : 1,
-              backgroundColor: isOver ? `${color}15` : 'rgba(255, 255, 255, 0.02)',
-              border: isOver ? `2px solid ${color}` : '2px dashed transparent',
-              transition: 'all 0.2s ease',
-            }}
-          >
-            <Stack
-              spacing={1.5}
-              sx={{
-                flex: 1,
-                overflowY: { xs: 'visible', md: 'auto' },
-                pr: { xs: 0, md: 0.5 },
-                minHeight: isOver && columnTasks.length === 0 ? 120 : 100,
-                // Скрываем скроллбар, но оставляем возможность прокрутки
-                scrollbarWidth: 'none', // Firefox
-                msOverflowStyle: 'none', // IE и Edge
-                '&::-webkit-scrollbar': {
-                  display: 'none', // Chrome, Safari, Opera
-                },
-              }}
-            >
-              {columnTasks.length === 0 ? (
-                <Box
-                  sx={{
-                    textAlign: 'center',
-                    py: 6,
-                    px: 3,
-                    borderRadius: 2,
-                    backgroundColor: 'rgba(255, 255, 255, 0.05)',
-                    border: '2px dashed',
-                    borderColor: 'rgba(255, 255, 255, 0.15)',
-                    minHeight: 80,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                  }}
-                >
-                  <Typography
-                    variant="body1"
-                    color="text.secondary"
-                    sx={{
-                      fontSize: '0.875rem',
-                    }}
-                  >
-                    Нет задач
-                  </Typography>
-                </Box>
-              ) : (
-                columnTasks.map((task) => (
-                  <DraggableTaskCard key={task.id} task={task} />
-                ))
-              )}
-            </Stack>
-          </Box>
-        )}
-      </Box>
-    );
+  const handleCardClick = (task: Task) => {
+    setSelectedTask(task);
+    setOpenTaskDetails(true);
   };
+
+  const renderTask = (task: Task) => (
+    <DraggableTaskCard
+      key={task.id}
+      task={task}
+      cardProps={convertTaskToCardProps(task)}
+      onCardClick={handleCardClick}
+    />
+  );
 
   return (
     <Box
       sx={{
         width: '100%',
-        minHeight: '100%',
+        height: '100%',
         display: 'flex',
         flexDirection: 'column',
         backgroundColor: 'background.default',
       }}
     >
-      {/* Title Section */}
-      <Box
-        sx={{
-          p: 2,
-          pb: 1.5,
-          borderBottom: '1px solid',
-          borderColor: 'rgba(255, 255, 255, 0.1)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-        }}
-      >
-        <Typography
-          variant="h6"
-          sx={{
-            fontWeight: 600,
-            fontSize: '1rem',
-            color: 'text.primary',
-          }}
-        >
-          {chatTitle}
-        </Typography>
-        <Box display="flex" alignItems="center" gap={1}>
-          <IconButton
-            size="small"
-            onClick={() => setShowOnlyMyTasks(!showOnlyMyTasks)}
-            sx={{
-              padding: 0.5,
-              color: showOnlyMyTasks ? 'primary.main' : 'text.secondary',
-              '&:hover': {
-                backgroundColor: 'rgba(255, 255, 255, 0.08)',
-              },
-              '& .MuiSvgIcon-root': {
-                fontSize: '1rem',
-              },
-            }}
-            title={showOnlyMyTasks ? 'Показать все задачи' : 'Показать только мои задачи'}
-          >
-            <FilterList />
-          </IconButton>
-          <Typography
-            variant="body2"
-            color="text.secondary"
-            sx={{ fontSize: '0.75rem' }}
-          >
-            {filteredTasks.length}
-          </Typography>
-        </Box>
-      </Box>
+      <TaskBoardHeader
+        chatTitle={chatTitle}
+        tasksCount={filteredTasks.length}
+        showOnlyMyTasks={showOnlyMyTasks}
+        onToggleFilter={() => setShowOnlyMyTasks(!showOnlyMyTasks)}
+        isMobile={isMobile}
+      />
 
-      {/* Board */}
       <DndContext
         sensors={sensors}
         collisionDetection={closestCenter}
@@ -505,79 +297,14 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({
         onDragEnd={handleDragEnd}
         modifiers={[]}
       >
-        <Box
-          sx={{
-            flex: 1,
-            overflow: { xs: 'auto', md: 'hidden' },
-            p: { xs: 2, sm: 2.5 },
-          }}
-        >
-          {isMobile ? (
-            // Mobile: Vertical stack
-            <Stack spacing={2}>
-              <Column
-                title="Очередь"
-                tasks={backlogTasks}
-                color="rgba(255, 255, 255, 0.5)"
-                status="backlog"
-                isCollapsed={collapsedColumns.backlog}
-                onToggle={() => toggleColumn('backlog')}
-              />
-              <Column
-                title="В работе"
-                tasks={inProgressTasks}
-                color={theme.palette.primary.main}
-                status="in_progress"
-                isCollapsed={collapsedColumns.in_progress}
-                onToggle={() => toggleColumn('in_progress')}
-              />
-              <Column
-                title="Выполнено"
-                tasks={completedTasks}
-                color={theme.palette.success.main}
-                status="completed"
-                isCollapsed={collapsedColumns.completed}
-                onToggle={() => toggleColumn('completed')}
-              />
-            </Stack>
-          ) : (
-            // Desktop: Horizontal columns
-            <Stack
-              direction="row"
-              spacing={2}
-              sx={{
-                width: '100%',
-                height: '100%',
-                alignItems: 'flex-start',
-              }}
-            >
-              <Column
-                title="Очередь"
-                tasks={backlogTasks}
-                color="rgba(255, 255, 255, 0.5)"
-                status="backlog"
-                isCollapsed={collapsedColumns.backlog}
-                onToggle={() => toggleColumn('backlog')}
-              />
-              <Column
-                title="В работе"
-                tasks={inProgressTasks}
-                color={theme.palette.primary.main}
-                status="in_progress"
-                isCollapsed={collapsedColumns.in_progress}
-                onToggle={() => toggleColumn('in_progress')}
-              />
-              <Column
-                title="Выполнено"
-                tasks={completedTasks}
-                color={theme.palette.success.main}
-                status="completed"
-                isCollapsed={collapsedColumns.completed}
-                onToggle={() => toggleColumn('completed')}
-              />
-            </Stack>
-          )}
-        </Box>
+        <TaskBoardContent
+          backlogTasks={backlogTasks}
+          inProgressTasks={inProgressTasks}
+          completedTasks={completedTasks}
+          collapsedColumns={collapsedColumns}
+          onToggleColumn={toggleColumn}
+          renderTask={renderTask}
+        />
         <DragOverlay
           style={{
             cursor: 'grabbing',
