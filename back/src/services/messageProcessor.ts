@@ -51,7 +51,7 @@ export class MessageProcessor {
 
       // Получаем или создаем пользователя и чат
       const { user, isNewUser } = await userManager.getOrCreateUser(msg.from);
-      const chat = await userManager.getOrCreateChat(msg.chat);
+      const chat = await userManager.getOrCreateChat(msg.chat, msg.message_id);
 
       // Получаем существующие задачи
       const existingTasks = await taskService.getChatTasks(chat.id);
@@ -93,26 +93,35 @@ export class MessageProcessor {
     bot: TelegramBot,
     msg: TelegramBot.Message
   ): Promise<ProcessedMessage | null> {
+    try {
+      if (msg.text) {
+        return {
+          text: msg.text,
+        };
+      }
+      
+      if (msg.voice) {
+        try {
+          const fileUrl = await bot.getFileLink(msg.voice.file_id);
+          const audioResult = await AudioUtils.processTelegramVoice(
+            fileUrl,
+            'voice.ogg'
+          );
+          return {
+            audioData: audioResult.data,
+            audioMimeType: audioResult.mimeType
+          };
+        } catch (error) {
+          console.error('❌ [MESSAGE_PROCESSOR] Error processing voice message:', error);
+          return null;
+        }
+      }
 
-    if (msg.text) {
-      return {
-        text: msg.text,
-      };
+      return null;
+    } catch (error) {
+      console.error('❌ [MESSAGE_PROCESSOR] Error extracting message content:', error);
+      return null;
     }
-    
-    if (msg.voice) {
-      const fileUrl = await bot.getFileLink(msg.voice.file_id);
-      const audioResult = await AudioUtils.processTelegramVoice(
-        fileUrl,
-        'voice.ogg'
-      );
-      return {
-        audioData: audioResult.data,
-        audioMimeType: audioResult.mimeType
-      };
-    }
-
-    return null;
   }
 
   /**
@@ -246,7 +255,7 @@ export class MessageProcessor {
 
       // Получаем или создаем пользователя и чат
       const { user } = await userManager.getOrCreateUser(msg.from);
-      const chat = await userManager.getOrCreateChat(msg.chat);
+      const chat = await userManager.getOrCreateChat(msg.chat, msg.message_id);
 
       // Получаем задачи
       const tasks = await taskService.getChatTasks(chat.id);

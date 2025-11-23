@@ -12,7 +12,11 @@ import {
   InputLabel,
   Select,
   Typography,
+  IconButton,
+  useTheme,
+  useMediaQuery,
 } from '@mui/material';
+import { Close } from '@mui/icons-material';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
@@ -45,6 +49,9 @@ export const TaskForm: React.FC<TaskFormProps> = ({
   initialData,
   assignedUsers = [],
 }) => {
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+
   const [formData, setFormData] = useState<TaskFormData>({
     title: initialData?.title || '',
     description: initialData?.description || '',
@@ -118,26 +125,59 @@ export const TaskForm: React.FC<TaskFormProps> = ({
         onClose={handleClose}
         maxWidth="sm"
         fullWidth
+        fullScreen={isMobile}
         PaperProps={{
           sx: {
-            borderRadius: 2,
+            borderRadius: isMobile ? 0 : 2,
             backgroundImage: 'none',
+            m: isMobile ? 0 : 2,
+            maxHeight: isMobile ? '100vh' : '90vh',
+            pt: isMobile ? 'env(safe-area-inset-top, 0px)' : 0,
           },
         }}
       >
         <DialogTitle
           sx={{
-            pb: 1.5,
+            pb: isMobile ? 1 : 1.5,
+            pt: isMobile ? 1 : 2,
+            px: isMobile ? 2 : 3,
             borderBottom: '1px solid',
             borderColor: 'divider',
             fontWeight: 600,
-            fontSize: '1rem',
+            fontSize: isMobile ? '1.125rem' : '1rem',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
           }}
         >
-          {initialData ? 'Редактировать задачу' : 'Создать задачу'}
+          <Typography
+            variant="h6"
+            component="div"
+            sx={{
+              flex: 1,
+              fontSize: isMobile ? '1.125rem' : '1rem',
+              lineHeight: 1.4,
+            }}
+          >
+            {initialData ? 'Редактировать задачу' : 'Создать задачу'}
+          </Typography>
+          {isMobile && (
+            <IconButton
+              onClick={handleClose}
+              size="small"
+              sx={{
+                color: 'text.secondary',
+                '&:hover': {
+                  backgroundColor: 'rgba(255, 255, 255, 0.08)',
+                },
+              }}
+            >
+              <Close />
+            </IconButton>
+          )}
         </DialogTitle>
-        <DialogContent sx={{ pt: 2 }}>
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+        <DialogContent sx={{ pt: 2, px: isMobile ? 2 : 3 }}>
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5, py: 2 }}>
             <TextField
               label="Название задачи"
               value={formData.title}
@@ -231,22 +271,45 @@ export const TaskForm: React.FC<TaskFormProps> = ({
         </DialogContent>
         <DialogActions
           sx={{
-            px: 2,
-            py: 1.5,
+            px: isMobile ? 2 : 2,
+            py: isMobile ? 2 : 1.5,
+            pt: isMobile ? 2 : 1.5,
+            pb: isMobile ? 3 : 1.5,
             borderTop: '1px solid',
             borderColor: 'divider',
-            gap: 1,
+            gap: isMobile ? 1.5 : 1,
+            flexDirection: isMobile ? 'column' : 'row',
+            '& > *': {
+              width: isMobile ? '100%' : 'auto',
+              m: isMobile ? '0 !important' : '0',
+            },
           }}
         >
-          <Button onClick={handleClose} variant="outlined" size="small" sx={{ borderRadius: 1.5, fontSize: '0.875rem' }}>
+          <Button
+            onClick={handleClose}
+            variant="outlined"
+            size={isMobile ? 'medium' : 'small'}
+            fullWidth={isMobile}
+            sx={{
+              borderRadius: 1.5,
+              fontSize: isMobile ? '1rem' : '0.875rem',
+              py: isMobile ? 1.25 : 0.5,
+            }}
+          >
             Отмена
           </Button>
           <Button
             onClick={handleSubmit}
             variant="contained"
             color="primary"
-            size="small"
-            sx={{ borderRadius: 1.5, px: 2, fontSize: '0.875rem' }}
+            size={isMobile ? 'medium' : 'small'}
+            fullWidth={isMobile}
+            sx={{
+              borderRadius: 1.5,
+              px: isMobile ? 2 : 2,
+              fontSize: isMobile ? '1rem' : '0.875rem',
+              py: isMobile ? 1.25 : 0.5,
+            }}
           >
             {initialData ? 'Сохранить' : 'Создать'}
           </Button>

@@ -44,7 +44,6 @@ export const TaskCard: React.FC<TaskCardProps> = ({
   return (
     <Card
       sx={{
-        mb: 1.5,
         opacity: status === 'completed' ? 0.75 : 1,
         transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
         position: 'relative',

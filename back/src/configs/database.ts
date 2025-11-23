@@ -25,10 +25,19 @@ export const AppDataSource = new DataSource({
 
 export const initializeDatabase = async () => {
   try {
-    await AppDataSource.initialize();
-    console.log('Database connection established successfully');
+    if (!AppDataSource.isInitialized) {
+      await AppDataSource.initialize();
+      console.log('✅ Database connection established successfully');
+      
+      // Синхронизируем схему, если не в production
+      if (process.env.NODE_ENV !== 'production') {
+        console.log('🔄 Synchronizing database schema...');
+        await AppDataSource.synchronize(false); // false = не удаляет существующие таблицы
+        console.log('✅ Database schema synchronized successfully');
+      }
+    }
   } catch (error) {
-    console.error('Error during database initialization:', error);
+    console.error('❌ Error during database initialization:', error);
     process.exit(1);
   }
 };

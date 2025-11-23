@@ -18,13 +18,23 @@ export class TaskService {
     const result : Task[] = [];
 
     try {
-      result.push(...await this.createNewTasks(params));
+      // Создаем новые задачи
+      const newTasks = await this.createNewTasks(params);
+      result.push(...newTasks);
 
-      result.push(...await this.updateExistingTasks(params.geminiResult.updatedTasks));
+      // Обновляем существующие задачи
+      const updatedTasks = await this.updateExistingTasks(params.geminiResult.updatedTasks);
+      result.push(...updatedTasks);
+
+      console.log('✅ [TASK_SERVICE] Tasks saved:', {
+        newTasks: newTasks.length,
+        updatedTasks: updatedTasks.length,
+        chatId: params.chat.id
+      });
 
       return result;
     } catch (error) {
-      console.error('❌ [TASK_MANAGER] Error saving tasks:', error);
+      console.error('❌ [TASK_SERVICE] Error saving tasks:', error);
       throw error;
     }
   }
@@ -33,23 +43,40 @@ export class TaskService {
     const result : Task[] = [];
 
     for (const taskData of params.geminiResult.newTasks) {
-      const task = this.taskRepository.create({
-        title: taskData.title,
-        description: taskData.description,
-        assignedUserId: taskData.assignedUserId,
-        assignedRoleId: taskData.assignedRoleId,
-        deadline: taskData.deadline ? new Date(taskData.deadline) : null,
-        chat: params.chat,
-      });
-      const savedTask = await this.taskRepository.save(task);
+      try {
+        const task = this.taskRepository.create({
+          title: taskData.title,
+          description: taskData.description || null,
+          assignedUserId: taskData.assignedUserId || null,
+          assignedRoleId: taskData.assignedRoleId || null,
+          deadline: taskData.deadline ? new Date(taskData.deadline) : null,
+          status: 'backlog', // Все новые задачи создаются со статусом backlog
+          chat: params.chat,
+        });
+        const savedTask = await this.taskRepository.save(task);
 
-      const chatTask = this.chatTaskRepository.create({
-        chatId: params.chat.id,
-        taskId: savedTask.id
-      });
-      await this.chatTaskRepository.save(chatTask);
+        // Создаем связь через ChatTask
+        const chatTask = this.chatTaskRepository.create({
+          chatId: params.chat.id,
+          taskId: savedTask.id
+        });
+        await this.chatTaskRepository.save(chatTask);
 
-      result.push(savedTask);
+        // Загружаем задачу с relations для возврата
+        const taskWithRelations = await this.taskRepository.findOne({
+          where: { id: savedTask.id },
+          relations: ['assignedUser', 'assignedRole', 'chat']
+        });
+
+        if (taskWithRelations) {
+          result.push(taskWithRelations);
+        } else {
+          result.push(savedTask);
+        }
+      } catch (error) {
+        console.error('❌ [TASK_SERVICE] Error creating task:', error, taskData);
+        // Продолжаем обработку остальных задач
+      }
     }
 
     return result;
@@ -66,33 +93,52 @@ export class TaskService {
     for (const updateData of updatedTasks) {
       try {
         const existingTask = await this.taskRepository.findOne({
-          where: { id: updateData.id }
+          where: { id: updateData.id },
+          relations: ['assignedUser', 'assignedRole', 'chat']
         });
 
         if (!existingTask) {
-          console.warn('⚠️ [TASK_MANAGER] Task not found for update:', updateData.id);
+          console.warn('⚠️ [TASK_SERVICE] Task not found for update:', updateData.id);
           continue;
         }
 
         // Обновляем только переданные поля
-        const updateFields: Partial<Task> = {
-          ...updateData,
-          deadline: updateData.deadline ? new Date(updateData.deadline) : undefined
-        };
+        if (updateData.title !== undefined) {
+          existingTask.title = updateData.title;
+        }
+        if (updateData.description !== undefined) {
+          existingTask.description = updateData.description || null;
+        }
+        if (updateData.assignedUserId !== undefined) {
+          existingTask.assignedUserId = updateData.assignedUserId || null;
+        }
+        if (updateData.assignedRoleId !== undefined) {
+          existingTask.assignedRoleId = updateData.assignedRoleId || null;
+        }
+        if (updateData.deadline !== undefined) {
+          existingTask.deadline = updateData.deadline ? new Date(updateData.deadline) : null;
+        }
+        if (updateData.status !== undefined) {
+          existingTask.status = updateData.status;
+        }
 
-        await this.taskRepository.update(updateData.id, updateFields);
+        const updatedTask = await this.taskRepository.save(existingTask);
 
-        // Получаем обновленную задачу
-        const updatedTask = await this.taskRepository.findOne({
-          where: { id: updateData.id }
+        // Загружаем с relations
+        const taskWithRelations = await this.taskRepository.findOne({
+          where: { id: updatedTask.id },
+          relations: ['assignedUser', 'assignedRole', 'chat']
         });
 
-        if (updatedTask) {
+        if (taskWithRelations) {
+          result.push(taskWithRelations);
+        } else {
           result.push(updatedTask);
         }
 
       } catch (error) {
-        console.error('❌ [TASK_MANAGER] Error updating task:', error, updateData);
+        console.error('❌ [TASK_SERVICE] Error updating task:', error, updateData);
+        // Продолжаем обработку остальных задач
       }
     }
 

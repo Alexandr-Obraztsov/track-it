@@ -114,12 +114,10 @@ export const TaskDetailsDialog: React.FC<TaskDetailsDialogProps> = ({
       </DialogTitle>
       <DialogContent
         sx={{
-          pt: isMobile ? 2 : 2,
           px: isMobile ? 2 : 3,
-          pb: isMobile ? 2 : 2,
         }}
       >
-        <Stack spacing={isMobile ? 2.5 : 2}>
+        <Stack spacing={isMobile ? 2.5 : 2} py={1}>
           {/* Статус */}
           <Box>
             <Typography

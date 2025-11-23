@@ -118,7 +118,6 @@ export const TaskColumn: React.FC<TaskColumnProps> = ({
           ref={setNodeRef}
           sx={{
             flex: 1,
-            minHeight: isOver ? 150 : 100,
             borderRadius: 2,
             p: isOver ? 1.5 : 1,
             backgroundColor: isOver ? `${color}15` : 'rgba(255, 255, 255, 0.02)',
@@ -135,7 +134,6 @@ export const TaskColumn: React.FC<TaskColumnProps> = ({
               flex: 1,
               overflowY: { xs: 'visible', md: 'auto' },
               pr: { xs: 0, md: 0.5 },
-              minHeight: isOver && columnTasks.length === 0 ? 120 : 100,
               scrollbarWidth: 'none',
               msOverflowStyle: 'none',
               '&::-webkit-scrollbar': {
@@ -154,7 +152,6 @@ export const TaskColumn: React.FC<TaskColumnProps> = ({
                     backgroundColor: 'rgba(255, 255, 255, 0.05)',
                     border: '2px dashed',
                     borderColor: 'rgba(255, 255, 255, 0.15)',
-                    minHeight: 80,
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
@@ -181,7 +178,6 @@ export const TaskColumn: React.FC<TaskColumnProps> = ({
                       backgroundColor: 'rgba(255, 255, 255, 0.05)',
                       border: '2px dashed',
                       borderColor: 'rgba(255, 255, 255, 0.15)',
-                      minHeight: 80,
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',

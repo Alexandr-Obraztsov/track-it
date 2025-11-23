@@ -27,33 +27,42 @@ export class UserManager {
         isNewUser = true;
         user = this.userRepository.create({
           telegramId: from.id,
-          username: from.username || `user_${from.id}`,
+          username: from.username || null,
           firstName: from.first_name || 'Unknown',
-          lastName: from.last_name || undefined
+          lastName: from.last_name || null,
+          photoUrl: null // photoUrl из Telegram User недоступен напрямую, только через WebApp
         });
 
         user = await this.userRepository.save(user);
         console.log('✅ [USER_MANAGER] New user created:', {
           id: user.id,
+          telegramId: user.telegramId,
           username: user.username,
           firstName: user.firstName
         });
       } else {
         // Обновляем информацию о пользователе, если она изменилась
+        const newUsername = from.username || null;
+        const newFirstName = from.first_name || 'Unknown';
+        const newLastName = from.last_name || null;
+
         const needsUpdate = 
-          user.username !== (from.username || `user_${from.id}`) ||
-          user.firstName !== (from.first_name || 'Unknown') ||
-          user.lastName !== (from.last_name || undefined);
+          user.username !== newUsername ||
+          user.firstName !== newFirstName ||
+          user.lastName !== newLastName;
 
         if (needsUpdate) {
-          user.username = from.username || `user_${from.id}`;
-          user.firstName = from.first_name || 'Unknown';
-          user.lastName = from.last_name || undefined;
+          user.username = newUsername;
+          user.firstName = newFirstName;
+          user.lastName = newLastName;
+          // photoUrl обновляется только через WebApp auth, не через Telegram Bot API
           
           user = await this.userRepository.save(user);
           console.log('✅ [USER_MANAGER] User updated:', {
             id: user.id,
-            username: user.username
+            telegramId: user.telegramId,
+            username: user.username,
+            firstName: user.firstName
           });
         }
       }
@@ -69,30 +78,38 @@ export class UserManager {
   /**
    * Получает или создает чат
    */
-  async getOrCreateChat(chat: TelegramBot.Chat): Promise<Chat> {
+  async getOrCreateChat(chat: TelegramBot.Chat, messageId?: number): Promise<Chat> {
     try {
       let dbChat = await this.chatRepository.findOne({ where: { id: chat.id } });
 
       if (!dbChat) {
         dbChat = this.chatRepository.create({
           id: chat.id,
-          title: chat.title || `Chat ${chat.id}`,
-          messageId: 0 // Пока не используем
+          title: chat.title || chat.first_name || `Chat ${chat.id}`,
+          messageId: messageId || 0
         });
 
         dbChat = await this.chatRepository.save(dbChat);
         console.log('✅ [USER_MANAGER] New chat created:', {
           id: dbChat.id,
-          title: dbChat.title
+          title: dbChat.title,
+          messageId: dbChat.messageId
         });
       } else {
-        // Обновляем название чата, если оно изменилось
-        if (dbChat.title !== (chat.title || `Chat ${chat.id}`)) {
-          dbChat.title = chat.title || `Chat ${chat.id}`;
+        // Обновляем название чата и messageId, если они изменились
+        const newTitle = chat.title || chat.first_name || `Chat ${chat.id}`;
+        const needsUpdate = dbChat.title !== newTitle || (messageId && dbChat.messageId !== messageId);
+
+        if (needsUpdate) {
+          dbChat.title = newTitle;
+          if (messageId) {
+            dbChat.messageId = messageId;
+          }
           dbChat = await this.chatRepository.save(dbChat);
-          console.log('✅ [USER_MANAGER] Chat title updated:', {
+          console.log('✅ [USER_MANAGER] Chat updated:', {
             id: dbChat.id,
-            title: dbChat.title
+            title: dbChat.title,
+            messageId: dbChat.messageId
           });
         }
       }

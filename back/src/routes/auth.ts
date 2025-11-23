@@ -117,13 +117,33 @@ router.post('/telegram', async (req, res) => {
         photoUrl: userData.photo_url || null,
       });
       await userRepository.save(user);
+      console.log('✅ [AUTH] New user created from WebApp:', {
+        id: user.id,
+        telegramId: user.telegramId,
+        username: user.username,
+        hasPhotoUrl: !!user.photoUrl
+      });
     } else {
-      // Обновляем данные пользователя
-      user.firstName = userData.first_name || user.firstName;
-      user.lastName = userData.last_name || user.lastName;
-      user.username = userData.username || user.username;
-      user.photoUrl = userData.photo_url || user.photoUrl;
-      await userRepository.save(user);
+      // Обновляем данные пользователя (обновляем даже если null)
+      const needsUpdate = 
+        user.firstName !== (userData.first_name || '') ||
+        user.lastName !== (userData.last_name || null) ||
+        user.username !== (userData.username || null) ||
+        user.photoUrl !== (userData.photo_url || null);
+
+      if (needsUpdate) {
+        user.firstName = userData.first_name || user.firstName;
+        user.lastName = userData.last_name !== undefined ? userData.last_name : user.lastName;
+        user.username = userData.username !== undefined ? userData.username : user.username;
+        user.photoUrl = userData.photo_url !== undefined ? userData.photo_url : user.photoUrl;
+        await userRepository.save(user);
+        console.log('✅ [AUTH] User updated from WebApp:', {
+          id: user.id,
+          telegramId: user.telegramId,
+          username: user.username,
+          hasPhotoUrl: !!user.photoUrl
+        });
+      }
     }
     
     // Создаем JWT токен
