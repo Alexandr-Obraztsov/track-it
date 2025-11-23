@@ -10,7 +10,16 @@ router.get('/', authenticateToken, async (req, res) => {
   try {
     const chatRepository = AppDataSource.getRepository(Chat);
     const chats = await chatRepository.find({
-      relations: ['userChatRoles', 'chatRoles', 'tasks']
+      relations: [
+        'userChatRoles',
+        'userChatRoles.user',
+        'userChatRoles.role',
+        'chatRoles',
+        'chatRoles.role',
+        'tasks',
+        'tasks.assignedUser',
+        'tasks.assignedRole'
+      ]
     });
     res.json(chats);
   } catch (error) {
@@ -23,10 +32,25 @@ router.get('/', authenticateToken, async (req, res) => {
 router.get('/:id', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
+    const chatId = parseInt(id);
+    
+    if (isNaN(chatId)) {
+      return res.status(400).json({ error: 'Invalid chat ID' });
+    }
+
     const chatRepository = AppDataSource.getRepository(Chat);
     const chat = await chatRepository.findOne({
-      where: { id: parseInt(id) },
-      relations: ['userChatRoles', 'chatRoles', 'tasks']
+      where: { id: chatId },
+      relations: [
+        'userChatRoles',
+        'userChatRoles.user',
+        'userChatRoles.role',
+        'chatRoles',
+        'chatRoles.role',
+        'tasks',
+        'tasks.assignedUser',
+        'tasks.assignedRole'
+      ]
     });
 
     if (!chat) {
@@ -43,22 +67,43 @@ router.get('/:id', authenticateToken, async (req, res) => {
 // POST /api/chats - создать новый чат
 router.post('/', authenticateToken, async (req, res) => {
   try {
-    const { title, messageId } = req.body;
+    const { title, messageId, id } = req.body;
     
-    if (!title || messageId === undefined) {
-      return res.status(400).json({ error: 'Title and messageId are required' });
+    if (!title || typeof title !== 'string' || title.trim().length === 0) {
+      return res.status(400).json({ error: 'Title is required and must be a non-empty string' });
+    }
+
+    if (messageId === undefined && id === undefined) {
+      return res.status(400).json({ error: 'messageId or id is required' });
+    }
+
+    const chatId = id ? parseInt(id) : undefined;
+    const messageIdNum = messageId !== undefined ? parseInt(messageId) : undefined;
+
+    if (chatId && isNaN(chatId)) {
+      return res.status(400).json({ error: 'Invalid chat id' });
+    }
+
+    if (messageIdNum !== undefined && isNaN(messageIdNum)) {
+      return res.status(400).json({ error: 'Invalid messageId' });
     }
 
     const chatRepository = AppDataSource.getRepository(Chat);
+    
+    // Если передан id, используем его как primary key
     const chat = chatRepository.create({
-      title,
-      messageId: parseInt(messageId)
+      ...(chatId && { id: chatId }),
+      title: title.trim(),
+      messageId: messageIdNum || 0
     });
 
     const savedChat = await chatRepository.save(chat);
     res.status(201).json(savedChat);
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error creating chat:', error);
+    if (error.code === '23505') { // Unique violation
+      return res.status(409).json({ error: 'Chat with this ID already exists' });
+    }
     res.status(500).json({ error: 'Failed to create chat' });
   }
 });
@@ -67,19 +112,37 @@ router.post('/', authenticateToken, async (req, res) => {
 router.put('/:id', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
+    const chatId = parseInt(id);
+    
+    if (isNaN(chatId)) {
+      return res.status(400).json({ error: 'Invalid chat ID' });
+    }
+
     const { title, messageId } = req.body;
     
     const chatRepository = AppDataSource.getRepository(Chat);
     const chat = await chatRepository.findOne({
-      where: { id: parseInt(id) }
+      where: { id: chatId }
     });
 
     if (!chat) {
       return res.status(404).json({ error: 'Chat not found' });
     }
 
-    chat.title = title || chat.title;
-    chat.messageId = messageId !== undefined ? parseInt(messageId) : chat.messageId;
+    if (title !== undefined) {
+      if (typeof title !== 'string' || title.trim().length === 0) {
+        return res.status(400).json({ error: 'Title must be a non-empty string' });
+      }
+      chat.title = title.trim();
+    }
+
+    if (messageId !== undefined) {
+      const messageIdNum = parseInt(messageId);
+      if (isNaN(messageIdNum)) {
+        return res.status(400).json({ error: 'Invalid messageId' });
+      }
+      chat.messageId = messageIdNum;
+    }
 
     const updatedChat = await chatRepository.save(chat);
     res.json(updatedChat);
@@ -93,8 +156,14 @@ router.put('/:id', authenticateToken, async (req, res) => {
 router.delete('/:id', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
+    const chatId = parseInt(id);
+    
+    if (isNaN(chatId)) {
+      return res.status(400).json({ error: 'Invalid chat ID' });
+    }
+
     const chatRepository = AppDataSource.getRepository(Chat);
-    const result = await chatRepository.delete(parseInt(id));
+    const result = await chatRepository.delete(chatId);
 
     if (result.affected === 0) {
       return res.status(404).json({ error: 'Chat not found' });

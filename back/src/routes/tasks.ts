@@ -3,6 +3,8 @@ import { AppDataSource } from '../configs/database';
 import { Task } from '../entities/Task';
 import { Chat } from '../entities/Chat';
 import { ChatTask } from '../entities/ChatTask';
+import { User } from '../entities/User';
+import { Role } from '../entities/Role';
 import { taskManager } from '../services/task-service/task-service';
 import { authenticateToken } from '../middleware/auth';
 
@@ -22,16 +24,22 @@ router.get('/chat/:chatId', authenticateToken, async (req, res) => {
 router.get('/:id', authenticateToken, async (req, res) => {
   try {
     const taskId = parseInt(req.params.id);
-    if (isNaN(taskId)) return res.status(400).json({ error: 'Invalid ID' });
+    if (isNaN(taskId)) {
+      return res.status(400).json({ error: 'Invalid task ID' });
+    }
     
     const task = await AppDataSource.getRepository(Task).findOne({
       where: { id: taskId },
-      relations: ['assignedUser', 'assignedRole']
+      relations: ['assignedUser', 'assignedRole', 'chat']
     });
     
-    if (!task) return res.status(404).json({ error: 'Task not found' });
+    if (!task) {
+      return res.status(404).json({ error: 'Task not found' });
+    }
+    
     res.json(task);
   } catch (error) {
+    console.error('Error fetching task:', error);
     res.status(500).json({ error: 'Failed to fetch task' });
   }
 });
@@ -41,25 +49,75 @@ router.post('/', authenticateToken, async (req, res) => {
   try {
     const { title, description, assignedUserId, assignedRoleId, deadline, status, chatId } = req.body;
     
-    if (!title || !chatId) {
-      return res.status(400).json({ error: 'Title and chatId are required' });
+    // Валидация обязательных полей
+    if (!title || typeof title !== 'string' || title.trim().length === 0) {
+      return res.status(400).json({ error: 'Title is required and must be a non-empty string' });
+    }
+    
+    if (!chatId) {
+      return res.status(400).json({ error: 'chatId is required' });
+    }
+
+    const chatIdNum = parseInt(chatId);
+    if (isNaN(chatIdNum)) {
+      return res.status(400).json({ error: 'Invalid chatId' });
+    }
+    
+    // Валидация статуса
+    const validStatuses = ['backlog', 'in_progress', 'completed'];
+    if (status && !validStatuses.includes(status)) {
+      return res.status(400).json({ error: `Invalid status. Must be one of: ${validStatuses.join(', ')}` });
     }
     
     const chatRepository = AppDataSource.getRepository(Chat);
-    const chat = await chatRepository.findOne({ where: { id: parseInt(chatId) } });
+    const chat = await chatRepository.findOne({ where: { id: chatIdNum } });
     
     if (!chat) {
       return res.status(404).json({ error: 'Chat not found' });
     }
     
+    // Валидация assignedUserId и assignedRoleId
+    if (assignedUserId !== undefined && assignedUserId !== null) {
+      const userId = parseInt(assignedUserId);
+      if (isNaN(userId)) {
+        return res.status(400).json({ error: 'Invalid assignedUserId' });
+      }
+      const userRepository = AppDataSource.getRepository(User);
+      const user = await userRepository.findOne({ where: { id: userId } });
+      if (!user) {
+        return res.status(404).json({ error: 'Assigned user not found' });
+      }
+    }
+
+    if (assignedRoleId !== undefined && assignedRoleId !== null) {
+      const roleId = parseInt(assignedRoleId);
+      if (isNaN(roleId)) {
+        return res.status(400).json({ error: 'Invalid assignedRoleId' });
+      }
+      const roleRepository = AppDataSource.getRepository(Role);
+      const role = await roleRepository.findOne({ where: { id: roleId } });
+      if (!role) {
+        return res.status(404).json({ error: 'Assigned role not found' });
+      }
+    }
+    
+    // Валидация deadline
+    let deadlineDate: Date | null = null;
+    if (deadline) {
+      deadlineDate = new Date(deadline);
+      if (isNaN(deadlineDate.getTime())) {
+        return res.status(400).json({ error: 'Invalid deadline format' });
+      }
+    }
+    
     const taskRepository = AppDataSource.getRepository(Task);
     const task = taskRepository.create({
-      title,
-      description: description || null,
-      assignedUserId: assignedUserId || null,
-      assignedRoleId: assignedRoleId || null,
-      deadline: deadline ? new Date(deadline) : null,
-      status: status || 'backlog',
+      title: title.trim(),
+      description: description && typeof description === 'string' ? description.trim() : null,
+      assignedUserId: assignedUserId ? parseInt(assignedUserId) : null,
+      assignedRoleId: assignedRoleId ? parseInt(assignedRoleId) : null,
+      deadline: deadlineDate,
+      status: (status as 'backlog' | 'in_progress' | 'completed') || 'backlog',
       chat,
     });
     
@@ -76,12 +134,15 @@ router.post('/', authenticateToken, async (req, res) => {
     // Загружаем задачу с отношениями
     const taskWithRelations = await taskRepository.findOne({
       where: { id: savedTask.id },
-      relations: ['assignedUser', 'assignedRole'],
+      relations: ['assignedUser', 'assignedRole', 'chat'],
     });
     
     res.status(201).json(taskWithRelations);
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error creating task:', error);
+    if (error.code === '23505') { // Unique violation
+      return res.status(409).json({ error: 'Task with this ID already exists' });
+    }
     res.status(500).json({ error: 'Failed to create task' });
   }
 });
@@ -90,29 +151,91 @@ router.post('/', authenticateToken, async (req, res) => {
 router.put('/:id', authenticateToken, async (req, res) => {
   try {
     const taskId = parseInt(req.params.id);
-    if (isNaN(taskId)) return res.status(400).json({ error: 'Invalid ID' });
+    if (isNaN(taskId)) {
+      return res.status(400).json({ error: 'Invalid task ID' });
+    }
     
     const { title, description, assignedUserId, assignedRoleId, deadline, status } = req.body;
     
     const taskRepo = AppDataSource.getRepository(Task);
     const task = await taskRepo.findOne({
       where: { id: taskId },
-      relations: ['assignedUser', 'assignedRole'],
+      relations: ['assignedUser', 'assignedRole', 'chat'],
     });
     
-    if (!task) return res.status(404).json({ error: 'Task not found' });
+    if (!task) {
+      return res.status(404).json({ error: 'Task not found' });
+    }
     
-    if (title !== undefined) task.title = title;
-    if (description !== undefined) task.description = description;
-    if (assignedUserId !== undefined) task.assignedUserId = assignedUserId;
-    if (assignedRoleId !== undefined) task.assignedRoleId = assignedRoleId;
-    if (deadline !== undefined) task.deadline = deadline ? new Date(deadline) : null;
+    // Валидация и обновление title
+    if (title !== undefined) {
+      if (typeof title !== 'string' || title.trim().length === 0) {
+        return res.status(400).json({ error: 'Title must be a non-empty string' });
+      }
+      task.title = title.trim();
+    }
+    
+    // Валидация и обновление description
+    if (description !== undefined) {
+      task.description = description && typeof description === 'string' ? description.trim() : null;
+    }
+    
+    // Валидация и обновление assignedUserId
+    if (assignedUserId !== undefined) {
+      if (assignedUserId === null) {
+        task.assignedUserId = null;
+      } else {
+        const userId = parseInt(assignedUserId);
+        if (isNaN(userId)) {
+          return res.status(400).json({ error: 'Invalid assignedUserId' });
+        }
+        const userRepository = AppDataSource.getRepository(User);
+        const user = await userRepository.findOne({ where: { id: userId } });
+        if (!user) {
+          return res.status(404).json({ error: 'Assigned user not found' });
+        }
+        task.assignedUserId = userId;
+      }
+    }
+    
+    // Валидация и обновление assignedRoleId
+    if (assignedRoleId !== undefined) {
+      if (assignedRoleId === null) {
+        task.assignedRoleId = null;
+      } else {
+        const roleId = parseInt(assignedRoleId);
+        if (isNaN(roleId)) {
+          return res.status(400).json({ error: 'Invalid assignedRoleId' });
+        }
+        const roleRepository = AppDataSource.getRepository(Role);
+        const role = await roleRepository.findOne({ where: { id: roleId } });
+        if (!role) {
+          return res.status(404).json({ error: 'Assigned role not found' });
+        }
+        task.assignedRoleId = roleId;
+      }
+    }
+    
+    // Валидация и обновление deadline
+    if (deadline !== undefined) {
+      if (deadline === null) {
+        task.deadline = null;
+      } else {
+        const deadlineDate = new Date(deadline);
+        if (isNaN(deadlineDate.getTime())) {
+          return res.status(400).json({ error: 'Invalid deadline format' });
+        }
+        task.deadline = deadlineDate;
+      }
+    }
+    
+    // Валидация и обновление status
     if (status !== undefined) {
       const validStatuses = ['backlog', 'in_progress', 'completed'];
       if (!validStatuses.includes(status)) {
-        return res.status(400).json({ error: 'Invalid status' });
+        return res.status(400).json({ error: `Invalid status. Must be one of: ${validStatuses.join(', ')}` });
       }
-      task.status = status;
+      task.status = status as 'backlog' | 'in_progress' | 'completed';
     }
     
     const updatedTask = await taskRepo.save(task);
@@ -120,7 +243,7 @@ router.put('/:id', authenticateToken, async (req, res) => {
     // Загружаем с отношениями
     const taskWithRelations = await taskRepo.findOne({
       where: { id: updatedTask.id },
-      relations: ['assignedUser', 'assignedRole'],
+      relations: ['assignedUser', 'assignedRole', 'chat'],
     });
     
     res.json(taskWithRelations);
@@ -134,26 +257,39 @@ router.put('/:id', authenticateToken, async (req, res) => {
 router.patch('/:id/status', authenticateToken, async (req, res) => {
   try {
     const taskId = parseInt(req.params.id);
-    if (isNaN(taskId)) return res.status(400).json({ error: 'Invalid ID' });
+    if (isNaN(taskId)) {
+      return res.status(400).json({ error: 'Invalid task ID' });
+    }
     
     const { status } = req.body;
+    
+    if (!status) {
+      return res.status(400).json({ error: 'Status is required' });
+    }
+    
     const validStatuses = ['backlog', 'in_progress', 'completed'];
     if (!validStatuses.includes(status)) {
-      return res.status(400).json({ error: 'Invalid status' });
+      return res.status(400).json({ error: `Invalid status. Must be one of: ${validStatuses.join(', ')}` });
     }
     
     const taskRepo = AppDataSource.getRepository(Task);
-    const result = await taskRepo.update(taskId, { status });
+    const task = await taskRepo.findOne({ where: { id: taskId } });
     
-    if (result.affected === 0) return res.status(404).json({ error: 'Task not found' });
+    if (!task) {
+      return res.status(404).json({ error: 'Task not found' });
+    }
+    
+    task.status = status as 'backlog' | 'in_progress' | 'completed';
+    await taskRepo.save(task);
     
     const updatedTask = await taskRepo.findOne({
       where: { id: taskId },
-      relations: ['assignedUser', 'assignedRole']
+      relations: ['assignedUser', 'assignedRole', 'chat']
     });
     
     res.json(updatedTask);
   } catch (error) {
+    console.error('Error updating task status:', error);
     res.status(500).json({ error: 'Failed to update status' });
   }
 });
@@ -162,13 +298,27 @@ router.patch('/:id/status', authenticateToken, async (req, res) => {
 router.delete('/:id', authenticateToken, async (req, res) => {
   try {
     const taskId = parseInt(req.params.id);
-    if (isNaN(taskId)) return res.status(400).json({ error: 'Invalid ID' });
+    if (isNaN(taskId)) {
+      return res.status(400).json({ error: 'Invalid task ID' });
+    }
     
-    const result = await AppDataSource.getRepository(Task).delete(taskId);
-    if (result.affected === 0) return res.status(404).json({ error: 'Task not found' });
+    const taskRepo = AppDataSource.getRepository(Task);
+    const task = await taskRepo.findOne({ where: { id: taskId } });
+    
+    if (!task) {
+      return res.status(404).json({ error: 'Task not found' });
+    }
+    
+    // Удаляем связь ChatTask, если она существует
+    const chatTaskRepo = AppDataSource.getRepository(ChatTask);
+    await chatTaskRepo.delete({ taskId: taskId });
+    
+    // Удаляем саму задачу
+    await taskRepo.delete(taskId);
     
     res.status(204).send();
   } catch (error) {
+    console.error('Error deleting task:', error);
     res.status(500).json({ error: 'Failed to delete task' });
   }
 });

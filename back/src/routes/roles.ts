@@ -1,15 +1,16 @@
 import { Router } from 'express';
 import { AppDataSource } from '../configs/database';
 import { Role } from '../entities/Role';
+import { authenticateToken } from '../middleware/auth';
 
 const router = Router();
 
 // GET /api/roles - получить все роли
-router.get('/', async (req, res) => {
+router.get('/', authenticateToken, async (req, res) => {
   try {
     const roleRepository = AppDataSource.getRepository(Role);
     const roles = await roleRepository.find({
-      relations: ['users', 'chats']
+      relations: ['userChatRoles', 'chatRoles', 'assignedTasks']
     });
     res.json(roles);
   } catch (error) {
@@ -19,13 +20,19 @@ router.get('/', async (req, res) => {
 });
 
 // GET /api/roles/:id - получить роль по ID
-router.get('/:id', async (req, res) => {
+router.get('/:id', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
+    const roleId = parseInt(id);
+    
+    if (isNaN(roleId)) {
+      return res.status(400).json({ error: 'Invalid role ID' });
+    }
+
     const roleRepository = AppDataSource.getRepository(Role);
     const role = await roleRepository.findOne({
-      where: { id: parseInt(id) },
-      relations: ['users', 'chats']
+      where: { id: roleId },
+      relations: ['userChatRoles', 'chatRoles', 'assignedTasks']
     });
 
     if (!role) {
@@ -40,17 +47,17 @@ router.get('/:id', async (req, res) => {
 });
 
 // POST /api/roles - создать новую роль
-router.post('/', async (req, res) => {
+router.post('/', authenticateToken, async (req, res) => {
   try {
     const { title } = req.body;
     
-    if (!title) {
-      return res.status(400).json({ error: 'Title is required' });
+    if (!title || typeof title !== 'string' || title.trim().length === 0) {
+      return res.status(400).json({ error: 'Title is required and must be a non-empty string' });
     }
 
     const roleRepository = AppDataSource.getRepository(Role);
     const role = roleRepository.create({
-      title
+      title: title.trim()
     });
 
     const savedRole = await roleRepository.save(role);
@@ -62,21 +69,33 @@ router.post('/', async (req, res) => {
 });
 
 // PUT /api/roles/:id - обновить роль
-router.put('/:id', async (req, res) => {
+router.put('/:id', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
+    const roleId = parseInt(id);
+    
+    if (isNaN(roleId)) {
+      return res.status(400).json({ error: 'Invalid role ID' });
+    }
+
     const { title } = req.body;
+    
+    if (title !== undefined && (typeof title !== 'string' || title.trim().length === 0)) {
+      return res.status(400).json({ error: 'Title must be a non-empty string' });
+    }
     
     const roleRepository = AppDataSource.getRepository(Role);
     const role = await roleRepository.findOne({
-      where: { id: parseInt(id) }
+      where: { id: roleId }
     });
 
     if (!role) {
       return res.status(404).json({ error: 'Role not found' });
     }
 
-    role.title = title || role.title;
+    if (title !== undefined) {
+      role.title = title.trim();
+    }
 
     const updatedRole = await roleRepository.save(role);
     res.json(updatedRole);
@@ -87,11 +106,17 @@ router.put('/:id', async (req, res) => {
 });
 
 // DELETE /api/roles/:id - удалить роль
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
+    const roleId = parseInt(id);
+    
+    if (isNaN(roleId)) {
+      return res.status(400).json({ error: 'Invalid role ID' });
+    }
+
     const roleRepository = AppDataSource.getRepository(Role);
-    const result = await roleRepository.delete(parseInt(id));
+    const result = await roleRepository.delete(roleId);
 
     if (result.affected === 0) {
       return res.status(404).json({ error: 'Role not found' });
