@@ -2,7 +2,9 @@ import { useState, useEffect } from 'react';
 import { Profile } from '../components/templates/Profile';
 import type { User, NotificationSettings } from '../types/api';
 import { authApi } from '../api/auth';
+import { notificationsApi } from '../api/notifications';
 import { mockNotificationSettings } from '../mocks/data';
+import { isMockMode } from '../utils/mockMode';
 
 export const ProfilePage = () => {
   const [user, setUser] = useState<User | null>(null);
@@ -22,6 +24,20 @@ export const ProfilePage = () => {
           photoUrl: profile.photoUrl,
           createdAt: new Date().toISOString(),
         });
+
+        // Загружаем настройки уведомлений
+        if (isMockMode()) {
+          setNotificationSettings(mockNotificationSettings);
+        } else {
+          try {
+            const settings = await notificationsApi.get();
+            setNotificationSettings(settings);
+          } catch (error) {
+            console.error('Failed to load notification settings:', error);
+            // Используем дефолтные настройки при ошибке
+            setNotificationSettings(mockNotificationSettings);
+          }
+        }
       } catch (error) {
         console.error('Failed to load profile:', error);
       } finally {
@@ -33,8 +49,19 @@ export const ProfilePage = () => {
   }, []);
 
   const handleSaveNotifications = async (settings: NotificationSettings) => {
-    // TODO: Сохранить настройки уведомлений на бекенде
-    setNotificationSettings(settings);
+    try {
+      if (isMockMode()) {
+        // В режиме моков просто обновляем локальное состояние
+        setNotificationSettings(settings);
+      } else {
+        // Сохраняем на бекенде
+        const updatedSettings = await notificationsApi.update(settings);
+        setNotificationSettings(updatedSettings);
+      }
+    } catch (error) {
+      console.error('Failed to save notification settings:', error);
+      // Не пробрасываем ошибку, чтобы не блокировать UI
+    }
   };
 
   if (!user) {

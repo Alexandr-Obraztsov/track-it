@@ -77,30 +77,6 @@ export const TaskBoardPage = () => {
     }
   };
 
-  const handleTaskCreate = async (task: Omit<Task, 'id' | 'createdAt'>) => {
-    if (isMockMode()) {
-      // Моки: создаем локально
-      const newTask: Task = {
-        ...task,
-        id: Date.now(),
-        createdAt: new Date().toISOString(),
-      };
-      setTasks((prev) => [...prev, newTask]);
-    } else {
-      // Реальный API: создаем на бекенде
-      try {
-        const newTask = await tasksApi.create({
-          ...task,
-          chatId: Number(chatId),
-        });
-        setTasks((prev) => [...prev, newTask]);
-      } catch (error) {
-        console.error('Failed to create task:', error);
-        throw error;
-      }
-    }
-  };
-
   const handleTaskEdit = async (taskId: number, task: Partial<Task>) => {
     if (isMockMode()) {
       // Моки: обновляем локально
@@ -144,7 +120,6 @@ export const TaskBoardPage = () => {
       tasks={tasks}
       assignedUsers={assignedUsers}
       onStatusChange={handleStatusChange}
-      onTaskCreate={handleTaskCreate}
       onTaskEdit={handleTaskEdit}
       onTaskDelete={handleTaskDelete}
       loading={loading}

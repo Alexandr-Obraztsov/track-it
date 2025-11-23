@@ -10,6 +10,7 @@ import { roleRoutes } from './routes/roles';
 import { taskRoutes } from './routes/tasks';
 import { geminiRoutes } from './routes/gemini';
 import authRoutes from './routes/auth';
+import { notificationRoutes } from './routes/notifications';
 import { TelegramBotService } from './bot/telegramBot';
 
 // Загружаем переменные окружения
@@ -52,6 +53,7 @@ app.use('/api/chats', chatRoutes);
 app.use('/api/roles', roleRoutes);
 app.use('/api/tasks', taskRoutes);
 app.use('/api/gemini', geminiRoutes);
+app.use('/api/notifications', notificationRoutes);
 
 // Health check endpoint
 app.get('/health', (req, res) => {

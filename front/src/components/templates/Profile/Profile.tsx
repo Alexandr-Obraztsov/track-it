@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Box,
   Typography,
@@ -6,23 +6,21 @@ import {
   CardContent,
   Avatar,
   Stack,
-  Divider,
-  Switch,
-  FormControlLabel,
-  Button,
   Select,
   MenuItem,
   FormControl,
   InputLabel,
+  Button,
+  IconButton,
   useTheme,
   useMediaQuery,
 } from '@mui/material';
 import {
   Notifications,
-  Save,
   Schedule,
   Assignment,
-  Warning,
+  Add,
+  Delete,
 } from '@mui/icons-material';
 import type { User, NotificationSettings } from '../../../types/api';
 
@@ -43,551 +41,420 @@ export const Profile: React.FC<ProfileProps> = ({
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   
   const [notificationSettings, setNotificationSettings] = useState<NotificationSettings>(initialSettings);
+  const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const isInitialMount = useRef(true);
+  const lastSettingsRef = useRef<string>('');
 
-  const handleNotificationChange = (key: keyof NotificationSettings) => {
+  // Синхронизируем локальное состояние с пропсами при их изменении
+  useEffect(() => {
+    const currentSettingsStr = JSON.stringify(initialSettings);
+    if (lastSettingsRef.current !== currentSettingsStr) {
+      lastSettingsRef.current = currentSettingsStr;
+      if (!isInitialMount.current) {
+        setNotificationSettings(initialSettings);
+      } else {
+        isInitialMount.current = false;
+      }
+    }
+  }, [initialSettings]);
+
+  // Автосохранение с debounce
+  useEffect(() => {
+    if (isInitialMount.current) {
+      return;
+    }
+
+    // Очищаем предыдущий таймаут
+    if (saveTimeoutRef.current) {
+      clearTimeout(saveTimeoutRef.current);
+    }
+
+    // Устанавливаем новый таймаут для сохранения
+    saveTimeoutRef.current = setTimeout(() => {
+      onSaveNotifications?.(notificationSettings);
+    }, 500); // Сохраняем через 500ms после последнего изменения
+
+    // Очистка при размонтировании
+    return () => {
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current);
+      }
+    };
+  }, [notificationSettings, onSaveNotifications]);
+
+  const handleTimeChange = (value: string) => {
     setNotificationSettings((prev) => ({
       ...prev,
-      [key]: !prev[key],
+      dailyDigestTime: value,
     }));
   };
 
-  const handleNumberChange = (key: keyof NotificationSettings) => (
-    event: { target: { value: string } }
-  ) => {
+  const handleAddReminder = () => {
     setNotificationSettings((prev) => ({
       ...prev,
-      [key]: Number(event.target.value),
+      deadlineReminderHours: [...prev.deadlineReminderHours, 24],
     }));
   };
 
-  const handleSelectChange = (key: keyof NotificationSettings) => (
-    event: { target: { value: string } }
-  ) => {
+  const handleRemoveReminder = (index: number) => {
     setNotificationSettings((prev) => ({
       ...prev,
-      [key]: event.target.value,
+      deadlineReminderHours: prev.deadlineReminderHours.filter((_, i) => i !== index),
     }));
   };
 
-  const handleSaveNotifications = () => {
-    onSaveNotifications?.(notificationSettings);
+  const handleReminderChange = (index: number, value: number) => {
+    setNotificationSettings((prev) => ({
+      ...prev,
+      deadlineReminderHours: prev.deadlineReminderHours.map((hours, i) => 
+        i === index ? value : hours
+      ),
+    }));
   };
+
+  // Генерируем опции для времени (каждый час от 00:00 до 23:00)
+  const timeOptions = Array.from({ length: 24 }, (_, i) => {
+    const hour = i.toString().padStart(2, '0');
+    return `${hour}:00`;
+  });
 
   return (
     <Box
       sx={{
-        p: 1.5,
+        p: { xs: 2, sm: 2.5 },
         maxWidth: 800,
         mx: 'auto',
         width: '100%',
       }}
     >
-      <Typography
-        variant="h6"
-        component="h1"
-        sx={{
-          mb: 1.5,
-          fontWeight: 600,
-          fontSize: '1rem',
-        }}
-      >
-        Личный кабинет
-      </Typography>
-
-      <Stack spacing={1.5}>
+      <Stack spacing={2}>
         {/* Profile Section */}
         <Card
           sx={{
-            borderRadius: 1.5,
+            borderRadius: 2,
             backgroundImage: 'none',
+            border: '1px solid',
+            borderColor: 'rgba(255, 255, 255, 0.1)',
+            background: 'linear-gradient(135deg, rgba(25, 118, 210, 0.1) 0%, rgba(25, 118, 210, 0.05) 100%)',
+            position: 'relative',
+            overflow: 'hidden',
+            '&::before': {
+              content: '""',
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              right: 0,
+              height: 3,
+              background: 'linear-gradient(90deg, rgba(25, 118, 210, 0.8) 0%, rgba(156, 39, 176, 0.8) 100%)',
+            },
           }}
         >
-          <CardContent sx={{ p: 1.5, '&:last-child': { pb: 1.5 } }}>
+          <CardContent sx={{ p: { xs: 2, sm: 2.5 }, '&:last-child': { pb: { xs: 2, sm: 2.5 } } }}>
             <Box
               display="flex"
               alignItems="center"
-              gap={1.5}
-              mb={1.5}
+              gap={2}
               flexDirection={isMobile ? 'column' : 'row'}
               textAlign={isMobile ? 'center' : 'left'}
             >
               <Avatar
                 src={user.photoUrl || undefined}
                 sx={{
-                  width: 48,
-                  height: 48,
+                  width: { xs: 64, sm: 72 },
+                  height: { xs: 64, sm: 72 },
                   bgcolor: 'primary.main',
-                  fontSize: '1.125rem',
+                  fontSize: { xs: '1.5rem', sm: '1.75rem' },
+                  fontWeight: 600,
+                  border: '3px solid',
+                  borderColor: 'rgba(255, 255, 255, 0.2)',
+                  boxShadow: '0 4px 12px rgba(0, 0, 0, 0.3)',
                 }}
               >
                 {user.firstName.charAt(0).toUpperCase()}
                 {user.lastName?.charAt(0).toUpperCase() || ''}
               </Avatar>
-              <Box>
+              <Box flex={1}>
                 <Typography
-                  variant="subtitle2"
-                  sx={{ fontWeight: 600, fontSize: '0.875rem' }}
+                  variant="h6"
+                  sx={{
+                    fontWeight: 600,
+                    fontSize: { xs: '1rem', sm: '1.125rem' },
+                    mb: 0.5,
+                  }}
                 >
                   {user.firstName} {user.lastName || ''}
                 </Typography>
                 <Typography
                   variant="body2"
                   color="text.secondary"
-                  sx={{ fontSize: '0.75rem' }}
+                  sx={{
+                    fontSize: { xs: '0.8rem', sm: '0.875rem' },
+                    mb: 0.5,
+                  }}
                 >
                   @{user.username || 'без username'}
                 </Typography>
-                <Typography
-                  variant="caption"
-                  color="text.secondary"
-                  sx={{ fontSize: '0.65rem' }}
+                <Box
+                  sx={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 0.5,
+                    px: 1,
+                    py: 0.25,
+                    borderRadius: 1,
+                    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+                    border: '1px solid',
+                    borderColor: 'rgba(255, 255, 255, 0.1)',
+                  }}
                 >
-                  ID: {user.telegramId || 'не указан'}
-                </Typography>
+                  <Typography
+                    variant="caption"
+                    color="text.secondary"
+                    sx={{
+                      fontSize: '0.7rem',
+                    }}
+                  >
+                    Telegram ID: {user.telegramId || 'не указан'}
+                  </Typography>
+                </Box>
               </Box>
             </Box>
-
           </CardContent>
         </Card>
 
         {/* Notifications Section */}
         <Card
           sx={{
-            borderRadius: 1.5,
+            borderRadius: 2,
             backgroundImage: 'none',
+            border: '1px solid',
+            borderColor: 'rgba(255, 255, 255, 0.1)',
           }}
         >
-          <CardContent sx={{ p: 1.5, '&:last-child': { pb: 1.5 } }}>
+          <CardContent sx={{ p: { xs: 2, sm: 2.5 }, '&:last-child': { pb: { xs: 2, sm: 2.5 } } }}>
             <Box
               display="flex"
               alignItems="center"
-              gap={1}
-              mb={1.5}
+              gap={1.5}
+              mb={2}
+              sx={{
+                pb: 1.5,
+                borderBottom: '1px solid',
+                borderColor: 'rgba(255, 255, 255, 0.1)',
+              }}
             >
-              <Notifications color="primary" sx={{ fontSize: '1.125rem' }} />
+              <Box
+                sx={{
+                  p: 1,
+                  borderRadius: 1.5,
+                  backgroundColor: 'rgba(25, 118, 210, 0.15)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <Notifications color="primary" sx={{ fontSize: '1.25rem' }} />
+              </Box>
               <Typography
-                variant="subtitle2"
-                sx={{ fontWeight: 600, fontSize: '0.875rem' }}
+                variant="h6"
+                sx={{
+                  fontWeight: 600,
+                  fontSize: { xs: '0.9375rem', sm: '1rem' },
+                }}
               >
                 Настройки уведомлений
               </Typography>
             </Box>
 
-            <Divider sx={{ mb: 1.5 }} />
-
-            <Stack spacing={2}>
-              {/* Основные уведомления */}
+            <Stack spacing={3}>
+              {/* Ежедневный список задач */}
               <Box>
-                <Typography
-                  variant="body2"
+                <Box
+                  display="flex"
+                  alignItems="center"
+                  gap={1}
+                  mb={1.5}
                   sx={{
-                    fontWeight: 600,
-                    fontSize: '0.75rem',
-                    mb: 1,
-                    color: 'text.secondary',
-                    textTransform: 'uppercase',
-                    letterSpacing: '0.5px',
+                    p: 1,
+                    borderRadius: 1,
+                    backgroundColor: 'rgba(25, 118, 210, 0.08)',
                   }}
                 >
-                  Основные уведомления
-                </Typography>
-                <Stack spacing={1}>
-                  {[
-                    {
-                      key: 'taskAssigned' as const,
-                      title: 'Назначение задач',
-                      description: 'Уведомления при назначении задач на вас',
-                    },
-                    {
-                      key: 'newTaskNotification' as const,
-                      title: 'Новые задачи',
-                      description: 'Уведомления о новых задачах в ваших группах',
-                    },
-                    {
-                      key: 'statusChangeNotification' as const,
-                      title: 'Изменение статуса',
-                      description: 'Уведомления об изменении статуса задач',
-                    },
-                    {
-                      key: 'taskUpdateNotification' as const,
-                      title: 'Обновление задач',
-                      description: 'Уведомления об обновлении задач',
-                    },
-                    {
-                      key: 'taskComment' as const,
-                      title: 'Комментарии',
-                      description: 'Уведомления о новых комментариях к вашим задачам',
-                    },
-                    {
-                      key: 'taskCompleted' as const,
-                      title: 'Завершение задач',
-                      description: 'Уведомления при завершении задач в ваших группах',
-                    },
-                  ].map((item) => (
-                    <FormControlLabel
-                      key={item.key}
-                      control={
-                        <Switch
-                          checked={notificationSettings[item.key] as boolean}
-                          onChange={() => handleNotificationChange(item.key)}
-                          color="primary"
-                          size="small"
-                        />
-                      }
-                      label={
-                        <Box sx={{ ml: 1 }}>
-                          <Typography
-                            variant="body2"
-                            sx={{
-                              fontWeight: 500,
-                              fontSize: '0.8rem',
-                            }}
-                          >
-                            {item.title}
-                          </Typography>
-                          <Typography
-                            variant="caption"
-                            color="text.secondary"
-                            sx={{
-                              fontSize: '0.7rem',
-                              display: 'block',
-                              mt: 0.25,
-                            }}
-                          >
-                            {item.description}
-                          </Typography>
-                        </Box>
-                      }
-                      sx={{
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: 'flex-start',
-                        m: 0,
-                        width: '100%',
-                        flexDirection: 'row-reverse',
-                      }}
-                    />
-                  ))}
-                </Stack>
-              </Box>
-
-              <Divider />
-
-              {/* Настройки дедлайнов */}
-              <Box>
-                <Box display="flex" alignItems="center" gap={0.75} mb={1}>
-                  <Schedule sx={{ fontSize: '1rem', color: 'primary.main' }} />
+                  <Assignment sx={{ fontSize: '1.125rem', color: 'primary.main' }} />
                   <Typography
                     variant="body2"
                     sx={{
                       fontWeight: 600,
-                      fontSize: '0.75rem',
-                      color: 'text.secondary',
-                      textTransform: 'uppercase',
-                      letterSpacing: '0.5px',
+                      fontSize: '0.875rem',
                     }}
                   >
-                    Дедлайны
+                    Ежедневный список задач
                   </Typography>
                 </Box>
-                <Stack spacing={1.5}>
-                  <FormControlLabel
-                    control={
-                      <Switch
-                        checked={notificationSettings.taskDeadline}
-                        onChange={() => handleNotificationChange('taskDeadline')}
-                        color="primary"
-                        size="small"
-                      />
-                    }
-                    label={
-                      <Box sx={{ ml: 1 }}>
-                        <Typography
-                          variant="body2"
-                          sx={{
-                            fontWeight: 500,
-                            fontSize: '0.8rem',
-                          }}
-                        >
-                          Уведомления о дедлайнах
-                        </Typography>
-                        <Typography
-                          variant="caption"
-                          color="text.secondary"
-                          sx={{
-                            fontSize: '0.7rem',
-                            display: 'block',
-                            mt: 0.25,
-                          }}
-                        >
-                          Получать уведомления о приближающихся дедлайнах
-                        </Typography>
-                      </Box>
-                    }
+                <Typography
+                  variant="caption"
+                  color="text.secondary"
+                  sx={{
+                    fontSize: '0.75rem',
+                    mb: 1.5,
+                    display: 'block',
+                  }}
+                >
+                  Выберите время, когда вы будете получать ежедневный список всех задач, назначенных на вас
+                </Typography>
+                <FormControl fullWidth size="small">
+                  <InputLabel sx={{ fontSize: '0.875rem' }}>
+                    Время получения
+                  </InputLabel>
+                  <Select
+                    value={notificationSettings.dailyDigestTime}
+                    onChange={(e) => handleTimeChange(e.target.value)}
+                    label="Время получения"
                     sx={{
-                      display: 'flex',
-                      justifyContent: 'space-between',
-                      alignItems: 'flex-start',
-                      m: 0,
-                      width: '100%',
-                      flexDirection: 'row-reverse',
+                      fontSize: '0.875rem',
+                      borderRadius: 1.5,
                     }}
-                  />
-                  
-                  {notificationSettings.taskDeadline && (
-                    <FormControl fullWidth size="small">
-                      <InputLabel sx={{ fontSize: '0.8rem' }}>
-                        Напоминать за
-                      </InputLabel>
-                      <Select
-                        value={notificationSettings.deadlineReminderHours}
-                        onChange={handleNumberChange('deadlineReminderHours')}
-                        label="Напоминать за"
+                  >
+                    {timeOptions.map((time) => (
+                      <MenuItem key={time} value={time}>
+                        {time}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+              </Box>
+
+              {/* Напоминания о дедлайнах */}
+              <Box>
+                <Box
+                  display="flex"
+                  alignItems="center"
+                  justifyContent="space-between"
+                  mb={1.5}
+                >
+                  <Box
+                    display="flex"
+                    alignItems="center"
+                    gap={1}
+                    sx={{
+                      p: 1,
+                      borderRadius: 1,
+                      backgroundColor: 'rgba(25, 118, 210, 0.08)',
+                    }}
+                  >
+                    <Schedule sx={{ fontSize: '1.125rem', color: 'primary.main' }} />
+                    <Typography
+                      variant="body2"
+                      sx={{
+                        fontWeight: 600,
+                        fontSize: '0.875rem',
+                      }}
+                    >
+                      Напоминания о дедлайнах
+                    </Typography>
+                  </Box>
+                  <Button
+                    startIcon={<Add />}
+                    onClick={handleAddReminder}
+                    size="small"
+                    variant="outlined"
+                    sx={{
+                      fontSize: '0.75rem',
+                      py: 0.5,
+                      px: 1,
+                      minWidth: 'auto',
+                    }}
+                  >
+                    Добавить
+                  </Button>
+                </Box>
+                <Typography
+                  variant="caption"
+                  color="text.secondary"
+                  sx={{
+                    fontSize: '0.75rem',
+                    mb: 1.5,
+                    display: 'block',
+                  }}
+                >
+                  Выберите, за сколько часов до дедлайна вы хотите получать уведомления. Можно добавить несколько напоминаний.
+                </Typography>
+                <Stack spacing={1.5}>
+                  {notificationSettings.deadlineReminderHours.length === 0 ? (
+                    <Box
+                      sx={{
+                        textAlign: 'center',
+                        py: 2,
+                        px: 2,
+                        borderRadius: 1.5,
+                        backgroundColor: 'rgba(255, 255, 255, 0.05)',
+                        border: '1px dashed',
+                        borderColor: 'rgba(255, 255, 255, 0.15)',
+                      }}
+                    >
+                      <Typography
+                        variant="caption"
+                        color="text.secondary"
+                        sx={{ fontSize: '0.75rem' }}
+                      >
+                        Нет напоминаний. Нажмите "Добавить", чтобы создать напоминание.
+                      </Typography>
+                    </Box>
+                  ) : (
+                    notificationSettings.deadlineReminderHours.map((hours, index) => (
+                      <Box
+                        key={index}
+                        display="flex"
+                        alignItems="center"
+                        gap={1}
                         sx={{
-                          fontSize: '0.8rem',
+                          p: 1.5,
                           borderRadius: 1.5,
+                          backgroundColor: 'rgba(255, 255, 255, 0.05)',
+                          border: '1px solid',
+                          borderColor: 'rgba(255, 255, 255, 0.1)',
                         }}
                       >
-                        <MenuItem value={1}>1 час</MenuItem>
-                        <MenuItem value={3}>3 часа</MenuItem>
-                        <MenuItem value={6}>6 часов</MenuItem>
-                        <MenuItem value={12}>12 часов</MenuItem>
-                        <MenuItem value={24}>1 день</MenuItem>
-                        <MenuItem value={48}>2 дня</MenuItem>
-                        <MenuItem value={72}>3 дня</MenuItem>
-                        <MenuItem value={168}>1 неделя</MenuItem>
-                      </Select>
-                    </FormControl>
-                  )}
-                </Stack>
-              </Box>
-
-              <Divider />
-
-              {/* Просроченные задачи */}
-              <Box>
-                <Box display="flex" alignItems="center" gap={0.75} mb={1}>
-                  <Warning sx={{ fontSize: '1rem', color: 'warning.main' }} />
-                  <Typography
-                    variant="body2"
-                    sx={{
-                      fontWeight: 600,
-                      fontSize: '0.75rem',
-                      color: 'text.secondary',
-                      textTransform: 'uppercase',
-                      letterSpacing: '0.5px',
-                    }}
-                  >
-                    Просроченные задачи
-                  </Typography>
-                </Box>
-                <Stack spacing={1.5}>
-                  <FormControlLabel
-                    control={
-                      <Switch
-                        checked={notificationSettings.overdueTasksReminder}
-                        onChange={() => handleNotificationChange('overdueTasksReminder')}
-                        color="primary"
-                        size="small"
-                      />
-                    }
-                    label={
-                      <Box sx={{ ml: 1 }}>
-                        <Typography
-                          variant="body2"
-                          sx={{
-                            fontWeight: 500,
-                            fontSize: '0.8rem',
-                          }}
-                        >
-                          Напоминания о просроченных задачах
-                        </Typography>
-                        <Typography
-                          variant="caption"
-                          color="text.secondary"
-                          sx={{
-                            fontSize: '0.7rem',
-                            display: 'block',
-                            mt: 0.25,
-                          }}
-                        >
-                          Получать напоминания о задачах с просроченным дедлайном
-                        </Typography>
-                      </Box>
-                    }
-                    sx={{
-                      display: 'flex',
-                      justifyContent: 'space-between',
-                      alignItems: 'flex-start',
-                      m: 0,
-                      width: '100%',
-                      flexDirection: 'row-reverse',
-                    }}
-                  />
-
-                  {notificationSettings.overdueTasksReminder && (
-                    <>
-                      <FormControlLabel
-                        control={
-                          <Switch
-                            checked={notificationSettings.overdueTasksList}
-                            onChange={() => handleNotificationChange('overdueTasksList')}
-                            color="primary"
-                            size="small"
-                          />
-                        }
-                        label={
-                          <Box sx={{ ml: 1 }}>
-                            <Typography
-                              variant="body2"
-                              sx={{
-                                fontWeight: 500,
-                                fontSize: '0.8rem',
-                              }}
-                            >
-                              Список просроченных задач
-                            </Typography>
-                            <Typography
-                              variant="caption"
-                              color="text.secondary"
-                              sx={{
-                                fontSize: '0.7rem',
-                                display: 'block',
-                                mt: 0.25,
-                              }}
-                            >
-                              Включать список просроченных задач в уведомления
-                            </Typography>
-                          </Box>
-                        }
-                        sx={{
-                          display: 'flex',
-                          justifyContent: 'space-between',
-                          alignItems: 'flex-start',
-                          m: 0,
-                          width: '100%',
-                          flexDirection: 'row-reverse',
-                        }}
-                      />
-
-                      <FormControl fullWidth size="small">
-                        <InputLabel sx={{ fontSize: '0.8rem' }}>
-                          Частота напоминаний
-                        </InputLabel>
-                        <Select
-                          value={notificationSettings.overdueReminderFrequency}
-                          onChange={handleSelectChange('overdueReminderFrequency')}
-                          label="Частота напоминаний"
-                          sx={{
-                            fontSize: '0.8rem',
-                            borderRadius: 1.5,
-                          }}
-                        >
-                          <MenuItem value="daily">Ежедневно</MenuItem>
-                          <MenuItem value="weekly">Еженедельно</MenuItem>
-                          <MenuItem value="never">Никогда</MenuItem>
-                        </Select>
-                      </FormControl>
-                    </>
-                  )}
-                </Stack>
-              </Box>
-
-              <Divider />
-
-              {/* Отчеты */}
-              <Box>
-                <Box display="flex" alignItems="center" gap={0.75} mb={1}>
-                  <Assignment sx={{ fontSize: '1rem', color: 'primary.main' }} />
-                  <Typography
-                    variant="body2"
-                    sx={{
-                      fontWeight: 600,
-                      fontSize: '0.75rem',
-                      color: 'text.secondary',
-                      textTransform: 'uppercase',
-                      letterSpacing: '0.5px',
-                    }}
-                  >
-                    Отчеты
-                  </Typography>
-                </Box>
-                <Stack spacing={1}>
-                  {[
-                    {
-                      key: 'dailyDigest' as const,
-                      title: 'Ежедневная сводка',
-                      description: 'Ежедневный отчет о задачах в ваших группах',
-                    },
-                    {
-                      key: 'weeklyReport' as const,
-                      title: 'Еженедельный отчет',
-                      description: 'Еженедельный отчет о прогрессе в группах',
-                    },
-                  ].map((item) => (
-                    <FormControlLabel
-                      key={item.key}
-                      control={
-                        <Switch
-                          checked={notificationSettings[item.key] as boolean}
-                          onChange={() => handleNotificationChange(item.key)}
-                          color="primary"
+                        <FormControl size="small" sx={{ flex: 1 }}>
+                          <InputLabel sx={{ fontSize: '0.875rem' }}>
+                            За сколько часов
+                          </InputLabel>
+                          <Select
+                            value={hours}
+                            onChange={(e) => handleReminderChange(index, Number(e.target.value))}
+                            label="За сколько часов"
+                            sx={{
+                              fontSize: '0.875rem',
+                              borderRadius: 1.5,
+                            }}
+                          >
+                            <MenuItem value={1}>1 час</MenuItem>
+                            <MenuItem value={3}>3 часа</MenuItem>
+                            <MenuItem value={6}>6 часов</MenuItem>
+                            <MenuItem value={12}>12 часов</MenuItem>
+                            <MenuItem value={24}>1 день</MenuItem>
+                            <MenuItem value={48}>2 дня</MenuItem>
+                            <MenuItem value={72}>3 дня</MenuItem>
+                            <MenuItem value={168}>1 неделя</MenuItem>
+                          </Select>
+                        </FormControl>
+                        <IconButton
+                          onClick={() => handleRemoveReminder(index)}
                           size="small"
-                        />
-                      }
-                      label={
-                        <Box sx={{ ml: 1 }}>
-                          <Typography
-                            variant="body2"
-                            sx={{
-                              fontWeight: 500,
-                              fontSize: '0.8rem',
-                            }}
-                          >
-                            {item.title}
-                          </Typography>
-                          <Typography
-                            variant="caption"
-                            color="text.secondary"
-                            sx={{
-                              fontSize: '0.7rem',
-                              display: 'block',
-                              mt: 0.25,
-                            }}
-                          >
-                            {item.description}
-                          </Typography>
-                        </Box>
-                      }
-                      sx={{
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: 'flex-start',
-                        m: 0,
-                        width: '100%',
-                        flexDirection: 'row-reverse',
-                      }}
-                    />
-                  ))}
+                          sx={{
+                            color: 'error.main',
+                            '&:hover': {
+                              backgroundColor: 'rgba(211, 47, 47, 0.1)',
+                            },
+                          }}
+                        >
+                          <Delete fontSize="small" />
+                        </IconButton>
+                      </Box>
+                    ))
+                  )}
                 </Stack>
               </Box>
-
-              <Button
-                variant="contained"
-                startIcon={<Save />}
-                onClick={handleSaveNotifications}
-                disabled={loading}
-                fullWidth={isMobile}
-                size="small"
-                sx={{
-                  borderRadius: 1.5,
-                  mt: 1,
-                  py: 0.75,
-                  fontSize: '0.875rem',
-                }}
-              >
-                Сохранить настройки
-              </Button>
             </Stack>
           </CardContent>
         </Card>

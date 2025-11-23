@@ -196,18 +196,7 @@ export const mockChats: Chat[] = [
 export const mockCurrentUser: User = mockUsers[0];
 
 export const mockNotificationSettings: NotificationSettings = {
-  taskAssigned: true,
-  taskCompleted: false,
-  taskDeadline: true,
-  taskComment: true,
-  dailyDigest: false,
-  weeklyReport: true,
-  deadlineReminderHours: 24,
-  overdueTasksReminder: true,
-  overdueTasksList: true,
-  overdueReminderFrequency: 'daily',
-  newTaskNotification: true,
-  statusChangeNotification: true,
-  taskUpdateNotification: true,
+  dailyDigestTime: '09:00',
+  deadlineReminderHours: [168, 72, 24], // 1 неделя, 3 дня, 1 день
 };
 

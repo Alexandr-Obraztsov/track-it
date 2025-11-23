@@ -1,13 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import {
   Box,
-  Fab,
   useTheme,
   useMediaQuery,
 } from '@mui/material';
-import {
-  Add,
-} from '@mui/icons-material';
 import {
   DndContext,
   DragOverlay,
@@ -35,7 +31,6 @@ export interface TaskBoardProps {
   tasks: Task[];
   assignedUsers?: User[];
   onStatusChange?: (taskId: number, status: 'backlog' | 'in_progress' | 'completed') => void;
-  onTaskCreate?: (task: Omit<Task, 'id' | 'createdAt'>) => void;
   onTaskEdit?: (taskId: number, task: Partial<Task>) => void;
   onTaskDelete?: (taskId: number) => void;
   onTaskComment?: (taskId: number) => void;
@@ -48,7 +43,6 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({
   tasks,
   assignedUsers = [],
   onStatusChange,
-  onTaskCreate,
   onTaskEdit,
   onTaskDelete,
   onTaskComment,
@@ -120,11 +114,6 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({
   const inProgressTasks = filteredTasks.filter((t) => t.status === 'in_progress');
   const completedTasks = filteredTasks.filter((t) => t.status === 'completed');
 
-  const handleCreateTask = () => {
-    setEditingTask(null);
-    setOpenForm(true);
-  };
-
   const handleSaveTask = async (taskData: any) => {
     if (editingTask) {
       // Оптимистичное обновление для редактирования
@@ -150,16 +139,6 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({
           prev.map((t) => (t.id === editingTask.id ? editingTask : t))
         );
       }
-    } else {
-      // Для создания задачи просто вызываем callback
-      await onTaskCreate?.({
-        title: taskData.title,
-        description: taskData.description || null,
-        assignedUserId: taskData.assignedUserId || null,
-        assignedRoleId: null,
-        deadline: taskData.deadline ? taskData.deadline.toISOString() : null,
-        status: 'backlog',
-      });
     }
     setOpenForm(false);
     setEditingTask(null);
@@ -326,46 +305,24 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({
         </DragOverlay>
       </DndContext>
 
-      {/* FAB */}
-      <Fab
-        color="primary"
-        aria-label="add task"
-        onClick={handleCreateTask}
-        sx={{
-          position: 'fixed',
-          bottom: 72,
-          right: 16,
-          zIndex: 1000,
-          width: 56,
-          height: 56,
-          '& .MuiSvgIcon-root': {
-            fontSize: '1.5rem',
-          },
-        }}
-      >
-        <Add />
-      </Fab>
-
-      {/* Task Form */}
-      <TaskForm
-        open={openForm}
-        onClose={() => {
-          setOpenForm(false);
-          setEditingTask(null);
-        }}
-        onSubmit={handleSaveTask}
-        initialData={
-          editingTask
-            ? {
-                title: editingTask.title,
-                description: editingTask.description || '',
-                assignedUserId: editingTask.assignedUserId,
-                deadline: editingTask.deadline ? new Date(editingTask.deadline) : null,
-              }
-            : undefined
-        }
-        assignedUsers={assignedUsers}
-      />
+      {/* Task Form (только для редактирования) */}
+      {editingTask && (
+        <TaskForm
+          open={openForm}
+          onClose={() => {
+            setOpenForm(false);
+            setEditingTask(null);
+          }}
+          onSubmit={handleSaveTask}
+          initialData={{
+            title: editingTask.title,
+            description: editingTask.description || '',
+            assignedUserId: editingTask.assignedUserId,
+            deadline: editingTask.deadline ? new Date(editingTask.deadline) : null,
+          }}
+          assignedUsers={assignedUsers}
+        />
+      )}
 
       {/* Task Details Dialog */}
       <TaskDetailsDialog
