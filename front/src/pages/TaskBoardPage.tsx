@@ -57,19 +57,38 @@ export const TaskBoardPage = () => {
     loadData();
   }, [chatId]);
 
-  const handleStatusChange = async (taskId: number, status: 'backlog' | 'in_progress' | 'completed') => {
+  const handleStatusChange = async (taskId: number, status: 'backlog' | 'in_progress' | 'completed', assignedUserId?: number | null) => {
     if (isMockMode()) {
       // Моки: обновляем локально (уже обновлено оптимистично в TaskBoard)
       setTasks((prev) =>
-        prev.map((task) => (task.id === taskId ? { ...task, status } : task))
+        prev.map((task) => {
+          if (task.id === taskId) {
+            const updatedTask = { ...task, status };
+            if (assignedUserId !== undefined) {
+              const assignedUser = assignedUsers.find(u => u.id === assignedUserId);
+              updatedTask.assignedUserId = assignedUserId;
+              updatedTask.assignedUser = assignedUser || null;
+            }
+            return updatedTask;
+          }
+          return task;
+        })
       );
     } else {
       // Реальный API: обновляем на бекенде (уже обновлено оптимистично в TaskBoard)
       try {
-        const updatedTask = await tasksApi.updateStatus(taskId, status);
-        setTasks((prev) =>
-          prev.map((task) => (task.id === taskId ? updatedTask : task))
-        );
+        // Если нужно назначить пользователя, используем update вместо updateStatus
+        if (assignedUserId !== undefined) {
+          const updatedTask = await tasksApi.update(taskId, { status, assignedUserId });
+          setTasks((prev) =>
+            prev.map((task) => (task.id === taskId ? updatedTask : task))
+          );
+        } else {
+          const updatedTask = await tasksApi.updateStatus(taskId, status);
+          setTasks((prev) =>
+            prev.map((task) => (task.id === taskId ? updatedTask : task))
+          );
+        }
       } catch (error) {
         console.error('Failed to update task status:', error);
         throw error; // Пробрасываем ошибку для отката в TaskBoard

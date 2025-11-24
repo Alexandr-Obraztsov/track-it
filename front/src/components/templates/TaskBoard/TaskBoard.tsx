@@ -19,6 +19,7 @@ import {
 import { TaskCard, type TaskCardProps } from '../../organisms/TaskCard';
 import { TaskForm } from '../../organisms/TaskForm';
 import { TaskDetailsDialog } from '../../organisms/TaskDetailsDialog';
+import { AssignUserDialog } from '../../organisms/AssignUserDialog';
 import { DraggableTaskCard } from '../../organisms/DraggableTaskCard';
 import { TaskBoardHeader } from '../../molecules/TaskBoardHeader';
 import { TaskBoardContent } from './TaskBoardContent';
@@ -30,7 +31,7 @@ export interface TaskBoardProps {
   chatTitle: string;
   tasks: Task[];
   assignedUsers?: User[];
-  onStatusChange?: (taskId: number, status: 'backlog' | 'in_progress' | 'completed') => void;
+  onStatusChange?: (taskId: number, status: 'backlog' | 'in_progress' | 'completed', assignedUserId?: number | null) => void;
   onTaskEdit?: (taskId: number, task: Partial<Task>) => void;
   onTaskDelete?: (taskId: number) => void;
   onTaskComment?: (taskId: number) => void;
@@ -56,6 +57,10 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({
   const [showOnlyMyTasks, setShowOnlyMyTasks] = useState(false);
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [openTaskDetails, setOpenTaskDetails] = useState(false);
+  const [openAssignDialog, setOpenAssignDialog] = useState(false);
+  const [pendingTaskId, setPendingTaskId] = useState<number | null>(null);
+  const [pendingTask, setPendingTask] = useState<Task | null>(null);
+  const [pendingOriginalStatus, setPendingOriginalStatus] = useState<'backlog' | 'in_progress' | 'completed' | null>(null);
   
   // Локальное состояние задач для оптимистичного обновления
   const [localTasks, setLocalTasks] = useState<Task[]>(tasks);
@@ -194,20 +199,64 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({
     // Проверяем, что статус действительно изменился
     const task = localTasks.find((t) => t.id === taskId);
     if (task && task.status !== newStatus) {
-      // Оптимистичное обновление: сразу обновляем локальное состояние
-      setLocalTasks((prev) =>
-        prev.map((t) => (t.id === taskId ? { ...t, status: newStatus } : t))
-      );
-      
-      // Асинхронно синхронизируем с сервером
-      Promise.resolve(onStatusChange(taskId, newStatus)).catch((error: any) => {
-        console.error('Failed to update task status:', error);
-        // В случае ошибки откатываем изменения
+      // Если переводим в "в работе" и задача еще не назначена, показываем диалог
+      if (newStatus === 'in_progress' && !task.assignedUserId && assignedUsers.length > 0) {
+        // Временно обновляем визуально для drag-and-drop
         setLocalTasks((prev) =>
-          prev.map((t) => (t.id === taskId ? { ...t, status: task.status } : t))
+          prev.map((t) => (t.id === taskId ? { ...t, status: newStatus } : t))
         );
-      });
+        setPendingTaskId(taskId);
+        setPendingTask(task);
+        setPendingOriginalStatus(task.status);
+        setOpenAssignDialog(true);
+        return;
+      }
+
+      // Для остальных случаев обновляем сразу (включая случай, когда задача уже назначена)
+      handleStatusUpdate(taskId, newStatus, task.assignedUserId);
     }
+  };
+
+  const handleStatusUpdate = (taskId: number, newStatus: 'backlog' | 'in_progress' | 'completed', assignedUserId?: number | null) => {
+    // Оптимистичное обновление: сразу обновляем локальное состояние
+    setLocalTasks((prev) =>
+      prev.map((t) => (t.id === taskId ? { ...t, status: newStatus, assignedUserId: assignedUserId ?? t.assignedUserId } : t))
+    );
+    
+    // Асинхронно синхронизируем с сервером
+    Promise.resolve(onStatusChange(taskId, newStatus, assignedUserId)).catch((error: any) => {
+      console.error('Failed to update task status:', error);
+      // В случае ошибки откатываем изменения
+      const task = localTasks.find((t) => t.id === taskId);
+      if (task) {
+        setLocalTasks((prev) =>
+          prev.map((t) => (t.id === taskId ? { ...t, status: task.status, assignedUserId: task.assignedUserId } : t))
+        );
+      }
+    });
+  };
+
+  const handleAssignUser = (userId: number | null) => {
+    if (pendingTaskId !== null) {
+      handleStatusUpdate(pendingTaskId, 'in_progress', userId);
+      setPendingTaskId(null);
+      setPendingTask(null);
+      setPendingOriginalStatus(null);
+    }
+    setOpenAssignDialog(false);
+  };
+
+  const handleCancelAssign = () => {
+    // Возвращаем задачу в исходный статус при отмене
+    if (pendingTaskId !== null && pendingOriginalStatus !== null) {
+      setLocalTasks((prev) =>
+        prev.map((t) => (t.id === pendingTaskId ? { ...t, status: pendingOriginalStatus } : t))
+      );
+      setPendingTaskId(null);
+      setPendingTask(null);
+      setPendingOriginalStatus(null);
+    }
+    setOpenAssignDialog(false);
   };
 
   const convertTaskToCardProps = (task: Task): TaskCardProps => ({
@@ -334,6 +383,15 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({
         onEdit={handleEditTask}
         onDelete={onTaskDelete}
         onComment={onTaskComment}
+      />
+
+      {/* Assign User Dialog */}
+      <AssignUserDialog
+        open={openAssignDialog}
+        onClose={handleCancelAssign}
+        onConfirm={handleAssignUser}
+        users={assignedUsers}
+        taskTitle={pendingTask?.title}
       />
     </Box>
   );
