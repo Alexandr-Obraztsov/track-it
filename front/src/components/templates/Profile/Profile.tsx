@@ -16,7 +16,6 @@ import {
   useMediaQuery,
 } from '@mui/material';
 import {
-  Notifications,
   Schedule,
   Assignment,
   Add,
@@ -41,7 +40,7 @@ export const Profile: React.FC<ProfileProps> = ({
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   
   const [notificationSettings, setNotificationSettings] = useState<NotificationSettings>(initialSettings);
-  const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isInitialMount = useRef(true);
   const lastSettingsRef = useRef<string>('');
 
@@ -135,18 +134,6 @@ export const Profile: React.FC<ProfileProps> = ({
             backgroundImage: 'none',
             border: '1px solid',
             borderColor: 'rgba(255, 255, 255, 0.1)',
-            background: 'linear-gradient(135deg, rgba(25, 118, 210, 0.1) 0%, rgba(25, 118, 210, 0.05) 100%)',
-            position: 'relative',
-            overflow: 'hidden',
-            '&::before': {
-              content: '""',
-              position: 'absolute',
-              top: 0,
-              left: 0,
-              right: 0,
-              height: 3,
-              background: 'linear-gradient(90deg, rgba(25, 118, 210, 0.8) 0%, rgba(156, 39, 176, 0.8) 100%)',
-            },
           }}
         >
           <CardContent sx={{ p: { xs: 2, sm: 2.5 }, '&:last-child': { pb: { xs: 2, sm: 2.5 } } }}>
@@ -223,64 +210,90 @@ export const Profile: React.FC<ProfileProps> = ({
         </Card>
 
         {/* Notifications Section */}
-        <Card
-          sx={{
-            borderRadius: 2,
-            backgroundImage: 'none',
-            border: '1px solid',
-            borderColor: 'rgba(255, 255, 255, 0.1)',
-          }}
-        >
-          <CardContent sx={{ p: { xs: 2, sm: 2.5 }, '&:last-child': { pb: { xs: 2, sm: 2.5 } } }}>
-            <Box
-              display="flex"
-              alignItems="center"
-              gap={1.5}
-              mb={2}
-              sx={{
-                pb: 1.5,
-                borderBottom: '1px solid',
-                borderColor: 'rgba(255, 255, 255, 0.1)',
-              }}
-            >
+        <Stack spacing={2}>
+          {/* Ежедневный список задач */}
+          <Card
+            sx={{
+              borderRadius: 2,
+              backgroundImage: 'none',
+              border: '1px solid',
+              borderColor: 'rgba(255, 255, 255, 0.1)',
+            }}
+          >
+            <CardContent sx={{ p: { xs: 1.5, sm: 2 }, '&:last-child': { pb: { xs: 1.5, sm: 2 } } }}>
               <Box
-                sx={{
-                  p: 1,
-                  borderRadius: 1.5,
-                  backgroundColor: 'rgba(25, 118, 210, 0.15)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                }}
+                display="flex"
+                alignItems="center"
+                gap={1}
+                mb={1.5}
               >
-                <Notifications color="primary" sx={{ fontSize: '1.25rem' }} />
+                <Assignment sx={{ fontSize: '1rem', color: 'primary.main' }} />
+                <Typography
+                  variant="body2"
+                  sx={{
+                    fontWeight: 600,
+                    fontSize: '0.875rem',
+                  }}
+                >
+                  Ежедневный список задач
+                </Typography>
               </Box>
               <Typography
-                variant="h6"
+                variant="caption"
+                color="text.secondary"
                 sx={{
-                  fontWeight: 600,
-                  fontSize: { xs: '0.9375rem', sm: '1rem' },
+                  fontSize: '0.75rem',
+                  mb: 1.5,
+                  display: 'block',
                 }}
               >
-                Настройки уведомлений
+                Время получения ежедневного списка задач
               </Typography>
-            </Box>
+              <FormControl fullWidth size="small">
+                <InputLabel sx={{ fontSize: '0.875rem' }}>
+                  Время
+                </InputLabel>
+                <Select
+                  value={notificationSettings.dailyDigestTime}
+                  onChange={(e) => handleTimeChange(e.target.value)}
+                  label="Время"
+                  sx={{
+                    fontSize: '0.875rem',
+                    borderRadius: 1.5,
+                  }}
+                >
+                  {timeOptions.map((time) => (
+                    <MenuItem key={time} value={time}>
+                      {time}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            </CardContent>
+          </Card>
 
-            <Stack spacing={3}>
-              {/* Ежедневный список задач */}
-              <Box>
+          {/* Напоминания о дедлайнах */}
+          <Card
+            sx={{
+              borderRadius: 2,
+              backgroundImage: 'none',
+              border: '1px solid',
+              borderColor: 'rgba(255, 255, 255, 0.1)',
+            }}
+          >
+            <CardContent sx={{ p: { xs: 1.5, sm: 2 }, '&:last-child': { pb: { xs: 1.5, sm: 2 } } }}>
+              <Box
+                display="flex"
+                alignItems="center"
+                justifyContent="space-between"
+                mb={1.5}
+              >
                 <Box
                   display="flex"
                   alignItems="center"
                   gap={1}
-                  mb={1.5}
-                  sx={{
-                    p: 1,
-                    borderRadius: 1,
-                    backgroundColor: 'rgba(25, 118, 210, 0.08)',
-                  }}
                 >
-                  <Assignment sx={{ fontSize: '1.125rem', color: 'primary.main' }} />
+                  <Schedule sx={{ fontSize: '1rem', color: 'primary.main' }} />
                   <Typography
                     variant="body2"
                     sx={{
@@ -288,176 +301,103 @@ export const Profile: React.FC<ProfileProps> = ({
                       fontSize: '0.875rem',
                     }}
                   >
-                    Ежедневный список задач
+                    Напоминания о дедлайнах
                   </Typography>
                 </Box>
-                <Typography
-                  variant="caption"
-                  color="text.secondary"
+                <Button
+                  startIcon={<Add />}
+                  onClick={handleAddReminder}
+                  size="small"
+                  variant="outlined"
                   sx={{
                     fontSize: '0.75rem',
-                    mb: 1.5,
-                    display: 'block',
+                    py: 0.5,
+                    px: 1,
+                    minWidth: 'auto',
                   }}
                 >
-                  Выберите время, когда вы будете получать ежедневный список всех задач, назначенных на вас
-                </Typography>
-                <FormControl fullWidth size="small">
-                  <InputLabel sx={{ fontSize: '0.875rem' }}>
-                    Время получения
-                  </InputLabel>
-                  <Select
-                    value={notificationSettings.dailyDigestTime}
-                    onChange={(e) => handleTimeChange(e.target.value)}
-                    label="Время получения"
-                    sx={{
-                      fontSize: '0.875rem',
-                      borderRadius: 1.5,
-                    }}
-                  >
-                    {timeOptions.map((time) => (
-                      <MenuItem key={time} value={time}>
-                        {time}
-                      </MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
+                  Добавить
+                </Button>
               </Box>
-
-              {/* Напоминания о дедлайнах */}
-              <Box>
-                <Box
-                  display="flex"
-                  alignItems="center"
-                  justifyContent="space-between"
-                  mb={1.5}
-                >
+              <Stack spacing={1}>
+                {notificationSettings.deadlineReminderHours.length === 0 ? (
                   <Box
-                    display="flex"
-                    alignItems="center"
-                    gap={1}
                     sx={{
-                      p: 1,
-                      borderRadius: 1,
-                      backgroundColor: 'rgba(25, 118, 210, 0.08)',
+                      textAlign: 'center',
+                      py: 1.5,
+                      px: 2,
+                      borderRadius: 1.5,
+                      backgroundColor: 'rgba(255, 255, 255, 0.05)',
+                      border: '1px dashed',
+                      borderColor: 'rgba(255, 255, 255, 0.15)',
                     }}
                   >
-                    <Schedule sx={{ fontSize: '1.125rem', color: 'primary.main' }} />
                     <Typography
-                      variant="body2"
-                      sx={{
-                        fontWeight: 600,
-                        fontSize: '0.875rem',
-                      }}
+                      variant="caption"
+                      color="text.secondary"
+                      sx={{ fontSize: '0.75rem' }}
                     >
-                      Напоминания о дедлайнах
+                      Нет напоминаний
                     </Typography>
                   </Box>
-                  <Button
-                    startIcon={<Add />}
-                    onClick={handleAddReminder}
-                    size="small"
-                    variant="outlined"
-                    sx={{
-                      fontSize: '0.75rem',
-                      py: 0.5,
-                      px: 1,
-                      minWidth: 'auto',
-                    }}
-                  >
-                    Добавить
-                  </Button>
-                </Box>
-                <Typography
-                  variant="caption"
-                  color="text.secondary"
-                  sx={{
-                    fontSize: '0.75rem',
-                    mb: 1.5,
-                    display: 'block',
-                  }}
-                >
-                  Выберите, за сколько часов до дедлайна вы хотите получать уведомления. Можно добавить несколько напоминаний.
-                </Typography>
-                <Stack spacing={1.5}>
-                  {notificationSettings.deadlineReminderHours.length === 0 ? (
+                ) : (
+                  notificationSettings.deadlineReminderHours.map((hours, index) => (
                     <Box
+                      key={index}
+                      display="flex"
+                      alignItems="center"
+                      gap={1}
                       sx={{
-                        textAlign: 'center',
-                        py: 2,
-                        px: 2,
+                        p: 1,
                         borderRadius: 1.5,
                         backgroundColor: 'rgba(255, 255, 255, 0.05)',
-                        border: '1px dashed',
-                        borderColor: 'rgba(255, 255, 255, 0.15)',
+                        border: '1px solid',
+                        borderColor: 'rgba(255, 255, 255, 0.1)',
                       }}
                     >
-                      <Typography
-                        variant="caption"
-                        color="text.secondary"
-                        sx={{ fontSize: '0.75rem' }}
-                      >
-                        Нет напоминаний. Нажмите "Добавить", чтобы создать напоминание.
-                      </Typography>
-                    </Box>
-                  ) : (
-                    notificationSettings.deadlineReminderHours.map((hours, index) => (
-                      <Box
-                        key={index}
-                        display="flex"
-                        alignItems="center"
-                        gap={1}
-                        sx={{
-                          p: 1.5,
-                          borderRadius: 1.5,
-                          backgroundColor: 'rgba(255, 255, 255, 0.05)',
-                          border: '1px solid',
-                          borderColor: 'rgba(255, 255, 255, 0.1)',
-                        }}
-                      >
-                        <FormControl size="small" sx={{ flex: 1 }}>
-                          <InputLabel sx={{ fontSize: '0.875rem' }}>
-                            За сколько часов
-                          </InputLabel>
-                          <Select
-                            value={hours}
-                            onChange={(e) => handleReminderChange(index, Number(e.target.value))}
-                            label="За сколько часов"
-                            sx={{
-                              fontSize: '0.875rem',
-                              borderRadius: 1.5,
-                            }}
-                          >
-                            <MenuItem value={1}>1 час</MenuItem>
-                            <MenuItem value={3}>3 часа</MenuItem>
-                            <MenuItem value={6}>6 часов</MenuItem>
-                            <MenuItem value={12}>12 часов</MenuItem>
-                            <MenuItem value={24}>1 день</MenuItem>
-                            <MenuItem value={48}>2 дня</MenuItem>
-                            <MenuItem value={72}>3 дня</MenuItem>
-                            <MenuItem value={168}>1 неделя</MenuItem>
-                          </Select>
-                        </FormControl>
-                        <IconButton
-                          onClick={() => handleRemoveReminder(index)}
-                          size="small"
+                      <FormControl size="small" sx={{ flex: 1 }}>
+                        <InputLabel sx={{ fontSize: '0.875rem' }}>
+                          За сколько часов
+                        </InputLabel>
+                        <Select
+                          value={hours}
+                          onChange={(e) => handleReminderChange(index, Number(e.target.value))}
+                          label="За сколько часов"
                           sx={{
-                            color: 'error.main',
-                            '&:hover': {
-                              backgroundColor: 'rgba(211, 47, 47, 0.1)',
-                            },
+                            fontSize: '0.875rem',
+                            borderRadius: 1.5,
                           }}
                         >
-                          <Delete fontSize="small" />
-                        </IconButton>
-                      </Box>
-                    ))
-                  )}
-                </Stack>
-              </Box>
-            </Stack>
-          </CardContent>
-        </Card>
+                          <MenuItem value={1}>1 час</MenuItem>
+                          <MenuItem value={3}>3 часа</MenuItem>
+                          <MenuItem value={6}>6 часов</MenuItem>
+                          <MenuItem value={12}>12 часов</MenuItem>
+                          <MenuItem value={24}>1 день</MenuItem>
+                          <MenuItem value={48}>2 дня</MenuItem>
+                          <MenuItem value={72}>3 дня</MenuItem>
+                          <MenuItem value={168}>1 неделя</MenuItem>
+                        </Select>
+                      </FormControl>
+                      <IconButton
+                        onClick={() => handleRemoveReminder(index)}
+                        size="small"
+                        sx={{
+                          color: 'error.main',
+                          '&:hover': {
+                            backgroundColor: 'rgba(211, 47, 47, 0.1)',
+                          },
+                          transition: 'background-color 0.2s ease',
+                        }}
+                      >
+                        <Delete fontSize="small" />
+                      </IconButton>
+                    </Box>
+                  ))
+                )}
+              </Stack>
+            </CardContent>
+          </Card>
+        </Stack>
       </Stack>
     </Box>
   );

@@ -130,11 +130,6 @@ export const theme = createTheme({
           boxShadow: '0 2px 12px rgba(0, 0, 0, 0.2)',
           border: '1px solid rgba(255, 255, 255, 0.05)',
           transition: 'all 0.2s ease-in-out',
-          '&:hover': {
-            boxShadow: '0 4px 16px rgba(0, 0, 0, 0.3)',
-            borderColor: 'rgba(255, 255, 255, 0.1)',
-            transform: 'translateY(-1px)',
-          },
         },
       },
     },
