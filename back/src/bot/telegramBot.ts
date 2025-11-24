@@ -587,4 +587,23 @@ export class TelegramBotService {
       throw error;
     }
   }
+
+  /**
+   * Отправляет сообщение пользователю в личный чат
+   * Используется для уведомлений
+   */
+  public async sendNotification(telegramUserId: number, message: string): Promise<boolean> {
+    try {
+      await this.bot.sendMessage(telegramUserId, message, { parse_mode: 'HTML' });
+      return true;
+    } catch (error: any) {
+      // Игнорируем ошибки, если пользователь заблокировал бота
+      if (error.response?.statusCode === 403) {
+        console.log(`⚠️ [TELEGRAM] User ${telegramUserId} blocked the bot`);
+      } else {
+        console.error(`❌ [TELEGRAM] Error sending notification to ${telegramUserId}:`, error.message);
+      }
+      return false;
+    }
+  }
 }

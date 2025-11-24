@@ -12,6 +12,7 @@ import { geminiRoutes } from './routes/gemini';
 import authRoutes from './routes/auth';
 import { notificationRoutes } from './routes/notifications';
 import { TelegramBotService } from './bot/telegramBot';
+import { notificationScheduler } from './services/notificationScheduler';
 
 // Загружаем переменные окружения
 dotenv.config();
@@ -85,11 +86,23 @@ initializeDatabase().then(() => {
   });
 
   // Запускаем Telegram бота
+  let telegramBot: TelegramBotService | null = null;
   try {
-    const telegramBot = new TelegramBotService();
+    telegramBot = new TelegramBotService();
     telegramBot.start();
   } catch (error) {
     console.error('Failed to start Telegram bot:', error);
+  }
+
+  // Запускаем планировщик уведомлений
+  if (telegramBot) {
+    try {
+      notificationScheduler.start(telegramBot);
+    } catch (error) {
+      console.error('Failed to start notification scheduler:', error);
+    }
+  } else {
+    console.warn('⚠️ [SERVER] Notification scheduler not started: Telegram bot not available');
   }
 }).catch(error => {
   console.error('Failed to initialize database:', error);
