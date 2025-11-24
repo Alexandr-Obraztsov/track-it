@@ -347,7 +347,27 @@ export class TelegramBotService {
           chatId: msg.chat.id,
           chatType: msg.chat.type
         });
+        // Но все равно создаем/обновляем чат, даже если нет отправителя
+        try {
+          await userManager.getOrCreateChat(msg.chat, msg.message_id);
+        } catch (error) {
+          console.error('❌ [TELEGRAM] Error ensuring chat for message without sender:', error);
+        }
         return;
+      }
+
+      // Всегда создаем/обновляем пользователя и чат для любого сообщения
+      // Это нужно делать ДО проверки на ботов и тип чата, чтобы данные всегда были в базе
+      try {
+        await userManager.getOrCreateUser(msg.from);
+        await userManager.getOrCreateChat(msg.chat, msg.message_id);
+        console.log('✅ [TELEGRAM] User and chat ensured for message:', {
+          userId: msg.from.id,
+          chatId: msg.chat.id,
+          messageId: msg.message_id
+        });
+      } catch (error) {
+        console.error('❌ [TELEGRAM] Error ensuring user/chat for message:', error);
       }
 
       // Пропускаем сообщения от других ботов (но не от самого себя)
@@ -380,12 +400,8 @@ export class TelegramBotService {
       });
 
       try {
-        // Всегда создаем пользователя и чат перед обработкой
-        if (msg.from) {
-          await userManager.getOrCreateUser(msg.from);
-        }
-        await userManager.getOrCreateChat(msg.chat, msg.message_id);
-        
+        // Пользователь и чат уже созданы выше для всех сообщений
+        // Просто обрабатываем сообщение
         await this.handleMessage(msg, true);
       } catch (error) {
         console.error('❌ [TELEGRAM] Error handling message:', error);

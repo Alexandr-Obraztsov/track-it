@@ -185,15 +185,36 @@ router.post('/telegram', async (req, res) => {
   }
 });
 
-// Эндпоинт для получения профиля
+// Эндпоинт для получения профиля пользователя
 router.get('/profile', authenticateToken, async (req: any, res) => {
+  console.log('📋 [AUTH] GET /profile handler called:', {
+    userId: req.user?.userId,
+    method: req.method,
+    path: req.path,
+    url: req.url,
+    originalUrl: req.originalUrl,
+  });
+
   try {
     const userRepository = AppDataSource.getRepository(User);
-    const user = await userRepository.findOne({ where: { id: req.user.userId } });
+    // Ищем пользователя по telegramId, так как это более надежный идентификатор
+    const user = await userRepository.findOne({ where: { telegramId: req.user.telegramId } });
     
     if (!user) {
-      return res.status(404).json({ error: 'User not found' });
+      console.log('❌ [AUTH] User not found in database:', { 
+        telegramId: req.user.telegramId,
+        userId: req.user.userId 
+      });
+      // Возвращаем 401, так как токен ссылается на несуществующего пользователя
+      // Это означает, что токен невалиден или пользователь был удален
+      return res.status(401).json({ error: 'User not found. Please login again.' });
     }
+    
+    console.log('✅ [AUTH] Profile loaded successfully:', {
+      userId: user.id,
+      telegramId: user.telegramId,
+      username: user.username,
+    });
     
     res.json({
       id: user.id,
@@ -202,9 +223,10 @@ router.get('/profile', authenticateToken, async (req: any, res) => {
       lastName: user.lastName,
       username: user.username,
       photoUrl: user.photoUrl,
+      createdAt: user.createdAt.toISOString(),
     });
   } catch (error) {
-    console.error('Profile error:', error);
+    console.error('❌ [AUTH] Profile error:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });

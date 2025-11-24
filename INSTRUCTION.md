@@ -25,7 +25,7 @@
 - TailwindCSS 4 (стилизация)
 - shadcn/ui (UI компоненты)
 - Framer Motion (анимации)
-- @twa-dev/sdk (Telegram WebApp SDK)
+- @tma.js/sdk + @tma.js/sdk-react (Telegram Mini Apps SDK)
 
 ## Структура проекта
 

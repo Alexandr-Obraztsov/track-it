@@ -9,8 +9,7 @@
     "build": "tsc",
     "start": "node dist/server.js",
     "start:debug": "node --inspect dist/server.js",
-    "typeorm": "typeorm-ts-node-commonjs",
-    "sync-schema": "tsx src/scripts/sync-schema.ts"
+    "typeorm": "typeorm-ts-node-commonjs"
   },
   "dependencies": {
     "@google/generative-ai": "^0.24.1",

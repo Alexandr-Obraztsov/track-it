@@ -1,15 +1,32 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Box, CircularProgress, Typography } from '@mui/material';
-import { useTelegramWebApp } from '../hooks/useTelegramWebApp';
+import { useRawInitData, useSignal, initData } from '@tma.js/sdk-react';
 import { authApi } from '../api/auth';
 import { ROUTES } from '../constants/routes';
 
 export const LoginPage = () => {
   const navigate = useNavigate();
-  const { webApp, isReady } = useTelegramWebApp();
+  const rawInitData = useRawInitData();
+  const initDataValue = useSignal(initData.state);
   const [error, setError] = useState<string | null>(null);
   const [isAuthenticating, setIsAuthenticating] = useState(false);
+  const [isReady, setIsReady] = useState(false);
+
+  useEffect(() => {
+    // Check if we're in Telegram environment
+    const isInTelegram = rawInitData !== null;
+    
+    if (isInTelegram && initDataValue) {
+      setIsReady(true);
+    } else if (import.meta.env.DEV) {
+      // In dev mode, we can still proceed
+      setIsReady(true);
+    } else {
+      console.warn('[TelegramWebApp] Не удалось определить окружение Telegram');
+      setIsReady(true);
+    }
+  }, [rawInitData, initDataValue]);
 
   useEffect(() => {
     // Проверяем, есть ли уже токен
@@ -27,10 +44,10 @@ export const LoginPage = () => {
       try {
         let initDataToUse: string;
         
-        if (webApp?.initData) {
+        if (rawInitData) {
           // Используем initData из Telegram WebApp
-          initDataToUse = webApp.initData;
-        } else {
+          initDataToUse = rawInitData;
+        } else if (import.meta.env.DEV) {
           // Для разработки вне Telegram - используем мок initData
           const mockUser = {
             id: 123456789,
@@ -39,6 +56,8 @@ export const LoginPage = () => {
             username: 'ivan_petrov',
           };
           initDataToUse = `user=${encodeURIComponent(JSON.stringify(mockUser))}&auth_date=${Math.floor(Date.now() / 1000)}`;
+        } else {
+          throw new Error('Init data not available');
         }
         
         const response = await authApi.login(initDataToUse);
@@ -74,7 +93,7 @@ export const LoginPage = () => {
     };
 
     authenticate();
-  }, [isReady, webApp]); // Убрали navigate из зависимостей
+  }, [isReady, rawInitData, navigate]);
 
   if (error) {
     return (
@@ -127,6 +146,3 @@ export const LoginPage = () => {
     </Box>
   );
 };
-
-
-

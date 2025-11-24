@@ -22,7 +22,7 @@ export const ProfilePage = () => {
           lastName: profile.lastName,
           username: profile.username,
           photoUrl: profile.photoUrl,
-          createdAt: new Date().toISOString(),
+          createdAt: profile.createdAt || new Date().toISOString(),
         });
 
         // Загружаем настройки уведомлений
@@ -38,8 +38,14 @@ export const ProfilePage = () => {
             setNotificationSettings(mockNotificationSettings);
           }
         }
-      } catch (error) {
+      } catch (error: any) {
         console.error('Failed to load profile:', error);
+        // Если ошибка 401, токен будет удален и произойдет редирект через interceptor
+        // Для других ошибок просто логируем
+        if (error.response?.status === 401) {
+          // Редирект произойдет автоматически через interceptor
+          console.log('User not found or token invalid, redirecting to login...');
+        }
       } finally {
         setLoading(false);
       }
@@ -64,8 +70,12 @@ export const ProfilePage = () => {
     }
   };
 
-  if (!user) {
+  if (loading) {
     return <div>Загрузка...</div>;
+  }
+
+  if (!user) {
+    return <div>Ошибка загрузки профиля</div>;
   }
 
   return (

@@ -46,8 +46,17 @@ app.use(morgan('combined'));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Routes
-app.use('/api/auth', authRoutes);
+// Routes - регистрация всех API эндпоинтов
+app.use('/api/auth', (req, res, next) => {
+  console.log('🌐 [SERVER] Auth route hit:', {
+    method: req.method,
+    path: req.path,
+    url: req.url,
+    originalUrl: req.originalUrl,
+    baseUrl: req.baseUrl,
+  });
+  next();
+}, authRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/chats', chatRoutes);
 app.use('/api/roles', roleRoutes);
