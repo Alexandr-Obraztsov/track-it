@@ -8,6 +8,7 @@ import { userRoutes } from './routes/users';
 import { chatRoutes } from './routes/chats';
 import { roleRoutes } from './routes/roles';
 import { taskRoutes } from './routes/tasks';
+import { labelRoutes } from './routes/labels';
 import { geminiRoutes } from './routes/gemini';
 import authRoutes from './routes/auth';
 import { notificationRoutes } from './routes/notifications';
@@ -62,6 +63,7 @@ app.use('/api/users', userRoutes);
 app.use('/api/chats', chatRoutes);
 app.use('/api/roles', roleRoutes);
 app.use('/api/tasks', taskRoutes);
+app.use('/api/labels', labelRoutes);
 app.use('/api/gemini', geminiRoutes);
 app.use('/api/notifications', notificationRoutes);
 

@@ -1,12 +1,21 @@
-import { Router } from 'express';
+import { Request, Router } from 'express';
 import { AppDataSource } from '../configs/database';
 import { Task } from '../entities/Task';
 import { Chat } from '../entities/Chat';
 import { ChatTask } from '../entities/ChatTask';
 import { User } from '../entities/User';
 import { Role } from '../entities/Role';
+import { Label } from '../entities/Label';
 import { taskManager } from '../services/task-service/task-service';
 import { authenticateToken } from '../middleware/auth';
+import { taskHistoryService } from '../services/taskHistoryService';
+
+interface AuthenticatedRequest extends Request {
+  user?: {
+    userId: number;
+    telegramId: number;
+  };
+}
 
 const router = Router();
 
@@ -30,7 +39,7 @@ router.get('/:id', authenticateToken, async (req, res) => {
     
     const task = await AppDataSource.getRepository(Task).findOne({
       where: { id: taskId },
-      relations: ['assignedUser', 'assignedRole', 'chat']
+      relations: ['assignedUser', 'assignedRole', 'chat', 'label']
     });
     
     if (!task) {
@@ -45,9 +54,9 @@ router.get('/:id', authenticateToken, async (req, res) => {
 });
 
 // POST /api/tasks - создать новую задачу
-router.post('/', authenticateToken, async (req, res) => {
+router.post('/', authenticateToken, async (req: AuthenticatedRequest, res) => {
   try {
-    const { title, description, assignedUserId, assignedRoleId, deadline, status, chatId } = req.body;
+    const { title, description, assignedUserId, assignedRoleId, deadline, status, chatId, labelId } = req.body;
     
     // Валидация обязательных полей
     if (!title || typeof title !== 'string' || title.trim().length === 0) {
@@ -100,6 +109,20 @@ router.post('/', authenticateToken, async (req, res) => {
         return res.status(404).json({ error: 'Assigned role not found' });
       }
     }
+
+    let normalizedLabelId: number | null = null;
+    if (labelId !== undefined && labelId !== null) {
+      const parsedLabelId = parseInt(labelId);
+      if (isNaN(parsedLabelId)) {
+        return res.status(400).json({ error: 'Invalid labelId' });
+      }
+      const labelRepository = AppDataSource.getRepository(Label);
+      const label = await labelRepository.findOne({ where: { id: parsedLabelId, chatId: chat.id } });
+      if (!label) {
+        return res.status(404).json({ error: 'Label not found for this chat' });
+      }
+      normalizedLabelId = label.id;
+    }
     
     // Валидация deadline
     let deadlineDate: Date | null = null;
@@ -118,6 +141,7 @@ router.post('/', authenticateToken, async (req, res) => {
       assignedRoleId: assignedRoleId ? parseInt(assignedRoleId) : null,
       deadline: deadlineDate,
       status: (status as 'backlog' | 'in_progress' | 'completed') || 'backlog',
+      labelId: normalizedLabelId,
       chat,
     });
     
@@ -134,8 +158,10 @@ router.post('/', authenticateToken, async (req, res) => {
     // Загружаем задачу с отношениями
     const taskWithRelations = await taskRepository.findOne({
       where: { id: savedTask.id },
-      relations: ['assignedUser', 'assignedRole', 'chat'],
+      relations: ['assignedUser', 'assignedRole', 'chat', 'label'],
     });
+
+    await taskHistoryService.logCreation(savedTask, req.user?.userId ?? null);
     
     res.status(201).json(taskWithRelations);
   } catch (error: any) {
@@ -148,25 +174,27 @@ router.post('/', authenticateToken, async (req, res) => {
 });
 
 // PUT /api/tasks/:id - обновить задачу
-router.put('/:id', authenticateToken, async (req, res) => {
+router.put('/:id', authenticateToken, async (req: AuthenticatedRequest, res) => {
   try {
     const taskId = parseInt(req.params.id);
     if (isNaN(taskId)) {
       return res.status(400).json({ error: 'Invalid task ID' });
     }
     
-    const { title, description, assignedUserId, assignedRoleId, deadline, status } = req.body;
+    const { title, description, assignedUserId, assignedRoleId, deadline, status, labelId } = req.body;
     
     const taskRepo = AppDataSource.getRepository(Task);
     const task = await taskRepo.findOne({
       where: { id: taskId },
-      relations: ['assignedUser', 'assignedRole', 'chat'],
+      relations: ['assignedUser', 'assignedRole', 'chat', 'label'],
     });
     
     if (!task) {
       return res.status(404).json({ error: 'Task not found' });
     }
     
+    const previousTaskState = Object.assign(new Task(), task);
+
     // Валидация и обновление title
     if (title !== undefined) {
       if (typeof title !== 'string' || title.trim().length === 0) {
@@ -237,14 +265,35 @@ router.put('/:id', authenticateToken, async (req, res) => {
       }
       task.status = status as 'backlog' | 'in_progress' | 'completed';
     }
+
+    if (labelId !== undefined) {
+      if (labelId === null) {
+        task.labelId = null;
+      } else {
+        const parsedLabelId = parseInt(labelId);
+        if (isNaN(parsedLabelId)) {
+          return res.status(400).json({ error: 'Invalid labelId' });
+        }
+        const labelRepository = AppDataSource.getRepository(Label);
+        const label = await labelRepository.findOne({
+          where: { id: parsedLabelId, chatId: task.chat?.id },
+        });
+        if (!label) {
+          return res.status(404).json({ error: 'Label not found for this chat' });
+        }
+        task.labelId = label.id;
+      }
+    }
     
     const updatedTask = await taskRepo.save(task);
     
     // Загружаем с отношениями
     const taskWithRelations = await taskRepo.findOne({
       where: { id: updatedTask.id },
-      relations: ['assignedUser', 'assignedRole', 'chat'],
+      relations: ['assignedUser', 'assignedRole', 'chat', 'label'],
     });
+
+    await taskHistoryService.logUpdates(previousTaskState, updatedTask, req.user?.userId ?? null);
     
     res.json(taskWithRelations);
   } catch (error) {
@@ -254,7 +303,7 @@ router.put('/:id', authenticateToken, async (req, res) => {
 });
 
 // PATCH /api/tasks/:id/status - изменить статус задачи
-router.patch('/:id/status', authenticateToken, async (req, res) => {
+router.patch('/:id/status', authenticateToken, async (req: AuthenticatedRequest, res) => {
   try {
     const taskId = parseInt(req.params.id);
     if (isNaN(taskId)) {
@@ -279,15 +328,19 @@ router.patch('/:id/status', authenticateToken, async (req, res) => {
       return res.status(404).json({ error: 'Task not found' });
     }
     
+    const previousTaskState = Object.assign(new Task(), task);
+
     task.status = status as 'backlog' | 'in_progress' | 'completed';
-    await taskRepo.save(task);
+    const updatedTask = await taskRepo.save(task);
+
+    await taskHistoryService.logUpdates(previousTaskState, updatedTask, req.user?.userId ?? null);
     
-    const updatedTask = await taskRepo.findOne({
+    const taskWithRelations = await taskRepo.findOne({
       where: { id: taskId },
-      relations: ['assignedUser', 'assignedRole', 'chat']
+      relations: ['assignedUser', 'assignedRole', 'chat', 'label']
     });
     
-    res.json(updatedTask);
+    res.json(taskWithRelations);
   } catch (error) {
     console.error('Error updating task status:', error);
     res.status(500).json({ error: 'Failed to update status' });

@@ -3,6 +3,7 @@ import { UserChatRole } from './UserChatRole';
 import { ChatRole } from './ChatRole';
 import { Task } from './Task';
 import { ChatTask } from './ChatTask';
+import { Label } from './Label';
 
 @Entity('chats')
 export class Chat {
@@ -33,4 +34,7 @@ export class Chat {
   // Связь один-ко-многим с ChatTask (промежуточная таблица)
   @OneToMany(() => ChatTask, chatTask => chatTask.chat)
   chatTasks!: ChatTask[];
+
+  @OneToMany(() => Label, label => label.chat)
+  labels!: Label[];
 }

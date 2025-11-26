@@ -84,10 +84,10 @@ export const TaskBoardPage = () => {
             prev.map((task) => (task.id === taskId ? updatedTask : task))
           );
         } else {
-          const updatedTask = await tasksApi.updateStatus(taskId, status);
-          setTasks((prev) =>
-            prev.map((task) => (task.id === taskId ? updatedTask : task))
-          );
+        const updatedTask = await tasksApi.updateStatus(taskId, status);
+        setTasks((prev) =>
+          prev.map((task) => (task.id === taskId ? updatedTask : task))
+        );
         }
       } catch (error) {
         console.error('Failed to update task status:', error);

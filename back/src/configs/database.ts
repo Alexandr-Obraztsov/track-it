@@ -8,6 +8,8 @@ import { ChatRole } from '../entities/ChatRole';
 import { UserTask } from '../entities/UserTask';
 import { ChatTask } from '../entities/ChatTask';
 import { NotificationSettings } from '../entities/NotificationSettings';
+import { TaskHistory } from '../entities/TaskHistory';
+import { Label } from '../entities/Label';
 
 export const AppDataSource = new DataSource({
   type: 'postgres',
@@ -18,7 +20,7 @@ export const AppDataSource = new DataSource({
   database: process.env.DB_NAME || 'track_it',
   synchronize: process.env.NODE_ENV !== 'production',
   logging: process.env.NODE_ENV === 'development',
-  entities: [User, Chat, Role, Task, UserChatRole, ChatRole, UserTask, ChatTask, NotificationSettings],
+  entities: [User, Chat, Role, Task, UserChatRole, ChatRole, UserTask, ChatTask, NotificationSettings, TaskHistory, Label],
   migrations: ['src/migrations/*.ts'],
   subscribers: ['src/subscribers/*.ts'],
 });

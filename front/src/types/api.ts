@@ -16,6 +16,15 @@ export interface Role {
   createdAt: string;
 }
 
+export interface Label {
+  id: number;
+  chatId: number;
+  name: string;
+  color: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface Task {
   id: number;
   title: string;
@@ -25,8 +34,10 @@ export interface Task {
   deadline: string | null;
   status: 'backlog' | 'in_progress' | 'completed';
   createdAt: string;
+  labelId: number | null;
   assignedUser?: User | null;
   assignedRole?: Role | null;
+  label?: Label | null;
 }
 
 export interface UserChatRole {

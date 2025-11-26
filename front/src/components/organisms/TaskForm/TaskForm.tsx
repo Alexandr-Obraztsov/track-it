@@ -125,96 +125,96 @@ export const TaskForm: React.FC<TaskFormProps> = ({
   // Общий контент формы
   const formContent = (
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
-      <TextField
-        label="Название задачи"
-        value={formData.title}
-        onChange={handleChange('title')}
-        error={!!errors.title}
-        helperText={errors.title}
-        required
-        fullWidth
+            <TextField
+              label="Название задачи"
+              value={formData.title}
+              onChange={handleChange('title')}
+              error={!!errors.title}
+              helperText={errors.title}
+              required
+              fullWidth
         autoFocus={!isMobile}
-        variant="outlined"
-        size="small"
-        sx={{
-          '& .MuiOutlinedInput-root': {
-            borderRadius: 1.5,
-            fontSize: '0.875rem',
-          },
-          '& .MuiInputLabel-root': {
-            fontSize: '0.875rem',
-          },
-        }}
-      />
+              variant="outlined"
+              size="small"
+              sx={{
+                '& .MuiOutlinedInput-root': {
+                  borderRadius: 1.5,
+                  fontSize: '0.875rem',
+                },
+                '& .MuiInputLabel-root': {
+                  fontSize: '0.875rem',
+                },
+              }}
+            />
 
-      <TextField
-        label="Описание"
-        value={formData.description}
-        onChange={handleChange('description')}
-        multiline
-        rows={3}
-        fullWidth
-        variant="outlined"
-        size="small"
-        sx={{
-          '& .MuiOutlinedInput-root': {
-            borderRadius: 1.5,
-            fontSize: '0.875rem',
-          },
-          '& .MuiInputLabel-root': {
-            fontSize: '0.875rem',
-          },
-        }}
-      />
+            <TextField
+              label="Описание"
+              value={formData.description}
+              onChange={handleChange('description')}
+              multiline
+              rows={3}
+              fullWidth
+              variant="outlined"
+              size="small"
+              sx={{
+                '& .MuiOutlinedInput-root': {
+                  borderRadius: 1.5,
+                  fontSize: '0.875rem',
+                },
+                '& .MuiInputLabel-root': {
+                  fontSize: '0.875rem',
+                },
+              }}
+            />
 
-      {assignedUsers.length > 0 && (
-        <FormControl fullWidth size="small">
-          <InputLabel sx={{ fontSize: '0.875rem' }}>Назначить на</InputLabel>
-          <Select
-            value={formData.assignedUserId || ''}
-            onChange={(e) => handleChange('assignedUserId')({ target: { value: e.target.value || null } })}
-            label="Назначить на"
-            sx={{
-              borderRadius: 1.5,
-              fontSize: '0.875rem',
-              '& .MuiSelect-select': {
-                fontSize: '0.875rem',
-              },
-            }}
-          >
-            <MenuItem value="" sx={{ fontSize: '0.875rem' }}>
-              <Typography color="text.secondary" sx={{ fontSize: '0.875rem' }}>Не назначено</Typography>
-            </MenuItem>
-            {assignedUsers.map((user) => (
-              <MenuItem key={user.id} value={user.id} sx={{ fontSize: '0.875rem' }}>
-                {user.firstName} {user.lastName || ''}
-              </MenuItem>
-            ))}
-          </Select>
-        </FormControl>
-      )}
+            {assignedUsers.length > 0 && (
+              <FormControl fullWidth size="small">
+                <InputLabel sx={{ fontSize: '0.875rem' }}>Назначить на</InputLabel>
+                <Select
+                  value={formData.assignedUserId || ''}
+                  onChange={(e) => handleChange('assignedUserId')({ target: { value: e.target.value || null } })}
+                  label="Назначить на"
+                  sx={{
+                    borderRadius: 1.5,
+                    fontSize: '0.875rem',
+                    '& .MuiSelect-select': {
+                      fontSize: '0.875rem',
+                    },
+                  }}
+                >
+                  <MenuItem value="" sx={{ fontSize: '0.875rem' }}>
+                    <Typography color="text.secondary" sx={{ fontSize: '0.875rem' }}>Не назначено</Typography>
+                  </MenuItem>
+                  {assignedUsers.map((user) => (
+                    <MenuItem key={user.id} value={user.id} sx={{ fontSize: '0.875rem' }}>
+                      {user.firstName} {user.lastName || ''}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            )}
 
       <DateTimePicker
-        label="Дедлайн"
-        value={formData.deadline}
-        onChange={handleDateChange}
-        slotProps={{
-          textField: {
-            fullWidth: true,
-            size: 'small',
-            sx: {
-              '& .MuiOutlinedInput-root': {
-                borderRadius: 1.5,
-                fontSize: '0.875rem',
-              },
-              '& .MuiInputLabel-root': {
-                fontSize: '0.875rem',
-              },
-            },
-          },
-        }}
-      />
-    </Box>
+              label="Дедлайн"
+              value={formData.deadline}
+              onChange={handleDateChange}
+              slotProps={{
+                textField: {
+                  fullWidth: true,
+                  size: 'small',
+                  sx: {
+                    '& .MuiOutlinedInput-root': {
+                      borderRadius: 1.5,
+                      fontSize: '0.875rem',
+                    },
+                    '& .MuiInputLabel-root': {
+                      fontSize: '0.875rem',
+                    },
+                  },
+                },
+              }}
+            />
+          </Box>
   );
 
   // Мобильная версия - шторка

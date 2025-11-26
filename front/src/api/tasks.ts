@@ -9,6 +9,7 @@ export interface CreateTaskData {
   deadline?: string | null;
   status?: 'backlog' | 'in_progress' | 'completed';
   chatId: number;
+  labelId?: number | null;
 }
 
 export interface UpdateTaskData {
@@ -18,6 +19,7 @@ export interface UpdateTaskData {
   assignedRoleId?: number | null;
   deadline?: string | null;
   status?: 'backlog' | 'in_progress' | 'completed';
+  labelId?: number | null;
 }
 
 export const tasksApi = {

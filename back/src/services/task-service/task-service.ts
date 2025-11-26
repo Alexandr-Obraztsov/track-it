@@ -65,7 +65,7 @@ export class TaskService {
         // Загружаем задачу с relations для возврата
         const taskWithRelations = await this.taskRepository.findOne({
           where: { id: savedTask.id },
-          relations: ['assignedUser', 'assignedRole', 'chat']
+          relations: ['assignedUser', 'assignedRole', 'chat', 'label']
         });
 
         if (taskWithRelations) {
@@ -94,7 +94,7 @@ export class TaskService {
       try {
         const existingTask = await this.taskRepository.findOne({
           where: { id: updateData.id },
-          relations: ['assignedUser', 'assignedRole', 'chat']
+          relations: ['assignedUser', 'assignedRole', 'chat', 'label']
         });
 
         if (!existingTask) {
@@ -127,7 +127,7 @@ export class TaskService {
         // Загружаем с relations
         const taskWithRelations = await this.taskRepository.findOne({
           where: { id: updatedTask.id },
-          relations: ['assignedUser', 'assignedRole', 'chat']
+          relations: ['assignedUser', 'assignedRole', 'chat', 'label']
         });
 
         if (taskWithRelations) {
@@ -153,7 +153,7 @@ export class TaskService {
     const chatTaskRepository = AppDataSource.getRepository(ChatTask);
     const chatTasks = await chatTaskRepository.find({
       where: { chatId },
-      relations: ['task', 'task.assignedUser', 'task.assignedRole']
+      relations: ['task', 'task.assignedUser', 'task.assignedRole', 'task.label']
     });
     return chatTasks.map(ct => ct.task);
   }
@@ -163,7 +163,7 @@ export class TaskService {
    * Получает задачу по ID
    */
   async getTaskById(taskId: number): Promise<Task | null> {
-    return await this.taskRepository.findOne({ where: { id: taskId }, relations: ['assignedUser', 'assignedRole', 'chat'] });
+    return await this.taskRepository.findOne({ where: { id: taskId }, relations: ['assignedUser', 'assignedRole', 'chat', 'label'] });
   }
 
   /**

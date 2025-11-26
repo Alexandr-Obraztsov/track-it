@@ -4,6 +4,8 @@ import { User } from './User';
 import { Role } from './Role';
 import { UserTask } from './UserTask';
 import { ChatTask } from './ChatTask';
+import { TaskHistory } from './TaskHistory';
+import { Label } from './Label';
 
 @Entity('tasks')
 export class Task {
@@ -28,6 +30,9 @@ export class Task {
   @Column({ type: 'date', nullable: true })
   deadline!: Date | null;
 
+  @Column({ name: 'label_id', type: 'int', nullable: true })
+  labelId!: number | null;
+
   @Column({ 
     type: 'enum', 
     enum: ['backlog', 'in_progress', 'completed'], 
@@ -49,6 +54,10 @@ export class Task {
   @JoinColumn({ name: 'assigned_role_id' })
   assignedRole!: Role | null;
 
+  @ManyToOne(() => Label, label => label.tasks, { nullable: true })
+  @JoinColumn({ name: 'label_id' })
+  label!: Label | null;
+
   // Связь один-ко-многим с UserTask (для личных задач)
   @OneToMany(() => UserTask, userTask => userTask.task)
   userTasks!: UserTask[];
@@ -56,4 +65,7 @@ export class Task {
   // Связь один-ко-многим с ChatTask (промежуточная таблица)
   @OneToMany(() => ChatTask, chatTask => chatTask.task)
   chatTasks!: ChatTask[];
+
+  @OneToMany(() => TaskHistory, history => history.task)
+  historyEntries!: TaskHistory[];
 }

@@ -202,8 +202,8 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({
       // Если переводим в "в работе" и задача еще не назначена, показываем диалог
       if (newStatus === 'in_progress' && !task.assignedUserId && assignedUsers.length > 0) {
         // Временно обновляем визуально для drag-and-drop
-        setLocalTasks((prev) =>
-          prev.map((t) => (t.id === taskId ? { ...t, status: newStatus } : t))
+      setLocalTasks((prev) =>
+        prev.map((t) => (t.id === taskId ? { ...t, status: newStatus } : t))
         );
         setPendingTaskId(taskId);
         setPendingTask(task);
@@ -221,19 +221,19 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({
     // Оптимистичное обновление: сразу обновляем локальное состояние
     setLocalTasks((prev) =>
       prev.map((t) => (t.id === taskId ? { ...t, status: newStatus, assignedUserId: assignedUserId ?? t.assignedUserId } : t))
-    );
-    
-    // Асинхронно синхронизируем с сервером
+      );
+      
+      // Асинхронно синхронизируем с сервером
     Promise.resolve(onStatusChange(taskId, newStatus, assignedUserId)).catch((error: any) => {
-      console.error('Failed to update task status:', error);
-      // В случае ошибки откатываем изменения
+        console.error('Failed to update task status:', error);
+        // В случае ошибки откатываем изменения
       const task = localTasks.find((t) => t.id === taskId);
       if (task) {
         setLocalTasks((prev) =>
           prev.map((t) => (t.id === taskId ? { ...t, status: task.status, assignedUserId: task.assignedUserId } : t))
         );
       }
-    });
+      });
   };
 
   const handleAssignUser = (userId: number | null) => {
