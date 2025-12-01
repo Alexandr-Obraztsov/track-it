@@ -49,3 +49,5 @@ COMMENT ON COLUMN task_attachments.file_type IS 'Тип файла (расшир
 COMMENT ON COLUMN task_attachments.mime_type IS 'MIME тип файла';
 COMMENT ON COLUMN task_attachments.uploaded_at IS 'Дата и время загрузки файла';
 
+
+

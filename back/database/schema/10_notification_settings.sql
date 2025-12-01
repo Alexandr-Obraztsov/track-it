@@ -41,3 +41,5 @@ COMMENT ON COLUMN notification_settings.deadline_reminder_hours IS 'Массив
 COMMENT ON COLUMN notification_settings.created_at IS 'Дата и время создания записи';
 COMMENT ON COLUMN notification_settings.updated_at IS 'Дата и время последнего обновления';
 
+
+

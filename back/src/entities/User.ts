@@ -1,6 +1,7 @@
 import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, OneToMany } from 'typeorm';
 import { UserChatRole } from './UserChatRole';
 import { UserTask } from './UserTask';
+import { TaskComment } from './TaskComment';
 
 @Entity('users')
 export class User {
@@ -32,4 +33,8 @@ export class User {
   // Связь один-ко-многим с UserTask (личные задачи пользователя)
   @OneToMany(() => UserTask, userTask => userTask.user)
   userTasks!: UserTask[];
+
+  // Связь один-ко-многим с TaskComment (комментарии пользователя)
+  @OneToMany(() => TaskComment, comment => comment.user)
+  taskComments!: TaskComment[];
 }

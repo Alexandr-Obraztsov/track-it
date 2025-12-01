@@ -5,7 +5,7 @@ import { AudioUtils } from '../utils/audioUtils';
 import { Formatter } from '../utils/formatter';
 import { Chat } from '../entities/Chat';
 import { Task } from '../entities/Task';
-import { taskService } from './task-service/task-service';
+import { taskManager } from './task-service/task-service';
 import { userManager } from './userManager';
 
 export type ProcessedMessage = {
@@ -53,17 +53,24 @@ export class MessageProcessor {
       const { user, isNewUser } = await userManager.getOrCreateUser(msg.from);
       const chat = await userManager.getOrCreateChat(msg.chat, msg.message_id);
 
-      // Получаем существующие задачи
-      const existingTasks = await taskService.getChatTasks(chat.id);
+      // Получаем существующие задачи и labels
+      const existingTasks = await taskManager.getChatTasks(chat.id);
+      const { AppDataSource } = await import('../configs/database');
+      const { Label } = await import('../entities/Label');
+      const labels = await AppDataSource.getRepository(Label).find({
+        where: { chatId: chat.id },
+        order: { name: 'ASC' },
+      });
 
       const geminiResult = await geminiService.extractTasks({
         ...processedMessage,
         chat,
-        existingTasks
+        existingTasks,
+        labels
       } as TaskExtractionParams);
 
       // Сохраняем задачи в базу данных
-      const savedResult = await taskService.saveTasks({
+      const savedResult = await taskManager.saveTasks({
         geminiResult,
         chat
       });
@@ -78,7 +85,6 @@ export class MessageProcessor {
       };
 
     } catch (error) {
-      console.error('❌ [MESSAGE_PROCESSOR] Error processing message:', error);
       return {
         success: false,
         error: error instanceof Error ? error.message : 'Unknown error'
@@ -112,14 +118,12 @@ export class MessageProcessor {
             audioMimeType: audioResult.mimeType
           };
         } catch (error) {
-          console.error('❌ [MESSAGE_PROCESSOR] Error processing voice message:', error);
           return null;
         }
       }
 
       return null;
     } catch (error) {
-      console.error('❌ [MESSAGE_PROCESSOR] Error extracting message content:', error);
       return null;
     }
   }
@@ -183,7 +187,7 @@ export class MessageProcessor {
         const task = updatedTasks[index];
         
         // Получаем актуальную задачу из базы данных для отображения заголовка
-        const actualTask = await taskService.getTaskById(task.id);
+        const actualTask = await taskManager.getTaskById(task.id);
         
         if (!actualTask) {
           console.error('❌ [MESSAGE_PROCESSOR] Task not found for update:', task.id);
@@ -258,7 +262,7 @@ export class MessageProcessor {
       const chat = await userManager.getOrCreateChat(msg.chat, msg.message_id);
 
       // Получаем задачи
-      const tasks = await taskService.getChatTasks(chat.id);
+      const tasks = await taskManager.getChatTasks(chat.id);
 
       // Формируем ответное сообщение
       const responseMessage = await this.formatTasksList(tasks);
@@ -269,7 +273,6 @@ export class MessageProcessor {
       };
 
     } catch (error) {
-      console.error('❌ [MESSAGE_PROCESSOR] Error handling /tasks command:', error);
       return {
         success: false,
         error: error instanceof Error ? error.message : 'Unknown error'

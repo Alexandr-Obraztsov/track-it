@@ -27,24 +27,18 @@ export class UserManager {
         isNewUser = true;
         user = this.userRepository.create({
           telegramId: from.id,
-          username: from.username || null,
+          username: from.username || undefined,
           firstName: from.first_name || 'Unknown',
-          lastName: from.last_name || null,
-          photoUrl: null // photoUrl из Telegram User недоступен напрямую, только через WebApp
+          lastName: from.last_name || undefined,
+          photoUrl: undefined // photoUrl из Telegram User недоступен напрямую, только через WebApp
         });
 
         user = await this.userRepository.save(user);
-        console.log('✅ [USER_MANAGER] New user created:', {
-          id: user.id,
-          telegramId: user.telegramId,
-          username: user.username,
-          firstName: user.firstName
-        });
       } else {
         // Обновляем информацию о пользователе, если она изменилась
-        const newUsername = from.username || null;
+        const newUsername = from.username || undefined;
         const newFirstName = from.first_name || 'Unknown';
-        const newLastName = from.last_name || null;
+        const newLastName = from.last_name || undefined;
 
         const needsUpdate = 
           user.username !== newUsername ||
@@ -58,19 +52,12 @@ export class UserManager {
           // photoUrl обновляется только через WebApp auth, не через Telegram Bot API
           
           user = await this.userRepository.save(user);
-          console.log('✅ [USER_MANAGER] User updated:', {
-            id: user.id,
-            telegramId: user.telegramId,
-            username: user.username,
-            firstName: user.firstName
-          });
         }
       }
 
       return { user, isNewUser };
 
     } catch (error) {
-      console.error('❌ [USER_MANAGER] Error getting/creating user:', error);
       throw error;
     }
   }
@@ -90,11 +77,6 @@ export class UserManager {
         });
 
         dbChat = await this.chatRepository.save(dbChat);
-        console.log('✅ [USER_MANAGER] New chat created:', {
-          id: dbChat.id,
-          title: dbChat.title,
-          messageId: dbChat.messageId
-        });
       } else {
         // Обновляем название чата и messageId, если они изменились
         const newTitle = chat.title || chat.first_name || `Chat ${chat.id}`;
@@ -106,18 +88,12 @@ export class UserManager {
             dbChat.messageId = messageId;
           }
           dbChat = await this.chatRepository.save(dbChat);
-          console.log('✅ [USER_MANAGER] Chat updated:', {
-            id: dbChat.id,
-            title: dbChat.title,
-            messageId: dbChat.messageId
-          });
         }
       }
 
       return dbChat;
 
     } catch (error) {
-      console.error('❌ [USER_MANAGER] Error getting/creating chat:', error);
       throw error;
     }
   }
@@ -169,9 +145,6 @@ export class UserManager {
       const role = await this.roleRepository.findOne({ where: { id: roleId } });
 
       if (!user || !chat || !role) {
-        console.warn('⚠️ [USER_MANAGER] User, chat or role not found:', {
-          userId, chatId, roleId
-        });
         return null;
       }
 
@@ -181,9 +154,6 @@ export class UserManager {
       });
 
       if (!chatRole) {
-        console.warn('⚠️ [USER_MANAGER] Role not available in chat:', {
-          chatId, roleId
-        });
         return null;
       }
 
@@ -193,9 +163,6 @@ export class UserManager {
       });
 
       if (existingUserChatRole) {
-        console.warn('⚠️ [USER_MANAGER] User already has this role in chat:', {
-          userId, chatId, roleId
-        });
         return existingUserChatRole;
       }
 
@@ -207,15 +174,9 @@ export class UserManager {
       });
 
       const savedUserChatRole = await this.userChatRoleRepository.save(userChatRole);
-      
-      console.log('✅ [USER_MANAGER] User added to chat with role:', {
-        userId, chatId, roleId
-      });
-
       return savedUserChatRole;
 
     } catch (error) {
-      console.error('❌ [USER_MANAGER] Error adding user to chat:', error);
       return null;
     }
   }
@@ -230,18 +191,9 @@ export class UserManager {
         chatId
       });
 
-      const success = result.affected !== undefined && result.affected !== null && result.affected > 0;
-      
-      if (success) {
-        console.log('✅ [USER_MANAGER] User removed from chat:', {
-          userId, chatId
-        });
-      }
-
-      return success;
+      return result.affected !== undefined && result.affected !== null && result.affected > 0;
 
     } catch (error) {
-      console.error('❌ [USER_MANAGER] Error removing user from chat:', error);
       return false;
     }
   }
@@ -280,9 +232,6 @@ export class UserManager {
       const role = await this.roleRepository.findOne({ where: { id: roleId } });
 
       if (!chat || !role) {
-        console.warn('⚠️ [USER_MANAGER] Chat or role not found:', {
-          chatId, roleId
-        });
         return null;
       }
 
@@ -292,9 +241,6 @@ export class UserManager {
       });
 
       if (existingChatRole) {
-        console.warn('⚠️ [USER_MANAGER] Role already exists in chat:', {
-          chatId, roleId
-        });
         return existingChatRole;
       }
 
@@ -304,16 +250,9 @@ export class UserManager {
         roleId
       });
 
-      const savedChatRole = await this.chatRoleRepository.save(chatRole);
-      
-      console.log('✅ [USER_MANAGER] Role added to chat:', {
-        chatId, roleId
-      });
-
-      return savedChatRole;
+      return await this.chatRoleRepository.save(chatRole);
 
     } catch (error) {
-      console.error('❌ [USER_MANAGER] Error adding role to chat:', error);
       return null;
     }
   }

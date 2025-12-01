@@ -6,13 +6,16 @@ import { mockTasks, mockUsers, mockChats } from '../mocks/data';
 import { tasksApi } from '../api/tasks';
 import { chatsApi } from '../api/chats';
 import { usersApi } from '../api/users';
+import { labelsApi } from '../api/labels';
 import { isMockMode } from '../utils/mockMode';
+import type { Label } from '../types/api';
 
 export const TaskBoardPage = () => {
   const { chatId } = useParams<{ chatId: string }>();
   const [tasks, setTasks] = useState<Task[]>([]);
   const [chatTitle, setChatTitle] = useState<string>('');
   const [assignedUsers, setAssignedUsers] = useState(mockUsers);
+  const [labels, setLabels] = useState<Label[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -45,6 +48,10 @@ export const TaskBoardPage = () => {
           // Загружаем пользователей
           const usersData = await usersApi.getAll();
           setAssignedUsers(usersData);
+          
+          // Загружаем labels
+          const labelsData = await labelsApi.getByChatId(chatIdNum);
+          setLabels(labelsData);
           
           setLoading(false);
         }
@@ -99,8 +106,9 @@ export const TaskBoardPage = () => {
   const handleTaskEdit = async (taskId: number, task: Partial<Task>) => {
     if (isMockMode()) {
       // Моки: обновляем локально
+      const label = labels.find((l) => l.id === task.labelId);
       setTasks((prev) =>
-        prev.map((t) => (t.id === taskId ? { ...t, ...task } : t))
+        prev.map((t) => (t.id === taskId ? { ...t, ...task, label: label || null } : t))
       );
     } else {
       // Реальный API: обновляем на бекенде
@@ -113,6 +121,51 @@ export const TaskBoardPage = () => {
         console.error('Failed to update task:', error);
         throw error;
       }
+    }
+  };
+
+  const handleLabelsChange = async () => {
+    // Перезагружаем labels после изменений
+    if (!isMockMode()) {
+      try {
+        const chatIdNum = Number(chatId);
+        const labelsData = await labelsApi.getByChatId(chatIdNum);
+        setLabels(labelsData);
+        
+        // Обновляем все задачи, которые используют метки
+        setTasks((prevTasks) =>
+          prevTasks.map((task) => {
+            if (task.labelId) {
+              const updatedLabel = labelsData.find((l) => l.id === task.labelId);
+              if (updatedLabel) {
+                return {
+                  ...task,
+                  label: updatedLabel,
+                };
+              }
+            }
+            return task;
+          })
+        );
+      } catch (error) {
+        console.error('Failed to reload labels:', error);
+      }
+    } else {
+      // В мок-режиме тоже обновляем задачи
+      setTasks((prevTasks) =>
+        prevTasks.map((task) => {
+          if (task.labelId) {
+            const updatedLabel = labels.find((l) => l.id === task.labelId);
+            if (updatedLabel) {
+              return {
+                ...task,
+                label: updatedLabel,
+              };
+            }
+          }
+          return task;
+        })
+      );
     }
   };
 
@@ -138,10 +191,12 @@ export const TaskBoardPage = () => {
       chatTitle={chatTitle}
       tasks={tasks}
       assignedUsers={assignedUsers}
+      labels={labels}
       onStatusChange={handleStatusChange}
       onTaskEdit={handleTaskEdit}
       onTaskDelete={handleTaskDelete}
       loading={loading}
+      onLabelsChange={handleLabelsChange}
     />
   );
 };

@@ -38,9 +38,9 @@ export const Default: Story = {
   render: (args) => <AssignUserDialogWrapper {...args} />,
   args: {
     users: [
-      { id: 1, firstName: 'Иван', lastName: 'Петров', username: 'ivan_petrov', telegramId: 123456789, createdAt: new Date().toISOString() },
-      { id: 2, firstName: 'Мария', lastName: 'Сидорова', username: 'maria_sidorova', telegramId: 987654321, createdAt: new Date().toISOString() },
-      { id: 3, firstName: 'Алексей', lastName: 'Иванов', telegramId: 456789123, createdAt: new Date().toISOString() },
+      { id: 1, firstName: 'Иван', lastName: 'Петров', username: 'ivan_petrov', telegramId: 123456789, photoUrl: null, createdAt: new Date().toISOString() },
+      { id: 2, firstName: 'Мария', lastName: 'Сидорова', username: 'maria_sidorova', telegramId: 987654321, photoUrl: null, createdAt: new Date().toISOString() },
+      { id: 3, firstName: 'Алексей', lastName: 'Иванов', username: null, telegramId: 456789123, photoUrl: null, createdAt: new Date().toISOString() },
     ],
   },
 };
@@ -50,9 +50,9 @@ export const WithTaskTitle: Story = {
   args: {
     taskTitle: 'Создать REST API для обработки задач',
     users: [
-      { id: 1, firstName: 'Иван', lastName: 'Петров', username: 'ivan_petrov', telegramId: 123456789, createdAt: new Date().toISOString() },
-      { id: 2, firstName: 'Мария', lastName: 'Сидорова', username: 'maria_sidorova', telegramId: 987654321, createdAt: new Date().toISOString() },
-      { id: 3, firstName: 'Алексей', lastName: 'Иванов', telegramId: 456789123, createdAt: new Date().toISOString() },
+      { id: 1, firstName: 'Иван', lastName: 'Петров', username: 'ivan_petrov', telegramId: 123456789, photoUrl: null, createdAt: new Date().toISOString() },
+      { id: 2, firstName: 'Мария', lastName: 'Сидорова', username: 'maria_sidorova', telegramId: 987654321, photoUrl: null, createdAt: new Date().toISOString() },
+      { id: 3, firstName: 'Алексей', lastName: 'Иванов', username: null, telegramId: 456789123, photoUrl: null, createdAt: new Date().toISOString() },
     ],
   },
 };
@@ -67,6 +67,7 @@ export const ManyUsers: Story = {
       lastName: `Фамилия${i + 1}`,
       username: `user${i + 1}`,
       telegramId: 100000000 + i,
+      photoUrl: null,
       createdAt: new Date().toISOString(),
     })),
   },

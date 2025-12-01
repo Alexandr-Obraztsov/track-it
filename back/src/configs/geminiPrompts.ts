@@ -1,10 +1,11 @@
 import { Chat } from '../entities/Chat';
 import { User } from '../entities/User';
 import { Task as TaskEntity } from '../entities/Task';
+import { Label } from '../entities/Label';
 
 export const GEMINI_PROMPTS = {
   // Промпт для извлечения групповых задач из текста/аудио
-  extractGroupTasks: (text: string, currentTime: Date, chat: Chat, existingTasks: TaskEntity[] = []): string => {
+  extractGroupTasks: (text: string, currentTime: Date, chat: Chat, existingTasks: TaskEntity[] = [], labels: Label[] = []): string => {
     const usersInfo = chat.userChatRoles?.map(ucr => ({
       id: ucr.user.id,
       username: ucr.user.username,
@@ -26,7 +27,17 @@ export const GEMINI_PROMPTS = {
           description: task.description || null,
           assignedUserId: task.assignedUserId || null,
           assignedRoleId: task.assignedRoleId || null,
-          deadline: task.deadline ? (task.deadline instanceof Date ? task.deadline.toISOString().split('T')[0] : task.deadline) : null
+          deadline: task.deadline ? (task.deadline instanceof Date ? task.deadline.toISOString().split('T')[0] : task.deadline) : null,
+          labelId: task.labelId || null,
+          labelName: task.label?.name || null,
+        }))
+      : [];
+
+    const labelsInfo = labels.length > 0
+      ? labels.map(label => ({
+          id: label.id,
+          name: label.name,
+          color: label.color || null,
         }))
       : [];
 
@@ -38,6 +49,7 @@ export const GEMINI_PROMPTS = {
 - Участники: ${JSON.stringify(usersInfo, null, 2)}
 - Роли: ${JSON.stringify(rolesInfo, null, 2)}
 - Существующие задачи: ${JSON.stringify(existingTasksInfo, null, 2)}
+- Доступные метки: ${JSON.stringify(labelsInfo, null, 2)}
 
 СООБЩЕНИЕ: "${text}"
 
@@ -54,6 +66,17 @@ export const GEMINI_PROMPTS = {
    - Если время не указано = 00:00 (не отображается)
    - Анализируй контекст: включительно или исключительно
 6. **ОБНОВЛЕНИЯ**: Обновляй только те поля, которые действительно изменились. Если заголовок тот же - НЕ указывай title
+7. **МЕТКИ (LABELS)**:
+   - Используй существующие метки из списка "Доступные метки", если они подходят по смыслу задачи
+   - Если подходящей метки нет, но задача явно относится к определенной категории (например, "frontend", "backend", "дизайн", "тестирование"), создай новую метку в поле "newLabels"
+   - При создании новой метки используй короткое название (1-2 слова) и опционально цвет в формате HEX (#RRGGBB)
+   - Если задача не требует категоризации, не указывай labelId
+
+ПРИМЕРЫ РАБОТЫ С МЕТКАМИ:
+- "Нужно исправить баг на фронтенде" → используй существующую метку "frontend" если есть, или создай новую: { name: "frontend", color: "#3B82F6" }
+- "Создать API для бэкенда" → используй существующую метку "backend" если есть, или создай новую: { name: "backend", color: "#10B981" }
+- "Обновить дизайн интерфейса" → используй существующую метку "дизайн" если есть, или создай новую: { name: "дизайн", color: "#F59E0B" }
+- "Протестировать функционал" → используй существующую метку "тестирование" если есть, или создай новую: { name: "тестирование", color: "#8B5CF6" }
 
 ПРИМЕРЫ УМНОГО ОБНОВЛЕНИЯ:
 - "Кстати, API нужно сделать REST" → обновить title: "Создать REST API"
@@ -83,7 +106,9 @@ export const GEMINI_PROMPTS = {
       "description": "Подробное описание сути задачи: что именно нужно сделать, почему это важно, как это должно работать, какие детали учесть",
       "assignedUserId": number | null,
       "assignedRoleId": number | null,
-      "deadline": "YYYY-MM-DDTHH:mm:ss+03:00" | null
+      "deadline": "YYYY-MM-DDTHH:mm:ss+03:00" | null,
+      "labelId": number | null, // ID существующей метки, если подходит
+      "labelName": string | null // Название новой метки для создания, если подходящей метки нет
     }
   ],
   "updatedTasks": [
@@ -93,7 +118,14 @@ export const GEMINI_PROMPTS = {
       "description": "новое описание" | null, // ТОЛЬКО если описание изменилось
       "assignedUserId": number | null, // ТОЛЬКО если назначение изменилось
       "assignedRoleId": number | null, // ТОЛЬКО если роль изменилась
-      "deadline": "YYYY-MM-DDTHH:mm:ss+03:00" | null // ТОЛЬКО если дедлайн изменился
+      "deadline": "YYYY-MM-DDTHH:mm:ss+03:00" | null, // ТОЛЬКО если дедлайн изменился
+      "labelId": number | null // ТОЛЬКО если метка изменилась
+    }
+  ],
+  "newLabels": [
+    {
+      "name": "название метки", // Короткое название (1-2 слова)
+      "color": "#RRGGBB" | null // Опциональный цвет в формате HEX
     }
   ]
 }`;

@@ -12,6 +12,7 @@ import { labelRoutes } from './routes/labels';
 import { geminiRoutes } from './routes/gemini';
 import authRoutes from './routes/auth';
 import { notificationRoutes } from './routes/notifications';
+import { commentRoutes } from './routes/comments';
 import { TelegramBotService } from './bot/telegramBot';
 import { notificationScheduler } from './services/notificationScheduler';
 
@@ -49,16 +50,7 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 // Routes - регистрация всех API эндпоинтов
-app.use('/api/auth', (req, res, next) => {
-  console.log('🌐 [SERVER] Auth route hit:', {
-    method: req.method,
-    path: req.path,
-    url: req.url,
-    originalUrl: req.originalUrl,
-    baseUrl: req.baseUrl,
-  });
-  next();
-}, authRoutes);
+app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/chats', chatRoutes);
 app.use('/api/roles', roleRoutes);
@@ -66,6 +58,7 @@ app.use('/api/tasks', taskRoutes);
 app.use('/api/labels', labelRoutes);
 app.use('/api/gemini', geminiRoutes);
 app.use('/api/notifications', notificationRoutes);
+app.use('/api/comments', commentRoutes);
 
 // Health check endpoint
 app.get('/health', (req, res) => {
@@ -101,12 +94,9 @@ initializeDatabase().then(() => {
     try {
       notificationScheduler.start(telegramBot);
     } catch (error) {
-      console.error('Failed to start notification scheduler:', error);
+      // Ошибка запуска планировщика
     }
-  } else {
-    console.warn('⚠️ [SERVER] Notification scheduler not started: Telegram bot not available');
   }
 }).catch(error => {
-  console.error('Failed to initialize database:', error);
   process.exit(1);
 });

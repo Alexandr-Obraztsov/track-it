@@ -21,3 +21,5 @@ COMMENT ON COLUMN roles.id IS 'Уникальный идентификатор �
 COMMENT ON COLUMN roles.title IS 'Название роли (уникальное)';
 COMMENT ON COLUMN roles.created_at IS 'Дата и время создания записи';
 
+
+

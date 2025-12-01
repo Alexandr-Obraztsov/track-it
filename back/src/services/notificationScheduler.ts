@@ -14,35 +14,26 @@ export class NotificationScheduler {
    * Запускает планировщик
    */
   start(telegramBot: TelegramBotService): void {
-    console.log('⏰ [SCHEDULER] Starting notification scheduler...');
-
     // Устанавливаем бота в сервис уведомлений
     notificationService.setTelegramBot(telegramBot);
 
     // Проверяем дедлайны каждую минуту
     this.deadlineCheckInterval = setInterval(() => {
-      notificationService.checkDeadlineReminders().catch(error => {
-        console.error('❌ [SCHEDULER] Error in deadline check:', error);
+      notificationService.checkDeadlineReminders().catch(() => {
+        // Ошибка обрабатывается на уровне выше
       });
     }, 60 * 1000); // 1 минута
 
     // Проверяем ежедневные уведомления каждую минуту
     this.dailyDigestInterval = setInterval(() => {
-      notificationService.sendDailyDigests().catch(error => {
-        console.error('❌ [SCHEDULER] Error in daily digest:', error);
+      notificationService.sendDailyDigests().catch(() => {
+        // Ошибка обрабатывается на уровне выше
       });
     }, 60 * 1000); // 1 минута
 
     // Запускаем проверки сразу при старте
-    notificationService.checkDeadlineReminders().catch(error => {
-      console.error('❌ [SCHEDULER] Error in initial deadline check:', error);
-    });
-
-    notificationService.sendDailyDigests().catch(error => {
-      console.error('❌ [SCHEDULER] Error in initial daily digest:', error);
-    });
-
-    console.log('✅ [SCHEDULER] Notification scheduler started');
+    notificationService.checkDeadlineReminders().catch(() => {});
+    notificationService.sendDailyDigests().catch(() => {});
   }
 
   /**
@@ -59,7 +50,6 @@ export class NotificationScheduler {
       this.dailyDigestInterval = null;
     }
 
-    console.log('🛑 [SCHEDULER] Notification scheduler stopped');
   }
 }
 

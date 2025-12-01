@@ -7,7 +7,6 @@ const meta: Meta<typeof Profile> = {
   component: Profile,
   tags: ['autodocs'],
   argTypes: {
-    onSaveProfile: { action: 'profile saved' },
     onSaveNotifications: { action: 'notifications saved' },
     loading: {
       control: 'boolean',
@@ -29,12 +28,8 @@ export const AllNotificationsOn: Story = {
   args: {
     user: mockCurrentUser,
     notificationSettings: {
-      taskAssigned: true,
-      taskCompleted: true,
-      taskDeadline: true,
-      taskComment: true,
-      dailyDigest: true,
-      weeklyReport: true,
+      dailyDigestTime: '09:00',
+      deadlineReminderHours: [168, 72, 24, 12, 1],
     },
   },
 };
@@ -43,12 +38,8 @@ export const AllNotificationsOff: Story = {
   args: {
     user: mockCurrentUser,
     notificationSettings: {
-      taskAssigned: false,
-      taskCompleted: false,
-      taskDeadline: false,
-      taskComment: false,
-      dailyDigest: false,
-      weeklyReport: false,
+      dailyDigestTime: '09:00',
+      deadlineReminderHours: [],
     },
   },
 };

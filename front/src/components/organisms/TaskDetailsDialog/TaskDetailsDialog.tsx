@@ -10,7 +10,6 @@ import {
   Box,
   Stack,
   Divider,
-  Chip,
   IconButton,
   useTheme,
   useMediaQuery,
@@ -20,11 +19,14 @@ import { Edit, Delete, Comment, Close } from '@mui/icons-material';
 import { StatusChip } from '../../molecules/StatusChip';
 import { UserChip } from '../../molecules/UserChip';
 import { DeadlineChip } from '../../molecules/DeadlineChip';
-import type { Task } from '../../../types/api';
+import { LabelChip } from '../../molecules/LabelChip';
+import { TaskComments } from '../TaskComments';
+import type { Task, User } from '../../../types/api';
 
 export interface TaskDetailsDialogProps {
   open: boolean;
   task: Task | null;
+  currentUser?: User | null;
   onClose: () => void;
   onEdit?: (taskId: number) => void;
   onDelete?: (taskId: number) => void;
@@ -34,6 +36,7 @@ export interface TaskDetailsDialogProps {
 export const TaskDetailsDialog: React.FC<TaskDetailsDialogProps> = ({
   open,
   task,
+  currentUser,
   onClose,
   onEdit,
   onDelete,
@@ -98,6 +101,9 @@ export const TaskDetailsDialog: React.FC<TaskDetailsDialogProps> = ({
         {task.deadline && (
           <DeadlineChip deadline={task.deadline} size="small" />
         )}
+        {task.label && (
+          <LabelChip label={task.label} size="small" />
+        )}
       </Box>
 
       {/* Дополнительная информация */}
@@ -161,6 +167,10 @@ export const TaskDetailsDialog: React.FC<TaskDetailsDialogProps> = ({
           )}
         </Box>
       )}
+
+      {/* Комментарии */}
+      <Divider sx={{ my: 2 }} />
+      <TaskComments taskId={task.id} currentUser={currentUser} />
     </Stack>
   );
 

@@ -34,7 +34,6 @@ export const Profile: React.FC<ProfileProps> = ({
   user,
   notificationSettings: initialSettings,
   onSaveNotifications,
-  loading = false,
 }) => {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));

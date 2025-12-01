@@ -23,7 +23,8 @@ import { AssignUserDialog } from '../../organisms/AssignUserDialog';
 import { DraggableTaskCard } from '../../organisms/DraggableTaskCard';
 import { TaskBoardHeader } from '../../molecules/TaskBoardHeader';
 import { TaskBoardContent } from './TaskBoardContent';
-import type { Task, User } from '../../../types/api';
+import { LabelManager } from '../../organisms/LabelManager';
+import type { Task, User, Label } from '../../../types/api';
 import { authApi } from '../../../api/auth';
 
 export interface TaskBoardProps {
@@ -31,10 +32,12 @@ export interface TaskBoardProps {
   chatTitle: string;
   tasks: Task[];
   assignedUsers?: User[];
+  labels?: Label[];
   onStatusChange?: (taskId: number, status: 'backlog' | 'in_progress' | 'completed', assignedUserId?: number | null) => void;
   onTaskEdit?: (taskId: number, task: Partial<Task>) => void;
   onTaskDelete?: (taskId: number) => void;
   onTaskComment?: (taskId: number) => void;
+  onLabelsChange?: () => void;
   loading?: boolean;
 }
 
@@ -43,10 +46,12 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({
   chatTitle,
   tasks,
   assignedUsers = [],
+  labels = [],
   onStatusChange,
   onTaskEdit,
   onTaskDelete,
   onTaskComment,
+  onLabelsChange,
 }) => {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
@@ -61,6 +66,8 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({
   const [pendingTaskId, setPendingTaskId] = useState<number | null>(null);
   const [pendingTask, setPendingTask] = useState<Task | null>(null);
   const [pendingOriginalStatus, setPendingOriginalStatus] = useState<'backlog' | 'in_progress' | 'completed' | null>(null);
+  const [openLabelManager, setOpenLabelManager] = useState(false);
+  const [localLabels, setLocalLabels] = useState<Label[]>(labels);
   
   // Локальное состояние задач для оптимистичного обновления
   const [localTasks, setLocalTasks] = useState<Task[]>(tasks);
@@ -69,6 +76,25 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({
   useEffect(() => {
     setLocalTasks(tasks);
   }, [tasks]);
+
+  useEffect(() => {
+    setLocalLabels(labels);
+    // Обновляем задачи при изменении меток
+    setLocalTasks((prevTasks) =>
+      prevTasks.map((task) => {
+        if (task.labelId) {
+          const updatedLabel = labels.find((l) => l.id === task.labelId);
+          if (updatedLabel) {
+            return {
+              ...task,
+              label: updatedLabel,
+            };
+          }
+        }
+        return task;
+      })
+    );
+  }, [labels]);
   
   // Состояние сворачивания колонок
   const getCollapsedStateKey = () => `taskBoard_collapsed_${chatId}`;
@@ -122,6 +148,7 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({
   const handleSaveTask = async (taskData: any) => {
     if (editingTask) {
       // Оптимистичное обновление для редактирования
+      const label = labels.find((l) => l.id === taskData.labelId);
       setLocalTasks((prev) =>
         prev.map((t) =>
           t.id === editingTask.id
@@ -131,12 +158,17 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({
                 description: taskData.description || null,
                 assignedUserId: taskData.assignedUserId || null,
                 deadline: taskData.deadline ? taskData.deadline.toISOString() : null,
+                labelId: taskData.labelId || null,
+                label: label || null,
               }
             : t
         )
       );
       try {
-        await onTaskEdit?.(editingTask.id, taskData);
+        await onTaskEdit?.(editingTask.id, {
+          ...taskData,
+          deadline: taskData.deadline ? taskData.deadline.toISOString() : null,
+        });
       } catch (error) {
         console.error('Failed to update task:', error);
         // Откатываем изменения в случае ошибки
@@ -224,16 +256,18 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({
       );
       
       // Асинхронно синхронизируем с сервером
-    Promise.resolve(onStatusChange(taskId, newStatus, assignedUserId)).catch((error: any) => {
+    if (onStatusChange) {
+      Promise.resolve(onStatusChange(taskId, newStatus, assignedUserId)).catch((error: any) => {
         console.error('Failed to update task status:', error);
         // В случае ошибки откатываем изменения
-      const task = localTasks.find((t) => t.id === taskId);
-      if (task) {
-        setLocalTasks((prev) =>
-          prev.map((t) => (t.id === taskId ? { ...t, status: task.status, assignedUserId: task.assignedUserId } : t))
-        );
-      }
+        const task = localTasks.find((t) => t.id === taskId);
+        if (task) {
+          setLocalTasks((prev) =>
+            prev.map((t) => (t.id === taskId ? { ...t, status: task.status, assignedUserId: task.assignedUserId } : t))
+          );
+        }
       });
+    }
   };
 
   const handleAssignUser = (userId: number | null) => {
@@ -273,6 +307,7 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({
         }
       : null,
     deadline: task.deadline,
+    label: task.label || null,
     onEdit: handleEditTask,
     onComment: onTaskComment,
     onDelete: onTaskDelete,
@@ -314,6 +349,7 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({
         tasksCount={filteredTasks.length}
         showOnlyMyTasks={showOnlyMyTasks}
         onToggleFilter={() => setShowOnlyMyTasks(!showOnlyMyTasks)}
+        onManageLabels={() => setOpenLabelManager(true)}
         isMobile={isMobile}
       />
 
@@ -367,8 +403,10 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({
             description: editingTask.description || '',
             assignedUserId: editingTask.assignedUserId,
             deadline: editingTask.deadline ? new Date(editingTask.deadline) : null,
+            labelId: editingTask.labelId || null,
           }}
           assignedUsers={assignedUsers}
+          labels={localLabels}
         />
       )}
 
@@ -376,6 +414,7 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({
       <TaskDetailsDialog
         open={openTaskDetails}
         task={selectedTask}
+        currentUser={currentUser}
         onClose={() => {
           setOpenTaskDetails(false);
           setSelectedTask(null);
@@ -392,6 +431,33 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({
         onConfirm={handleAssignUser}
         users={assignedUsers}
         taskTitle={pendingTask?.title}
+      />
+
+      {/* Label Manager */}
+      <LabelManager
+        open={openLabelManager}
+        onClose={() => setOpenLabelManager(false)}
+        chatId={chatId}
+        labels={localLabels}
+        onLabelsChange={(newLabels) => {
+          setLocalLabels(newLabels);
+          // Обновляем все задачи, которые используют метки
+          setLocalTasks((prevTasks) =>
+            prevTasks.map((task) => {
+              if (task.labelId) {
+                const updatedLabel = newLabels.find((l) => l.id === task.labelId);
+                if (updatedLabel) {
+                  return {
+                    ...task,
+                    label: updatedLabel,
+                  };
+                }
+              }
+              return task;
+            })
+          );
+          onLabelsChange?.();
+        }}
       />
     </Box>
   );

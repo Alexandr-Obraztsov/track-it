@@ -32,3 +32,5 @@ COMMENT ON COLUMN chat_roles.id IS 'Уникальный идентификат�
 COMMENT ON COLUMN chat_roles.chat_id IS 'ID чата';
 COMMENT ON COLUMN chat_roles.role_id IS 'ID роли';
 
+
+

@@ -26,6 +26,8 @@ import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { ru } from 'date-fns/locale';
 
+import type { Label } from '../../../types/api';
+
 export interface TaskFormProps {
   open: boolean;
   onClose: () => void;
@@ -37,6 +39,7 @@ export interface TaskFormProps {
     lastName?: string | null;
     username?: string | null;
   }>;
+  labels?: Label[];
 }
 
 export interface TaskFormData {
@@ -44,6 +47,7 @@ export interface TaskFormData {
   description: string;
   assignedUserId: number | null;
   deadline: Date | null;
+  labelId: number | null;
 }
 
 export const TaskForm: React.FC<TaskFormProps> = ({
@@ -52,6 +56,7 @@ export const TaskForm: React.FC<TaskFormProps> = ({
   onSubmit,
   initialData,
   assignedUsers = [],
+  labels = [],
 }) => {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
@@ -61,6 +66,7 @@ export const TaskForm: React.FC<TaskFormProps> = ({
     description: initialData?.description || '',
     assignedUserId: initialData?.assignedUserId || null,
     deadline: initialData?.deadline ? new Date(initialData.deadline) : null,
+    labelId: initialData?.labelId || null,
   });
 
   const [errors, setErrors] = useState<Partial<Record<keyof TaskFormData, string>>>({});
@@ -107,6 +113,7 @@ export const TaskForm: React.FC<TaskFormProps> = ({
       description: '',
       assignedUserId: null,
       deadline: null,
+      labelId: null,
     });
     setErrors({});
   };
@@ -117,6 +124,7 @@ export const TaskForm: React.FC<TaskFormProps> = ({
       description: initialData?.description || '',
       assignedUserId: initialData?.assignedUserId || null,
       deadline: initialData?.deadline ? new Date(initialData.deadline) : null,
+      labelId: initialData?.labelId || null,
     });
     setErrors({});
     onClose();
@@ -188,6 +196,67 @@ export const TaskForm: React.FC<TaskFormProps> = ({
                   {assignedUsers.map((user) => (
                     <MenuItem key={user.id} value={user.id} sx={{ fontSize: '0.875rem' }}>
                       {user.firstName} {user.lastName || ''}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            )}
+
+            {labels.length > 0 && (
+              <FormControl fullWidth size="small">
+                <InputLabel sx={{ fontSize: '0.875rem' }}>Метка</InputLabel>
+                <Select
+                  value={formData.labelId || ''}
+                  onChange={(e) => handleChange('labelId')({ target: { value: e.target.value || null } })}
+                  label="Метка"
+                  sx={{
+                    borderRadius: 1.5,
+                    fontSize: '0.875rem',
+                    '& .MuiSelect-select': {
+                      fontSize: '0.875rem',
+                    },
+                  }}
+                  renderValue={(value) => {
+                    if (!value) return '';
+                    const label = labels.find((l) => l.id === value);
+                    if (!label) return '';
+                    return (
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        {label.color && (
+                          <Box
+                            sx={{
+                              width: 12,
+                              height: 12,
+                              borderRadius: '50%',
+                              backgroundColor: label.color,
+                              border: '1px solid rgba(255, 255, 255, 0.2)',
+                            }}
+                          />
+                        )}
+                        <Typography sx={{ fontSize: '0.875rem' }}>{label.name}</Typography>
+                      </Box>
+                    );
+                  }}
+                >
+                  <MenuItem value="" sx={{ fontSize: '0.875rem' }}>
+                    <Typography color="text.secondary" sx={{ fontSize: '0.875rem' }}>Без метки</Typography>
+                  </MenuItem>
+                  {labels.map((label) => (
+                    <MenuItem key={label.id} value={label.id} sx={{ fontSize: '0.875rem' }}>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, width: '100%' }}>
+                        {label.color && (
+                          <Box
+                            sx={{
+                              width: 12,
+                              height: 12,
+                              borderRadius: '50%',
+                              backgroundColor: label.color,
+                              border: '1px solid rgba(255, 255, 255, 0.2)',
+                            }}
+                          />
+                        )}
+                        <Typography sx={{ fontSize: '0.875rem' }}>{label.name}</Typography>
+                      </Box>
                     </MenuItem>
                   ))}
                 </Select>

@@ -26,3 +26,5 @@ COMMENT ON COLUMN chats.title IS 'Название чата/группы';
 COMMENT ON COLUMN chats.message_id IS 'ID сообщения, связанного с чатом';
 COMMENT ON COLUMN chats.created_at IS 'Дата и время создания записи';
 
+
+

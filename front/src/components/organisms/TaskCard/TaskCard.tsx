@@ -10,7 +10,9 @@ import type { Theme } from '@mui/material';
 import { StatusChip } from '../../molecules/StatusChip';
 import { UserChip } from '../../molecules/UserChip';
 import { DeadlineChip } from '../../molecules/DeadlineChip';
+import { LabelChip } from '../../molecules/LabelChip';
 import { TaskActions } from '../../molecules/TaskActions';
+import type { Label } from '../../../types/api';
 
 export interface TaskCardProps {
   id: number;
@@ -24,6 +26,7 @@ export interface TaskCardProps {
     username?: string | null;
   } | null;
   deadline?: string | null;
+  label?: Label | null;
   onEdit?: (id: number) => void;
   onComment?: (id: number) => void;
   onDelete?: (id: number) => void;
@@ -36,6 +39,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
   status,
   assignedUser,
   deadline,
+  label,
   onEdit,
   onComment,
   onDelete,
@@ -113,7 +117,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
               </Typography>
             )}
 
-            {(assignedUser || deadline) && (
+            {(assignedUser || deadline || label) && (
               <Stack
                 direction="row"
                 spacing={1}
@@ -129,6 +133,8 @@ export const TaskCard: React.FC<TaskCardProps> = ({
                 )}
 
                 {deadline && <DeadlineChip deadline={deadline} size="small" />}
+
+                {label && <LabelChip label={label} size="small" />}
               </Stack>
             )}
           </Box>

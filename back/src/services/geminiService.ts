@@ -32,7 +32,13 @@ export class GeminiService {
     const currentTime = new Date();
 
     try {
-      const prompt = GEMINI_PROMPTS.extractGroupTasks(params.text || '', currentTime, params.chat, params.existingTasks || []);
+      const prompt = GEMINI_PROMPTS.extractGroupTasks(
+        params.text || '', 
+        currentTime, 
+        params.chat, 
+        params.existingTasks || [], 
+        params.labels || []
+      );
       
 
       const content: Part[] = [
@@ -69,11 +75,6 @@ export class GeminiService {
       
       return JSON.parse(jsonString);
     } catch (error) {
-      console.error('Error extracting tasks:', error);
-      if (error instanceof Error) {
-        console.error('Error details:', error.message);
-        console.error('Error stack:', error.stack);
-      }
       return { newTasks: [], updatedTasks: [] };
     }
   }

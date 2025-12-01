@@ -22,18 +22,12 @@ export class NotificationService {
    */
   private async sendNotification(user: User, message: string): Promise<boolean> {
     if (!this.telegramBot) {
-      console.error('❌ [NOTIFICATION] Telegram bot not initialized');
       return false;
     }
 
     try {
-      const success = await this.telegramBot.sendNotification(user.telegramId, message);
-      if (success) {
-        console.log(`✅ [NOTIFICATION] Sent to user ${user.id} (${user.telegramId})`);
-      }
-      return success;
+      return await this.telegramBot.sendNotification(user.telegramId, message);
     } catch (error: any) {
-      console.error(`❌ [NOTIFICATION] Error sending to user ${user.id}:`, error.message);
       return false;
     }
   }
@@ -43,7 +37,6 @@ export class NotificationService {
    */
   async checkDeadlineReminders(): Promise<void> {
     try {
-      console.log('🔔 [NOTIFICATION] Checking deadline reminders...');
 
       // Получаем всех пользователей с настройками уведомлений
       const allSettings = await this.notificationSettingsRepository.find({
@@ -106,9 +99,8 @@ export class NotificationService {
         }
       }
 
-      console.log('✅ [NOTIFICATION] Deadline reminders check completed');
     } catch (error) {
-      console.error('❌ [NOTIFICATION] Error checking deadline reminders:', error);
+      // Ошибка логируется на уровне выше
     }
   }
 
@@ -117,7 +109,6 @@ export class NotificationService {
    */
   async sendDailyDigests(): Promise<void> {
     try {
-      console.log('📅 [NOTIFICATION] Sending daily digests...');
 
       const now = new Date();
       const currentHour = now.getHours();
@@ -164,9 +155,8 @@ export class NotificationService {
         }
       }
 
-      console.log('✅ [NOTIFICATION] Daily digests check completed');
     } catch (error) {
-      console.error('❌ [NOTIFICATION] Error sending daily digests:', error);
+      // Ошибка логируется на уровне выше
     }
   }
 

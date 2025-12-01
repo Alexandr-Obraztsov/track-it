@@ -45,3 +45,5 @@ COMMENT ON COLUMN task_comments.edited IS 'Флаг редактирования
 COMMENT ON COLUMN task_comments.edited_at IS 'Дата и время последнего редактирования';
 COMMENT ON COLUMN task_comments.created_at IS 'Дата и время создания комментария';
 
+
+

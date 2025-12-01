@@ -4,6 +4,7 @@ import { taskManager } from '../services/task-service/task-service';
 import { AppDataSource } from '../configs/database';
 import { Chat } from '../entities/Chat';
 import { Task } from '../entities/Task';
+import { Label } from '../entities/Label';
 import { authenticateToken } from '../middleware/auth';
 import multer from 'multer';
 
@@ -46,16 +47,21 @@ router.post('/extract', authenticateToken, upload.single('audioData'), async (re
       return res.status(404).json({ error: 'Chat not found' });
     }
 
-    // Получаем существующие задачи для контекста
+    // Получаем существующие задачи и labels для контекста
     let existingTasks: Task[] = [];
+    let labels: Label[] = [];
     try {
       existingTasks = await taskManager.getChatTasks(chat.id);
+      labels = await AppDataSource.getRepository(Label).find({
+        where: { chatId: chat.id },
+        order: { name: 'ASC' },
+      });
     } catch (error) {
-      console.error('Error fetching existing tasks:', error);
+      console.error('Error fetching existing tasks or labels:', error);
     }
 
     // Создаем параметры для geminiService
-    const params = { text, audioData, audioMimeType, chat, existingTasks };
+    const params = { text, audioData, audioMimeType, chat, existingTasks, labels };
 
     const geminiResult = await geminiService.extractTasks(params);
     

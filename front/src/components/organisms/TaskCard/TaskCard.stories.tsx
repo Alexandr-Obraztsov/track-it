@@ -10,7 +10,6 @@ const meta: Meta<typeof TaskCard> = {
       control: 'select',
       options: ['backlog', 'in_progress', 'completed'],
     },
-    onStatusChange: { action: 'status changed' },
     onEdit: { action: 'edit clicked' },
     onComment: { action: 'comment clicked' },
     onDelete: { action: 'delete clicked' },

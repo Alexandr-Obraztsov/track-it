@@ -11,10 +11,8 @@ const meta: Meta<typeof TaskBoard> = {
   },
   argTypes: {
     onStatusChange: { action: 'status changed' },
-    onTaskCreate: { action: 'task created' },
     onTaskEdit: { action: 'task edited' },
     onTaskDelete: { action: 'task deleted' },
-    onTaskComment: { action: 'comment clicked' },
   },
 };
 
@@ -53,6 +51,7 @@ export const ManyTasks: Story = {
         description: 'Описание новой задачи',
         assignedUserId: 1,
         assignedRoleId: null,
+        labelId: null,
         deadline: new Date(Date.now() + 10 * 24 * 60 * 60 * 1000).toISOString(),
         status: 'backlog',
         createdAt: new Date().toISOString(),
@@ -64,6 +63,7 @@ export const ManyTasks: Story = {
         description: null,
         assignedUserId: 2,
         assignedRoleId: null,
+        labelId: null,
         deadline: null,
         status: 'in_progress',
         createdAt: new Date().toISOString(),
@@ -75,6 +75,7 @@ export const ManyTasks: Story = {
         description: 'Уже выполнена',
         assignedUserId: 1,
         assignedRoleId: null,
+        labelId: null,
         deadline: null,
         status: 'completed',
         createdAt: new Date().toISOString(),

@@ -39,17 +39,19 @@ const mockTask: Task = {
   description: 'Необходимо реализовать полноценный REST API для работы с задачами. API должен поддерживать создание, чтение, обновление и удаление задач. Также нужно добавить фильтрацию по статусу и назначенному пользователю.',
   status: 'in_progress',
   assignedUserId: 1,
+  assignedRoleId: null,
+  labelId: null,
   assignedUser: {
     id: 1,
     firstName: 'Иван',
     lastName: 'Петров',
     username: 'ivan_petrov',
     telegramId: 123456789,
+    photoUrl: null,
     createdAt: new Date().toISOString(),
   },
   deadline: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
   createdAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
-  chatId: 1,
 };
 
 export const Default: Story = {
@@ -89,6 +91,7 @@ export const CompletedTask: Story = {
         lastName: 'Сидорова',
         username: 'maria_sidorova',
         telegramId: 987654321,
+        photoUrl: null,
         createdAt: new Date().toISOString(),
       },
     },

@@ -10,25 +10,9 @@ const router: Router = Router();
 // Эндпоинт для авторизации через Telegram WebApp
 router.post('/telegram', async (req, res) => {
   try {
-    // Логируем запрос для отладки
-    console.log('🔐 Auth request:', {
-      origin: req.headers.origin || 'no origin',
-      userAgent: req.headers['user-agent'] || 'no user-agent',
-      hasInitData: !!req.body.initData,
-      initDataLength: req.body.initData?.length || 0,
-      ip: req.ip || req.socket.remoteAddress,
-      timestamp: new Date().toISOString(),
-    });
-    
     const { initData } = req.body;
     
     if (!initData) {
-      console.error('❌ Missing initData in request');
-      console.error('Request body:', req.body);
-      console.error('Request headers:', {
-        'content-type': req.headers['content-type'],
-        origin: req.headers.origin,
-      });
       return res.status(400).json({ error: 'initData is required' });
     }
 
@@ -49,7 +33,6 @@ router.post('/telegram', async (req, res) => {
       try {
         userData = JSON.parse(decodeURIComponent(userParam));
       } catch (error) {
-        console.error('❌ Failed to parse user data:', error);
         return res.status(400).json({ 
           error: 'Invalid user data in initData',
           details: 'Failed to parse user parameter'
@@ -70,32 +53,14 @@ router.post('/telegram', async (req, res) => {
       try {
         // Валидируем initData с помощью токена бота
         validate(initData, botToken);
-        console.log('✅ initData validated successfully');
       } catch (error: any) {
-        console.error('❌ initData validation failed:', {
-          message: error.message,
-          hasHash: !!hashParam,
-          hasUser: !!userParam,
-          initDataLength: initData.length,
-          isDevelopment,
-          skipValidation,
-        });
-        
         // В режиме разработки или если установлен флаг, пропускаем валидацию
         if (!isDevelopment && !skipValidation) {
           return res.status(401).json({ 
             error: 'Invalid initData',
             details: error.message || 'Hash validation failed. Set SKIP_INITDATA_VALIDATION=true to skip validation in development.'
           });
-        } else {
-          console.warn('⚠️ Skipping initData validation (development mode or SKIP_INITDATA_VALIDATION=true)');
         }
-      }
-    } else {
-      if (hashParam && skipValidation) {
-        console.warn('⚠️ Hash present but validation skipped (SKIP_INITDATA_VALIDATION=true)');
-      } else if (!hashParam) {
-        console.warn('⚠️ No hash in initData - using without validation');
       }
     }
 
@@ -117,12 +82,6 @@ router.post('/telegram', async (req, res) => {
         photoUrl: userData.photo_url || null,
       });
       await userRepository.save(user);
-      console.log('✅ [AUTH] New user created from WebApp:', {
-        id: user.id,
-        telegramId: user.telegramId,
-        username: user.username,
-        hasPhotoUrl: !!user.photoUrl
-      });
     } else {
       // Обновляем данные пользователя (обновляем даже если null)
       const needsUpdate = 
@@ -137,12 +96,6 @@ router.post('/telegram', async (req, res) => {
         user.username = userData.username !== undefined ? userData.username : user.username;
         user.photoUrl = userData.photo_url !== undefined ? userData.photo_url : user.photoUrl;
         await userRepository.save(user);
-        console.log('✅ [AUTH] User updated from WebApp:', {
-          id: user.id,
-          telegramId: user.telegramId,
-          username: user.username,
-          hasPhotoUrl: !!user.photoUrl
-        });
       }
     }
     
@@ -153,12 +106,6 @@ router.post('/telegram', async (req, res) => {
       jwtSecret,
       { expiresIn: '30d' }
     );
-    
-    console.log('✅ Auth successful:', {
-      userId: user.id,
-      telegramId: user.telegramId,
-      username: user.username,
-    });
 
     res.json({
       user: {
@@ -173,11 +120,6 @@ router.post('/telegram', async (req, res) => {
     });
     
   } catch (error: any) {
-    console.error('❌ Telegram auth error:', {
-      message: error.message,
-      stack: error.stack,
-      name: error.name,
-    });
     res.status(500).json({ 
       error: 'Internal server error',
       details: process.env.NODE_ENV === 'development' ? error.message : undefined
@@ -187,34 +129,14 @@ router.post('/telegram', async (req, res) => {
 
 // Эндпоинт для получения профиля пользователя
 router.get('/profile', authenticateToken, async (req: any, res) => {
-  console.log('📋 [AUTH] GET /profile handler called:', {
-    userId: req.user?.userId,
-    method: req.method,
-    path: req.path,
-    url: req.url,
-    originalUrl: req.originalUrl,
-  });
-
   try {
     const userRepository = AppDataSource.getRepository(User);
     // Ищем пользователя по telegramId, так как это более надежный идентификатор
     const user = await userRepository.findOne({ where: { telegramId: req.user.telegramId } });
     
     if (!user) {
-      console.log('❌ [AUTH] User not found in database:', { 
-        telegramId: req.user.telegramId,
-        userId: req.user.userId 
-      });
-      // Возвращаем 401, так как токен ссылается на несуществующего пользователя
-      // Это означает, что токен невалиден или пользователь был удален
       return res.status(401).json({ error: 'User not found. Please login again.' });
     }
-    
-    console.log('✅ [AUTH] Profile loaded successfully:', {
-      userId: user.id,
-      telegramId: user.telegramId,
-      username: user.username,
-    });
     
     res.json({
       id: user.id,
@@ -226,7 +148,6 @@ router.get('/profile', authenticateToken, async (req: any, res) => {
       createdAt: user.createdAt.toISOString(),
     });
   } catch (error) {
-    console.error('❌ [AUTH] Profile error:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });

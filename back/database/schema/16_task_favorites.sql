@@ -36,3 +36,5 @@ COMMENT ON COLUMN task_favorites.user_id IS 'ID пользователя';
 COMMENT ON COLUMN task_favorites.task_id IS 'ID задачи, добавленной в избранное';
 COMMENT ON COLUMN task_favorites.created_at IS 'Дата и время добавления в избранное';
 
+
+

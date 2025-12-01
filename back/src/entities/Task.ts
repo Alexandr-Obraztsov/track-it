@@ -6,6 +6,7 @@ import { UserTask } from './UserTask';
 import { ChatTask } from './ChatTask';
 import { TaskHistory } from './TaskHistory';
 import { Label } from './Label';
+import { TaskComment } from './TaskComment';
 
 @Entity('tasks')
 export class Task {
@@ -68,4 +69,7 @@ export class Task {
 
   @OneToMany(() => TaskHistory, history => history.task)
   historyEntries!: TaskHistory[];
+
+  @OneToMany(() => TaskComment, comment => comment.task)
+  comments!: TaskComment[];
 }

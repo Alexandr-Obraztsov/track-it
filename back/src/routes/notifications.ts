@@ -87,5 +87,5 @@ router.put('/', authenticateToken, async (req: any, res) => {
   }
 });
 
-export const notificationRoutes = router;
+export const notificationRoutes: Router = router;
 

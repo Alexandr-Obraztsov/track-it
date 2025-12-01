@@ -10,6 +10,7 @@ import { ChatTask } from '../entities/ChatTask';
 import { NotificationSettings } from '../entities/NotificationSettings';
 import { TaskHistory } from '../entities/TaskHistory';
 import { Label } from '../entities/Label';
+import { TaskComment } from '../entities/TaskComment';
 
 export const AppDataSource = new DataSource({
   type: 'postgres',
@@ -20,7 +21,7 @@ export const AppDataSource = new DataSource({
   database: process.env.DB_NAME || 'track_it',
   synchronize: process.env.NODE_ENV !== 'production',
   logging: process.env.NODE_ENV === 'development',
-  entities: [User, Chat, Role, Task, UserChatRole, ChatRole, UserTask, ChatTask, NotificationSettings, TaskHistory, Label],
+  entities: [User, Chat, Role, Task, UserChatRole, ChatRole, UserTask, ChatTask, NotificationSettings, TaskHistory, Label, TaskComment],
   migrations: ['src/migrations/*.ts'],
   subscribers: ['src/subscribers/*.ts'],
 });
@@ -29,13 +30,9 @@ export const initializeDatabase = async () => {
   try {
     if (!AppDataSource.isInitialized) {
       await AppDataSource.initialize();
-      console.log('✅ Database connection established successfully');
-      
       // Синхронизируем схему, если не в production
       if (process.env.NODE_ENV !== 'production') {
-        console.log('🔄 Synchronizing database schema...');
         await AppDataSource.synchronize(false); // false = не удаляет существующие таблицы
-        console.log('✅ Database schema synchronized successfully');
       }
     }
   } catch (error) {

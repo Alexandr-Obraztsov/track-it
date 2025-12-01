@@ -13,7 +13,6 @@ export interface TaskListProps {
 
 export const TaskList: React.FC<TaskListProps> = ({
   tasks,
-  onStatusChange,
   onEdit,
   onComment,
   onDelete,
@@ -126,7 +125,6 @@ export const TaskList: React.FC<TaskListProps> = ({
             <TaskCard
               key={task.id}
               {...task}
-              onStatusChange={onStatusChange}
               onEdit={onEdit}
               onComment={onComment}
               onDelete={onDelete}

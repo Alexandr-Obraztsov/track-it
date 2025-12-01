@@ -27,23 +27,11 @@ export class TelegramBotService {
         return;
       }
 
-      console.log('👥 [TELEGRAM] New chat members event:', {
-        chatId: msg.chat.id,
-        chatTitle: msg.chat.title || msg.chat.first_name,
-        chatType: msg.chat.type,
-        membersCount: msg.new_chat_members.length,
-        messageId: msg.message_id
-      });
 
       // Всегда создаем или получаем чат
       let chat;
       try {
         chat = await userManager.getOrCreateChat(msg.chat, msg.message_id);
-        console.log('✅ [TELEGRAM] Chat ensured:', {
-          chatId: chat.id,
-          title: chat.title,
-          isNew: !chat.createdAt || (Date.now() - new Date(chat.createdAt).getTime()) < 5000
-        });
       } catch (error) {
         console.error('❌ [TELEGRAM] Error ensuring chat:', error);
         return; // Не продолжаем, если не удалось создать чат
@@ -55,23 +43,8 @@ export class TelegramBotService {
           // Создаем пользователя (даже если это бот - для полноты данных)
           const { user, isNewUser } = await userManager.getOrCreateUser(newMember);
           
-          console.log(`👤 [TELEGRAM] User ${isNewUser ? 'created' : 'found'}:`, {
-            userId: user.id,
-            telegramId: user.telegramId,
-            username: user.username,
-            firstName: user.firstName,
-            isBot: newMember.is_bot
-          });
-          
           // Пропускаем ботов для приветственного сообщения
           if (newMember.is_bot) {
-            if (isNewUser) {
-              console.log('🤖 [TELEGRAM] Bot registered in system:', {
-                botId: newMember.id,
-                botName: newMember.first_name,
-                chatId: msg.chat.id
-              });
-            }
             continue;
           }
 
@@ -88,7 +61,6 @@ export class TelegramBotService {
             
             try {
               await this.sendMessage(msg.chat.id, welcomeMessage);
-              console.log('✅ [TELEGRAM] Welcome message sent to new user');
             } catch (error) {
               console.error('❌ [TELEGRAM] Error sending welcome message:', error);
             }
@@ -106,12 +78,6 @@ export class TelegramBotService {
 
     // Обработчик команды /users - показывает участников группы, которых знает бот
     this.bot.onText(/^\/users(@\w+)?$/, async (msg) => {
-      console.log('👥 [TELEGRAM] /users command received:', {
-        messageId: msg.message_id,
-        chatId: msg.chat.id,
-        chatType: msg.chat.type,
-        userId: msg.from?.id
-      });
 
       try {
         // Всегда создаем пользователя и чат
@@ -195,14 +161,6 @@ export class TelegramBotService {
     // Обработчик команды /tasks
     // Регулярное выражение учитывает как /tasks, так и /tasks@bot_username
     this.bot.onText(/^\/tasks(@\w+)?$/, async (msg) => {
-      console.log('📋 [TELEGRAM] /tasks command received:', {
-        messageId: msg.message_id,
-        chatId: msg.chat.id,
-        chatType: msg.chat.type,
-        userId: msg.from?.id,
-        username: msg.from?.username
-      });
-
       try {
         // Всегда создаем пользователя и чат перед обработкой команды
         if (msg.from) {
@@ -226,16 +184,6 @@ export class TelegramBotService {
     // Обработчик команды /check для обработки reply-сообщений в группах
     // Регулярное выражение учитывает как /check, так и /check@bot_username
     this.bot.onText(/^\/check(@\w+)?$/, async (msg) => {
-      console.log('✅ [TELEGRAM] /check command received:', {
-        messageId: msg.message_id,
-        chatId: msg.chat.id,
-        chatType: msg.chat.type,
-        userId: msg.from?.id,
-        username: msg.from?.username,
-        hasReply: !!msg.reply_to_message,
-        replyToMessageId: msg.reply_to_message?.message_id
-      });
-
       // Проверяем, что команда используется как reply на сообщение
       if (!msg.reply_to_message) {
         try {
@@ -281,14 +229,6 @@ export class TelegramBotService {
         console.error('❌ [TELEGRAM] Error ensuring user/chat for /check:', error);
       }
 
-      console.log('📝 [TELEGRAM] Processing original message via /check:', {
-        originalMessageId: originalMessage.message_id,
-        originalSenderId: originalMessage.from?.id,
-        originalSenderUsername: originalMessage.from?.username,
-        originalText: originalMessage.text,
-        originalMessageType: this.getMessageType(originalMessage)
-      });
-
       // Обрабатываем исходное сообщение
       try {
         await this.handleMessage(originalMessage, false); // Не показываем welcome, так как это группа
@@ -308,11 +248,6 @@ export class TelegramBotService {
       if (msg.group_chat_created || msg.supergroup_chat_created || msg.channel_chat_created) {
         try {
           const chat = await userManager.getOrCreateChat(msg.chat, msg.message_id);
-          console.log('✅ [TELEGRAM] Chat created/ensured for group creation event:', {
-            chatId: chat.id,
-            title: chat.title,
-            type: msg.group_chat_created ? 'group' : msg.supergroup_chat_created ? 'supergroup' : 'channel'
-          });
           
           // Если есть отправитель, создаем и его
           if (msg.from) {
@@ -331,22 +266,11 @@ export class TelegramBotService {
 
       // Пропускаем остальные системные сообщения (добавление/удаление участников, изменение группы и т.д.)
       if (this.isSystemMessage(msg)) {
-        console.log('ℹ️ [TELEGRAM] Skipping system message:', {
-          messageId: msg.message_id,
-          chatId: msg.chat.id,
-          chatType: msg.chat.type,
-          systemMessageType: this.getSystemMessageType(msg)
-        });
         return;
       }
 
       // Пропускаем сообщения без отправителя (должно быть редко, но возможно в некоторых случаях)
       if (!msg.from) {
-        console.warn('⚠️ [TELEGRAM] Message without sender, skipping:', {
-          messageId: msg.message_id,
-          chatId: msg.chat.id,
-          chatType: msg.chat.type
-        });
         // Но все равно создаем/обновляем чат, даже если нет отправителя
         try {
           await userManager.getOrCreateChat(msg.chat, msg.message_id);
@@ -361,44 +285,21 @@ export class TelegramBotService {
       try {
         await userManager.getOrCreateUser(msg.from);
         await userManager.getOrCreateChat(msg.chat, msg.message_id);
-        console.log('✅ [TELEGRAM] User and chat ensured for message:', {
-          userId: msg.from.id,
-          chatId: msg.chat.id,
-          messageId: msg.message_id
-        });
       } catch (error) {
         console.error('❌ [TELEGRAM] Error ensuring user/chat for message:', error);
       }
 
       // Пропускаем сообщения от других ботов (но не от самого себя)
       if (msg.from.is_bot) {
-        console.log('🤖 [TELEGRAM] Skipping message from bot');
         return;
       }
 
       // В групповых чатах игнорируем обычные сообщения - обрабатываем только через /check
       if (msg.chat.type !== 'private') {
-        console.log('👥 [TELEGRAM] Skipping group message (use /check command to process):', {
-          messageId: msg.message_id,
-          chatId: msg.chat.id,
-          chatType: msg.chat.type
-        });
         return;
       }
 
       // В личных чатах обрабатываем все сообщения автоматически
-      console.log('📨 [TELEGRAM] Message received:', {
-        messageId: msg.message_id,
-        chatId: msg.chat.id,
-        chatType: msg.chat.type,
-        userId: msg.from?.id,
-        username: msg.from?.username,
-        firstName: msg.from?.first_name,
-        lastName: msg.from?.last_name,
-        timestamp: new Date().toISOString(),
-        messageType: this.getMessageType(msg)
-      });
-
       try {
         // Пользователь и чат уже созданы выше для всех сообщений
         // Просто обрабатываем сообщение
@@ -482,7 +383,6 @@ export class TelegramBotService {
   private async handleMessage(msg: TelegramBot.Message, showWelcomeMessage: boolean = true) {
     // Дополнительная проверка на наличие отправителя
     if (!msg.from) {
-      console.warn('⚠️ [TELEGRAM] Message without sender in handleMessage');
       return;
     }
 
@@ -527,14 +427,12 @@ export class TelegramBotService {
     try {
       await this.bot.sendChatAction(msg.chat.id, 'typing');
     } catch (error) {
-      console.warn('⚠️ [TELEGRAM] Could not send chat action (may not have permissions):', error);
     }
 
     // Устанавливаем реакцию (может не работать если у бота нет прав)
     try {
       await this.bot.setMessageReaction(msg.chat.id, msg.message_id, { reaction: [{ type: 'emoji', emoji: '🤔' }] });
     } catch (error) {
-      console.warn('⚠️ [TELEGRAM] Could not set message reaction (may not have permissions):', error);
     }
 
     // Обрабатываем сообщение через MessageProcessor
@@ -550,7 +448,6 @@ export class TelegramBotService {
       try {
         await this.bot.setMessageReaction(msg.chat.id, msg.message_id, { reaction: [{ type: 'emoji', emoji: '🍓' }] });
       } catch (error) {
-        console.warn('⚠️ [TELEGRAM] Could not set success reaction:', error);
       }
 
     } else if (!result.success) {
@@ -564,19 +461,16 @@ export class TelegramBotService {
       try {
         await this.bot.setMessageReaction(msg.chat.id, msg.message_id, { reaction: [{ type: 'emoji', emoji: '🤬' }] });
       } catch (error) {
-        console.warn('⚠️ [TELEGRAM] Could not set error reaction:', error);
       }
     }
   }
 
 
   public start() {
-    console.log('🚀 [TELEGRAM] Bot started with polling');
   }
 
   public stop() {
     this.bot.stopPolling();
-    console.log('🛑 [TELEGRAM] Bot stopped');
   }
 
   private async sendMessage(chatId: number, message: string): Promise<void> {
@@ -599,7 +493,7 @@ export class TelegramBotService {
     } catch (error: any) {
       // Игнорируем ошибки, если пользователь заблокировал бота
       if (error.response?.statusCode === 403) {
-        console.log(`⚠️ [TELEGRAM] User ${telegramUserId} blocked the bot`);
+        // Пользователь заблокировал бота, просто игнорируем
       } else {
         console.error(`❌ [TELEGRAM] Error sending notification to ${telegramUserId}:`, error.message);
       }

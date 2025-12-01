@@ -1,6 +1,7 @@
 import { AppDataSource } from '../../configs/database';
 import { Task } from '../../entities/Task';
 import { Chat } from '../../entities/Chat';
+import { Label } from '../../entities/Label';
 import { Task as GeminiTask, UpdatedTask } from '../../types';
 import { SaveTaskParams } from './types';
 import { ChatTask } from '../../entities/ChatTask';
@@ -9,6 +10,8 @@ import { ChatTask } from '../../entities/ChatTask';
 export class TaskService {
   private taskRepository = AppDataSource.getRepository(Task);
   private chatTaskRepository = AppDataSource.getRepository(ChatTask);
+  private labelRepository = AppDataSource.getRepository(Label);
+  
   /**
    * Сохраняет задачи из результата Gemini в базу данных
    */
@@ -18,38 +21,103 @@ export class TaskService {
     const result : Task[] = [];
 
     try {
+      // Сначала создаем новые метки, если они есть
+      const createdLabels = await this.createNewLabels(params);
+      
       // Создаем новые задачи
-      const newTasks = await this.createNewTasks(params);
+      const newTasks = await this.createNewTasks(params, createdLabels);
       result.push(...newTasks);
 
       // Обновляем существующие задачи
       const updatedTasks = await this.updateExistingTasks(params.geminiResult.updatedTasks);
       result.push(...updatedTasks);
 
-      console.log('✅ [TASK_SERVICE] Tasks saved:', {
-        newTasks: newTasks.length,
-        updatedTasks: updatedTasks.length,
-        chatId: params.chat.id
-      });
 
       return result;
     } catch (error) {
-      console.error('❌ [TASK_SERVICE] Error saving tasks:', error);
       throw error;
     }
   }
 
-  private async createNewTasks(params: SaveTaskParams): Promise<Task[]> {
+  /**
+   * Создает новые метки из результата Gemini
+   */
+  private async createNewLabels(params: SaveTaskParams): Promise<Map<string, Label>> {
+    const labelMap = new Map<string, Label>();
+    
+    if (!params.geminiResult.newLabels || params.geminiResult.newLabels.length === 0) {
+      return labelMap;
+    }
+
+    for (const labelData of params.geminiResult.newLabels) {
+      try {
+        // Проверяем, не существует ли уже метка с таким именем
+        const existingLabel = await this.labelRepository.findOne({
+          where: { 
+            chatId: params.chat.id,
+            name: labelData.name.trim()
+          }
+        });
+
+        if (existingLabel) {
+          labelMap.set(labelData.name.trim().toLowerCase(), existingLabel);
+          continue;
+        }
+
+        // Создаем новую метку
+        const label = this.labelRepository.create({
+          chatId: params.chat.id,
+          name: labelData.name.trim(),
+          color: labelData.color || null,
+        });
+
+        const savedLabel = await this.labelRepository.save(label);
+        labelMap.set(labelData.name.trim().toLowerCase(), savedLabel);
+      } catch (error) {
+        // Продолжаем обработку остальных меток
+      }
+    }
+
+    return labelMap;
+  }
+
+  private async createNewTasks(params: SaveTaskParams, createdLabels: Map<string, Label>): Promise<Task[]> {
     const result : Task[] = [];
 
     for (const taskData of params.geminiResult.newTasks) {
       try {
+        // Определяем labelId для задачи
+        let labelId: number | null = null;
+        
+        if (taskData.labelId) {
+          // Используем существующую метку
+          labelId = taskData.labelId;
+        } else if (taskData.labelName) {
+          // Ищем созданную метку по имени
+          const label = createdLabels.get(taskData.labelName.trim().toLowerCase());
+          if (label) {
+            labelId = label.id;
+          } else {
+            // Пытаемся найти существующую метку в базе
+            const existingLabel = await this.labelRepository.findOne({
+              where: { 
+                chatId: params.chat.id,
+                name: taskData.labelName.trim()
+              }
+            });
+            if (existingLabel) {
+              labelId = existingLabel.id;
+            }
+          }
+        }
+
         const task = this.taskRepository.create({
           title: taskData.title,
           description: taskData.description || null,
           assignedUserId: taskData.assignedUserId || null,
           assignedRoleId: taskData.assignedRoleId || null,
           deadline: taskData.deadline ? new Date(taskData.deadline) : null,
+          labelId: labelId,
           status: 'backlog', // Все новые задачи создаются со статусом backlog
           chat: params.chat,
         });
@@ -74,7 +142,6 @@ export class TaskService {
           result.push(savedTask);
         }
       } catch (error) {
-        console.error('❌ [TASK_SERVICE] Error creating task:', error, taskData);
         // Продолжаем обработку остальных задач
       }
     }
@@ -98,7 +165,6 @@ export class TaskService {
         });
 
         if (!existingTask) {
-          console.warn('⚠️ [TASK_SERVICE] Task not found for update:', updateData.id);
           continue;
         }
 
@@ -118,8 +184,8 @@ export class TaskService {
         if (updateData.deadline !== undefined) {
           existingTask.deadline = updateData.deadline ? new Date(updateData.deadline) : null;
         }
-        if (updateData.status !== undefined) {
-          existingTask.status = updateData.status;
+        if (updateData.labelId !== undefined) {
+          existingTask.labelId = updateData.labelId;
         }
 
         const updatedTask = await this.taskRepository.save(existingTask);
@@ -137,7 +203,6 @@ export class TaskService {
         }
 
       } catch (error) {
-        console.error('❌ [TASK_SERVICE] Error updating task:', error, updateData);
         // Продолжаем обработку остальных задач
       }
     }
@@ -174,7 +239,6 @@ export class TaskService {
       const result = await this.taskRepository.delete(taskId);
       return result.affected !== undefined && result.affected !== null && result.affected > 0;
     } catch (error) {
-      console.error('❌ [TASK_MANAGER] Error deleting task:', error);
       return false;
     }
   }

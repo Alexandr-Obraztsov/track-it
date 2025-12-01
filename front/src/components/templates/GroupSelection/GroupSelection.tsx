@@ -6,14 +6,9 @@ import {
   CardContent,
   CardActionArea,
   Stack,
-  Chip,
   Avatar,
   AvatarGroup,
-  LinearProgress,
   alpha,
-  useTheme,
-  useMediaQuery,
-  Divider,
 } from '@mui/material';
 import type { Theme } from '@mui/material';
 import {
@@ -34,8 +29,6 @@ export const GroupSelection: React.FC<GroupSelectionProps> = ({
   onSelectChat,
   loading = false,
 }) => {
-  const theme = useTheme();
-  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
 
   const getTaskCounts = (chat: Chat) => {
     const tasks = chat.tasks || [];
@@ -62,15 +55,6 @@ export const GroupSelection: React.FC<GroupSelectionProps> = ({
   const getProgressPercentage = (counts: ReturnType<typeof getTaskCounts>) => {
     if (counts.total === 0) return 0;
     return Math.round((counts.completed / counts.total) * 100);
-  };
-
-  const getOverdueTasks = (chat: Chat) => {
-    const tasks = chat.tasks || [];
-    const now = new Date();
-    return tasks.filter((task) => {
-      if (!task.deadline || task.status === 'completed') return false;
-      return new Date(task.deadline) < now;
-    }).length;
   };
 
   return (
@@ -165,7 +149,6 @@ export const GroupSelection: React.FC<GroupSelectionProps> = ({
             const memberAvatars = getMemberAvatars(chat);
             const isSelected = currentChatId === chat.id;
             const progress = getProgressPercentage(counts);
-            const overdueCount = getOverdueTasks(chat);
 
             return (
               <Card

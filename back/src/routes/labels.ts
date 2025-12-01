@@ -133,6 +133,14 @@ router.delete('/:id', authenticateToken, async (req, res) => {
       return res.status(404).json({ error: 'Label not found' });
     }
 
+    // Перед удалением метки устанавливаем labelId в null для всех задач с этой меткой
+    const { Task } = await import('../entities/Task');
+    const taskRepository = AppDataSource.getRepository(Task);
+    await taskRepository.update(
+      { labelId },
+      { labelId: null }
+    );
+
     await labelRepository.delete(labelId);
     res.status(204).send();
   } catch (error) {
@@ -142,4 +150,6 @@ router.delete('/:id', authenticateToken, async (req, res) => {
 });
 
 export const labelRoutes: Router = router;
+
+
 

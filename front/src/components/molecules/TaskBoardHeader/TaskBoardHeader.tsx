@@ -6,6 +6,7 @@ import {
 } from '@mui/material';
 import {
   FilterList,
+  Label,
 } from '@mui/icons-material';
 
 export interface TaskBoardHeaderProps {
@@ -13,6 +14,7 @@ export interface TaskBoardHeaderProps {
   tasksCount: number;
   showOnlyMyTasks: boolean;
   onToggleFilter: () => void;
+  onManageLabels?: () => void;
   isMobile?: boolean;
 }
 
@@ -21,6 +23,7 @@ export const TaskBoardHeader: React.FC<TaskBoardHeaderProps> = ({
   tasksCount,
   showOnlyMyTasks,
   onToggleFilter,
+  onManageLabels,
   isMobile = false,
 }) => {
   return (
@@ -46,6 +49,25 @@ export const TaskBoardHeader: React.FC<TaskBoardHeaderProps> = ({
         {chatTitle}
       </Typography>
       <Box display="flex" alignItems="center" gap={1}>
+        {onManageLabels && (
+          <IconButton
+            size="small"
+            onClick={onManageLabels}
+            sx={{
+              padding: 0.5,
+              color: 'text.secondary',
+              '&:hover': {
+                backgroundColor: 'rgba(255, 255, 255, 0.08)',
+              },
+              '& .MuiSvgIcon-root': {
+                fontSize: '1rem',
+              },
+            }}
+            title="Управление метками"
+          >
+            <Label />
+          </IconButton>
+        )}
         {!isMobile && (
           <IconButton
             size="small"

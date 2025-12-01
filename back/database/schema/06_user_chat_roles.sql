@@ -39,3 +39,5 @@ COMMENT ON COLUMN user_chat_roles.user_id IS 'ID пользователя';
 COMMENT ON COLUMN user_chat_roles.chat_id IS 'ID чата';
 COMMENT ON COLUMN user_chat_roles.role_id IS 'ID роли';
 
+
+

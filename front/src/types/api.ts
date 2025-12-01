@@ -38,6 +38,18 @@ export interface Task {
   assignedUser?: User | null;
   assignedRole?: Role | null;
   label?: Label | null;
+  comments?: TaskComment[];
+}
+
+export interface TaskComment {
+  id: number;
+  taskId: number;
+  userId: number;
+  content: string;
+  edited: boolean;
+  editedAt: string | null;
+  createdAt: string;
+  user?: User;
 }
 
 export interface UserChatRole {
