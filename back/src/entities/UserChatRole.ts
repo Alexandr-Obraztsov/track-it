@@ -8,8 +8,8 @@ export class UserChatRole {
   @PrimaryGeneratedColumn('increment')
   id!: number;
 
-  @Column({ name: 'user_id', type: 'int' })
-  userId!: number;
+  @Column({ name: 'user_id', type: 'bigint' })
+  telegramId!: number;
 
   @Column({ name: 'chat_id', type: 'bigint' })
   chatId!: number;

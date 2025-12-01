@@ -102,12 +102,12 @@ export class TelegramBotService {
         const userIds = new Set<number>();
         
         // Добавляем пользователей из ролей
-        chatUsersFromRoles.forEach(user => userIds.add(user.id));
+        chatUsersFromRoles.forEach(user => userIds.add(user.telegramId));
         
         // Добавляем пользователей, назначенных на задачи
         chatTasks.forEach(task => {
           if (task.assignedUser) {
-            userIds.add(task.assignedUser.id);
+            userIds.add(task.assignedUser.telegramId);
           }
         });
 
@@ -138,7 +138,7 @@ export class TelegramBotService {
           validUsers.forEach((user, index) => {
             if (user) {
               const displayName = user.firstName + (user.lastName ? ` ${user.lastName}` : '');
-              const username = user.username ? `@${user.username}` : `ID: ${user.id}`;
+              const username = user.username ? `@${user.username}` : `ID: ${user.telegramId}`;
               message += `${index + 1}. ${displayName} (${username})\n`;
             }
           });

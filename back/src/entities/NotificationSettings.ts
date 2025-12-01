@@ -7,7 +7,7 @@ export class NotificationSettings {
   id!: number;
 
   @Column({ name: 'user_id', type: 'bigint', unique: true })
-  userId!: number;
+  telegramId!: number;
 
   @OneToOne(() => User)
   @JoinColumn({ name: 'user_id' })

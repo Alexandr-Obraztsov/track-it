@@ -1,12 +1,12 @@
-import { Router } from 'express';
+import { Router, Request } from 'express';
 import { AppDataSource } from '../configs/database';
 import { User } from '../entities/User';
-import { authenticateToken } from '../middleware/auth';
+import { getTelegramId } from '../utils/getTelegramId';
 
 const router = Router();
 
 // GET /api/users - получить всех пользователей (только для аутентифицированных)
-router.get('/', authenticateToken, async (req, res) => {
+router.get('/', async (req: Request, res) => {
   try {
     const userRepository = AppDataSource.getRepository(User);
     const users = await userRepository.find({
@@ -29,18 +29,18 @@ router.get('/', authenticateToken, async (req, res) => {
 });
 
 // GET /api/users/:id - получить пользователя по ID
-router.get('/:id', authenticateToken, async (req, res) => {
+router.get('/:telegramId', async (req: Request, res) => {
   try {
-    const { id } = req.params;
-    const userId = parseInt(id);
+    const { telegramId: telegramIdParam } = req.params;
+    const telegramId = parseInt(telegramIdParam);
     
-    if (isNaN(userId)) {
-      return res.status(400).json({ error: 'Invalid user ID' });
+    if (isNaN(telegramId)) {
+      return res.status(400).json({ error: 'Invalid telegram ID' });
     }
 
     const userRepository = AppDataSource.getRepository(User);
     const user = await userRepository.findOne({
-      where: { id: userId },
+      where: { telegramId },
       relations: ['userChatRoles', 'userTasks'],
       select: {
         id: true,
@@ -65,17 +65,22 @@ router.get('/:id', authenticateToken, async (req, res) => {
 });
 
 // PUT /api/users/:id - обновить пользователя (только свой профиль)
-router.put('/:id', authenticateToken, async (req: any, res) => {
+router.put('/:telegramId', async (req: Request, res) => {
   try {
-    const { id } = req.params;
-    const userId = parseInt(id);
+    const telegramId = getTelegramId(req);
+    if (!telegramId) {
+      return res.status(401).json({ error: 'Telegram ID required' });
+    }
+
+    const { telegramId: telegramIdParam } = req.params;
+    const targetTelegramId = parseInt(telegramIdParam);
     
-    if (isNaN(userId)) {
-      return res.status(400).json({ error: 'Invalid user ID' });
+    if (isNaN(targetTelegramId)) {
+      return res.status(400).json({ error: 'Invalid telegram ID' });
     }
 
     // Пользователь может обновлять только свой профиль
-    if (userId !== req.user.userId) {
+    if (telegramId !== targetTelegramId) {
       return res.status(403).json({ error: 'You can only update your own profile' });
     }
 
@@ -83,7 +88,7 @@ router.put('/:id', authenticateToken, async (req: any, res) => {
     
     const userRepository = AppDataSource.getRepository(User);
     const user = await userRepository.findOne({
-      where: { id: userId }
+      where: { telegramId }
     });
 
     if (!user) {
@@ -100,7 +105,6 @@ router.put('/:id', authenticateToken, async (req: any, res) => {
     
     // Возвращаем без чувствительных данных
     res.json({
-      id: updatedUser.id,
       telegramId: updatedUser.telegramId,
       username: updatedUser.username,
       firstName: updatedUser.firstName,
@@ -114,22 +118,27 @@ router.put('/:id', authenticateToken, async (req: any, res) => {
 });
 
 // DELETE /api/users/:id - удалить пользователя (только свой профиль)
-router.delete('/:id', authenticateToken, async (req: any, res) => {
+router.delete('/:telegramId', async (req: Request, res) => {
   try {
-    const { id } = req.params;
-    const userId = parseInt(id);
+    const telegramId = getTelegramId(req);
+    if (!telegramId) {
+      return res.status(401).json({ error: 'Telegram ID required' });
+    }
+
+    const { telegramId: telegramIdParam } = req.params;
+    const targetTelegramId = parseInt(telegramIdParam);
     
-    if (isNaN(userId)) {
-      return res.status(400).json({ error: 'Invalid user ID' });
+    if (isNaN(targetTelegramId)) {
+      return res.status(400).json({ error: 'Invalid telegram ID' });
     }
 
     // Пользователь может удалять только свой профиль
-    if (userId !== req.user.userId) {
+    if (telegramId !== targetTelegramId) {
       return res.status(403).json({ error: 'You can only delete your own profile' });
     }
 
     const userRepository = AppDataSource.getRepository(User);
-    const result = await userRepository.delete(userId);
+    const result = await userRepository.delete(targetTelegramId);
 
     if (result.affected === 0) {
       return res.status(404).json({ error: 'User not found' });

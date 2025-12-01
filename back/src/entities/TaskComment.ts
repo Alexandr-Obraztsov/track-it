@@ -17,8 +17,8 @@ export class TaskComment {
   @Column({ name: 'task_id', type: 'int' })
   taskId!: number;
 
-  @Column({ name: 'user_id', type: 'int' })
-  userId!: number;
+  @Column({ name: 'user_id', type: 'bigint' })
+  telegramId!: number;
 
   @Column({ type: 'text' })
   content!: string;

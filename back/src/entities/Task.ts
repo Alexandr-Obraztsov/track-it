@@ -25,8 +25,8 @@ export class Task {
   @Column({ name: 'assigned_role_id', type: 'int', nullable: true })
   assignedRoleId!: number | null;
 
-  @Column({ name: 'assigned_user_id', type: 'int', nullable: true })
-  assignedUserId!: number | null;
+  @Column({ name: 'assigned_user_id', type: 'bigint', nullable: true })
+  assignedTelegramId!: number | null;
 
   @Column({ type: 'date', nullable: true })
   deadline!: Date | null;

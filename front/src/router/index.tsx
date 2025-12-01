@@ -9,8 +9,8 @@ import type { NavigationTab } from '../components/organisms/BottomNavigation';
 
 // Компонент для защиты маршрутов
 const ProtectedRoute = () => {
-  const token = localStorage.getItem('auth_token');
-  if (!token) {
+  const initData = localStorage.getItem('telegram_init_data');
+  if (!initData) {
     return <Navigate to={ROUTES.LOGIN} replace />;
   }
   return <Outlet />;

@@ -48,11 +48,34 @@ export const apiClient = axios.create({
   timeout: 10000, // 10 секунд таймаут
 });
 
-// Добавляем токен к каждому запросу
+// Добавляем telegramId и initData к каждому запросу
 apiClient.interceptors.request.use((config) => {
-  const token = localStorage.getItem('auth_token');
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
+  // Получаем initData из localStorage
+  const initData = localStorage.getItem('telegram_init_data');
+  if (initData) {
+    config.headers['X-Telegram-Init-Data'] = initData;
+    console.log('📤 Request Interceptor: Added X-Telegram-Init-Data header');
+    
+    // Извлекаем telegramId из initData и добавляем в заголовок
+    try {
+      const params = new URLSearchParams(initData);
+      const userParam = params.get('user');
+      if (userParam) {
+        const userData = JSON.parse(decodeURIComponent(userParam));
+        if (userData?.id) {
+          config.headers['X-Telegram-Id'] = userData.id.toString();
+          console.log('📤 Request Interceptor: Added X-Telegram-Id header:', userData.id);
+        } else {
+          console.warn('⚠️ Request Interceptor: No id in user data');
+        }
+      } else {
+        console.warn('⚠️ Request Interceptor: No user param in initData');
+      }
+    } catch (error) {
+      console.error('❌ Request Interceptor: Error parsing initData:', error);
+    }
+  } else {
+    console.warn('⚠️ Request Interceptor: No initData in localStorage');
   }
   return config;
 });
@@ -104,9 +127,9 @@ apiClient.interceptors.response.use(
     }
     
     if (error.response?.status === 401) {
-      // Удаляем токен только если мы не на странице логина
+      // Удаляем initData и редиректим на логин
+      localStorage.removeItem('telegram_init_data');
       if (window.location.pathname !== '/') {
-        localStorage.removeItem('auth_token');
         window.location.href = '/';
       }
     }

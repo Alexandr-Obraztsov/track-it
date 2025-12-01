@@ -1,33 +1,34 @@
 import apiClient from './client';
 
-export interface AuthResponse {
-  user: {
-    id: number;
-    telegramId: number;
-    firstName: string;
-    lastName?: string | null;
-    username?: string | null;
-    photoUrl?: string | null;
-  };
-  token: string;
+export interface UserProfile {
+  id?: number; // Добавляем id, так как бэкенд его возвращает
+  telegramId: number;
+  firstName: string;
+  lastName?: string | null;
+  username?: string | null;
+  photoUrl?: string | null;
+  createdAt?: string;
 }
 
 export const authApi = {
-  login: async (initData: string): Promise<AuthResponse> => {
-    const response = await apiClient.post<AuthResponse>('/auth/telegram', { initData });
-    if (response.data.token) {
-      localStorage.setItem('auth_token', response.data.token);
+  getProfile: async (): Promise<UserProfile> => {
+    console.log('📤 authApi.getProfile: Making request to /auth/profile');
+    try {
+      const response = await apiClient.get<UserProfile>('/auth/profile');
+      console.log('✅ authApi.getProfile: Response received:', {
+        status: response.status,
+        data: response.data,
+      });
+      return response.data;
+    } catch (error) {
+      console.error('❌ authApi.getProfile: Request failed:', error);
+      throw error;
     }
-    return response.data;
-  },
-
-  getProfile: async () => {
-    const response = await apiClient.get('/auth/profile');
-    return response.data;
   },
 
   logout: () => {
-    localStorage.removeItem('auth_token');
+    console.log('🚪 authApi.logout: Clearing initData from localStorage');
+    localStorage.removeItem('telegram_init_data');
   },
 };
 

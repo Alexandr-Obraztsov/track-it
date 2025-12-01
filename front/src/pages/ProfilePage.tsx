@@ -3,51 +3,72 @@ import { Profile } from '../components/templates/Profile';
 import type { User, NotificationSettings } from '../types/api';
 import { authApi } from '../api/auth';
 import { notificationsApi } from '../api/notifications';
-import { mockNotificationSettings } from '../mocks/data';
-import { isMockMode } from '../utils/mockMode';
 
 export const ProfilePage = () => {
   const [user, setUser] = useState<User | null>(null);
-  const [notificationSettings, setNotificationSettings] = useState<NotificationSettings>(mockNotificationSettings);
+  const [notificationSettings, setNotificationSettings] = useState<NotificationSettings | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const loadProfile = async () => {
+      console.log('🔄 ProfilePage: Starting to load profile...');
+      console.log('📋 ProfilePage: Checking localStorage for initData...');
+      const initData = localStorage.getItem('telegram_init_data');
+      console.log('📋 ProfilePage: initData in localStorage:', initData ? 'present' : 'missing');
+      
       try {
+        console.log('📤 ProfilePage: Calling authApi.getProfile()...');
         const profile = await authApi.getProfile();
-        setUser({
-          id: profile.id,
+        console.log('✅ ProfilePage: Profile loaded successfully:', {
           telegramId: profile.telegramId,
           firstName: profile.firstName,
-          lastName: profile.lastName,
           username: profile.username,
-          photoUrl: profile.photoUrl,
+        });
+        
+        setUser({
+          id: profile.id || profile.telegramId, // Fallback на telegramId если id нет
+          telegramId: profile.telegramId,
+          firstName: profile.firstName,
+          lastName: profile.lastName ?? null,
+          username: profile.username ?? null,
+          photoUrl: profile.photoUrl ?? null,
           createdAt: profile.createdAt || new Date().toISOString(),
         });
 
         // Загружаем настройки уведомлений
-        if (isMockMode()) {
-          setNotificationSettings(mockNotificationSettings);
-        } else {
-          try {
-            const settings = await notificationsApi.get();
-            setNotificationSettings(settings);
-          } catch (error) {
-            console.error('Failed to load notification settings:', error);
-            // Используем дефолтные настройки при ошибке
-            setNotificationSettings(mockNotificationSettings);
-          }
+        try {
+          console.log('📤 ProfilePage: Loading notification settings...');
+          const settings = await notificationsApi.get();
+          console.log('✅ ProfilePage: Notification settings loaded');
+          setNotificationSettings(settings);
+        } catch (error) {
+          console.error('❌ ProfilePage: Failed to load notification settings:', error);
+          // При ошибке оставляем null, компонент Profile обработает это
         }
       } catch (error: any) {
-        console.error('Failed to load profile:', error);
-        // Если ошибка 401, токен будет удален и произойдет редирект через interceptor
-        // Для других ошибок просто логируем
+        console.error('❌ ProfilePage: Failed to load profile:', error);
+        console.error('❌ ProfilePage: Error details:', {
+          message: error.message,
+          code: error.code,
+          status: error.response?.status,
+          statusText: error.response?.statusText,
+          data: error.response?.data,
+          config: {
+            url: error.config?.url,
+            baseURL: error.config?.baseURL,
+            method: error.config?.method,
+          },
+        });
+        
+        // Если ошибка 401, удаляем initData и редиректим на логин
         if (error.response?.status === 401) {
-          // Редирект произойдет автоматически через interceptor
-          console.log('User not found or token invalid, redirecting to login...');
+          console.warn('⚠️ ProfilePage: 401 Unauthorized, redirecting to login...');
+          localStorage.removeItem('telegram_init_data');
+          window.location.href = '/';
         }
       } finally {
         setLoading(false);
+        console.log('🏁 ProfilePage: Loading finished');
       }
     };
 
@@ -56,14 +77,9 @@ export const ProfilePage = () => {
 
   const handleSaveNotifications = async (settings: NotificationSettings) => {
     try {
-      if (isMockMode()) {
-        // В режиме моков просто обновляем локальное состояние
-        setNotificationSettings(settings);
-      } else {
-        // Сохраняем на бекенде
-        const updatedSettings = await notificationsApi.update(settings);
-        setNotificationSettings(updatedSettings);
-      }
+      // Сохраняем на бекенде
+      const updatedSettings = await notificationsApi.update(settings);
+      setNotificationSettings(updatedSettings);
     } catch (error) {
       console.error('Failed to save notification settings:', error);
       // Не пробрасываем ошибку, чтобы не блокировать UI

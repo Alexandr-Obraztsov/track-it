@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { AppDataSource } from '../configs/database';
 import { Label } from '../entities/Label';
 import { Chat } from '../entities/Chat';
-import { authenticateToken } from '../middleware/auth';
+import { getTelegramId } from '../utils/getTelegramId';
 
 const router = Router();
 
@@ -18,7 +18,7 @@ const normalizeColor = (color?: string | null): string | null => {
   return trimmed.toLowerCase();
 };
 
-router.get('/chat/:chatId', authenticateToken, async (req, res) => {
+router.get('/chat/:chatId', async (req, res) => {
   try {
     const chatId = parseInt(req.params.chatId);
     if (isNaN(chatId)) {
@@ -37,7 +37,7 @@ router.get('/chat/:chatId', authenticateToken, async (req, res) => {
   }
 });
 
-router.post('/', authenticateToken, async (req, res) => {
+router.post('/', async (req, res) => {
   try {
     const { chatId, name, color } = req.body;
 
@@ -81,7 +81,7 @@ router.post('/', authenticateToken, async (req, res) => {
   }
 });
 
-router.put('/:id', authenticateToken, async (req, res) => {
+router.put('/:id', async (req, res) => {
   try {
     const labelId = parseInt(req.params.id);
     if (isNaN(labelId)) {
@@ -120,7 +120,7 @@ router.put('/:id', authenticateToken, async (req, res) => {
   }
 });
 
-router.delete('/:id', authenticateToken, async (req, res) => {
+router.delete('/:id', async (req, res) => {
   try {
     const labelId = parseInt(req.params.id);
     if (isNaN(labelId)) {

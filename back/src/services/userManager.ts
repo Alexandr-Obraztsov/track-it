@@ -99,11 +99,11 @@ export class UserManager {
   }
 
   /**
-   * Получает пользователя по ID
+   * Получает пользователя по telegramId
    */
-  async getUserById(userId: number): Promise<User | null> {
+  async getUserById(telegramId: number): Promise<User | null> {
     return await this.userRepository.findOne({
-      where: { id: userId },
+      where: { telegramId },
       relations: ['userChatRoles', 'userTasks']
     });
   }
@@ -159,7 +159,7 @@ export class UserManager {
 
       // Проверяем, что пользователь еще не имеет этой роли в чате
       const existingUserChatRole = await this.userChatRoleRepository.findOne({
-        where: { userId, chatId, roleId }
+        where: { telegramId: userId, chatId, roleId }
       });
 
       if (existingUserChatRole) {
@@ -168,7 +168,7 @@ export class UserManager {
 
       // Создаем новую связь пользователь-чат-роль
       const userChatRole = this.userChatRoleRepository.create({
-        userId,
+        telegramId: userId,
         chatId,
         roleId
       });
@@ -187,7 +187,7 @@ export class UserManager {
   async removeUserFromChat(userId: number, chatId: number): Promise<boolean> {
     try {
       const result = await this.userChatRoleRepository.delete({
-        userId,
+        telegramId: userId,
         chatId
       });
 
@@ -203,7 +203,7 @@ export class UserManager {
    */
   async getUserChatRoles(userId: number, chatId: number): Promise<Role[]> {
     const userChatRoles = await this.userChatRoleRepository.find({
-      where: { userId, chatId },
+      where: { telegramId: userId, chatId },
       relations: ['role']
     });
 

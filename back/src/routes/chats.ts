@@ -1,12 +1,12 @@
 import { Router } from 'express';
 import { AppDataSource } from '../configs/database';
 import { Chat } from '../entities/Chat';
-import { authenticateToken } from '../middleware/auth';
+import { getTelegramId } from '../utils/getTelegramId';
 
 const router = Router();
 
 // GET /api/chats - получить все чаты
-router.get('/', authenticateToken, async (req, res) => {
+router.get('/', async (req, res) => {
   try {
     const chatRepository = AppDataSource.getRepository(Chat);
     const chats = await chatRepository.find({
@@ -29,7 +29,7 @@ router.get('/', authenticateToken, async (req, res) => {
 });
 
 // GET /api/chats/:id - получить чат по ID
-router.get('/:id', authenticateToken, async (req, res) => {
+router.get('/:id', async (req, res) => {
   try {
     const { id } = req.params;
     const chatId = parseInt(id);
@@ -65,7 +65,7 @@ router.get('/:id', authenticateToken, async (req, res) => {
 });
 
 // POST /api/chats - создать новый чат
-router.post('/', authenticateToken, async (req, res) => {
+router.post('/', async (req, res) => {
   try {
     const { title, messageId, id } = req.body;
     
@@ -109,7 +109,7 @@ router.post('/', authenticateToken, async (req, res) => {
 });
 
 // PUT /api/chats/:id - обновить чат
-router.put('/:id', authenticateToken, async (req, res) => {
+router.put('/:id', async (req, res) => {
   try {
     const { id } = req.params;
     const chatId = parseInt(id);
@@ -153,7 +153,7 @@ router.put('/:id', authenticateToken, async (req, res) => {
 });
 
 // DELETE /api/chats/:id - удалить чат
-router.delete('/:id', authenticateToken, async (req, res) => {
+router.delete('/:id', async (req, res) => {
   try {
     const { id } = req.params;
     const chatId = parseInt(id);

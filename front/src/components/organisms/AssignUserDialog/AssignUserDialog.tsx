@@ -315,8 +315,10 @@ export const AssignUserDialog: React.FC<AssignUserDialogProps> = ({
         </IconButton>
       </DialogTitle>
 
-      <DialogContent sx={{ pt: 2.5, px: 3, pb: 2 }}>
-        {content}
+      <DialogContent>
+        <Box py={2}>
+          {content}
+        </Box>
       </DialogContent>
 
       <Divider />

@@ -1,12 +1,12 @@
 import { Router } from 'express';
 import { AppDataSource } from '../configs/database';
 import { Role } from '../entities/Role';
-import { authenticateToken } from '../middleware/auth';
+import { getTelegramId } from '../utils/getTelegramId';
 
 const router = Router();
 
 // GET /api/roles - получить все роли
-router.get('/', authenticateToken, async (req, res) => {
+router.get('/', async (req, res) => {
   try {
     const roleRepository = AppDataSource.getRepository(Role);
     const roles = await roleRepository.find({
@@ -20,7 +20,7 @@ router.get('/', authenticateToken, async (req, res) => {
 });
 
 // GET /api/roles/:id - получить роль по ID
-router.get('/:id', authenticateToken, async (req, res) => {
+router.get('/:id', async (req, res) => {
   try {
     const { id } = req.params;
     const roleId = parseInt(id);
@@ -47,7 +47,7 @@ router.get('/:id', authenticateToken, async (req, res) => {
 });
 
 // POST /api/roles - создать новую роль
-router.post('/', authenticateToken, async (req, res) => {
+router.post('/', async (req, res) => {
   try {
     const { title } = req.body;
     
@@ -69,7 +69,7 @@ router.post('/', authenticateToken, async (req, res) => {
 });
 
 // PUT /api/roles/:id - обновить роль
-router.put('/:id', authenticateToken, async (req, res) => {
+router.put('/:id', async (req, res) => {
   try {
     const { id } = req.params;
     const roleId = parseInt(id);
@@ -106,7 +106,7 @@ router.put('/:id', authenticateToken, async (req, res) => {
 });
 
 // DELETE /api/roles/:id - удалить роль
-router.delete('/:id', authenticateToken, async (req, res) => {
+router.delete('/:id', async (req, res) => {
   try {
     const { id } = req.params;
     const roleId = parseInt(id);

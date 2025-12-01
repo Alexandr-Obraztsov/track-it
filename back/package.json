@@ -10,6 +10,7 @@
     "start": "node dist/server.js",
     "start:debug": "node --inspect dist/server.js",
     "typeorm": "typeorm-ts-node-commonjs",
+    "drop-db": "tsx src/scripts/drop-database.ts",
     "test": "jest",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage"

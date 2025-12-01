@@ -1,14 +1,11 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, OneToMany } from 'typeorm';
+import { Entity, PrimaryColumn, Column, CreateDateColumn, OneToMany } from 'typeorm';
 import { UserChatRole } from './UserChatRole';
 import { UserTask } from './UserTask';
 import { TaskComment } from './TaskComment';
 
 @Entity('users')
 export class User {
-  @PrimaryGeneratedColumn('increment')
-  id!: number;
-
-  @Column({ name: 'telegram_id', type: 'bigint', unique: true })
+  @PrimaryColumn({ name: 'telegram_id', type: 'bigint' })
   telegramId!: number;
 
   @Column({ type: 'varchar', length: 255, nullable: true })

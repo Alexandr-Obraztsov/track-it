@@ -1,13 +1,14 @@
-import { Router } from 'express';
+import { Router, Request } from 'express';
 import { AppDataSource } from '../configs/database';
 import { TaskComment } from '../entities/TaskComment';
 import { Task } from '../entities/Task';
-import { authenticateToken } from '../middleware/auth';
+import { getTelegramId } from '../utils/getTelegramId';
+import { TelegramAuthRequest } from '../middleware/telegramAuth';
 
 const router = Router();
 
 // GET /api/comments/task/:taskId - получить все комментарии к задаче
-router.get('/task/:taskId', authenticateToken, async (req, res) => {
+router.get('/task/:taskId', async (req: Request, res) => {
   try {
     const taskId = parseInt(req.params.taskId);
     if (isNaN(taskId)) {
@@ -28,14 +29,14 @@ router.get('/task/:taskId', authenticateToken, async (req, res) => {
 });
 
 // POST /api/comments - создать новый комментарий
-router.post('/', authenticateToken, async (req: any, res) => {
+router.post('/', async (req: Request, res) => {
   try {
-    const { taskId, content } = req.body;
-    const userId = req.user?.userId;
-
-    if (!userId) {
-      return res.status(401).json({ error: 'Unauthorized' });
+    const telegramId = getTelegramId(req);
+    if (!telegramId) {
+      return res.status(401).json({ error: 'Telegram ID required' });
     }
+
+    const { taskId, content } = req.body;
 
     if (!taskId) {
       return res.status(400).json({ error: 'taskId is required' });
@@ -58,7 +59,7 @@ router.post('/', authenticateToken, async (req: any, res) => {
     const commentRepository = AppDataSource.getRepository(TaskComment);
     const comment = commentRepository.create({
       taskId: parseInt(taskId),
-      userId,
+      telegramId,
       content: content.trim(),
     });
 
@@ -76,19 +77,15 @@ router.post('/', authenticateToken, async (req: any, res) => {
 });
 
 // PUT /api/comments/:id - обновить комментарий
-router.put('/:id', authenticateToken, async (req: any, res) => {
+router.put('/:id', async (req: Request, res) => {
   try {
+    const telegramId = getTelegramId(req);
     const commentId = parseInt(req.params.id);
     if (isNaN(commentId)) {
       return res.status(400).json({ error: 'Invalid comment id' });
     }
 
     const { content } = req.body;
-    const userId = req.user?.userId;
-
-    if (!userId) {
-      return res.status(401).json({ error: 'Unauthorized' });
-    }
 
     if (!content || typeof content !== 'string' || content.trim().length === 0) {
       return res.status(400).json({ error: 'content is required and cannot be empty' });
@@ -109,7 +106,7 @@ router.put('/:id', authenticateToken, async (req: any, res) => {
     }
 
     // Проверяем, что пользователь может редактировать только свои комментарии
-    if (comment.userId !== userId) {
+    if (comment.user.telegramId !== telegramId) {
       return res.status(403).json({ error: 'You can only edit your own comments' });
     }
 
@@ -126,16 +123,14 @@ router.put('/:id', authenticateToken, async (req: any, res) => {
 });
 
 // DELETE /api/comments/:id - удалить комментарий
-router.delete('/:id', authenticateToken, async (req: any, res) => {
+router.delete('/:id', async (req: Request, res) => {
   try {
+
+    const telegramId = getTelegramId(req);
+
     const commentId = parseInt(req.params.id);
     if (isNaN(commentId)) {
       return res.status(400).json({ error: 'Invalid comment id' });
-    }
-
-    const userId = req.user?.userId;
-    if (!userId) {
-      return res.status(401).json({ error: 'Unauthorized' });
     }
 
     const commentRepository = AppDataSource.getRepository(TaskComment);
@@ -146,7 +141,7 @@ router.delete('/:id', authenticateToken, async (req: any, res) => {
     }
 
     // Проверяем, что пользователь может удалять только свои комментарии
-    if (comment.userId !== userId) {
+    if (comment.telegramId !== telegramId) {
       return res.status(403).json({ error: 'You can only delete your own comments' });
     }
 

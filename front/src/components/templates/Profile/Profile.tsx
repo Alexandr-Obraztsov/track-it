@@ -25,7 +25,7 @@ import type { User, NotificationSettings } from '../../../types/api';
 
 export interface ProfileProps {
   user: User;
-  notificationSettings: NotificationSettings;
+  notificationSettings: NotificationSettings | null;
   onSaveNotifications?: (settings: NotificationSettings) => void;
   loading?: boolean;
 }
@@ -38,13 +38,22 @@ export const Profile: React.FC<ProfileProps> = ({
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   
-  const [notificationSettings, setNotificationSettings] = useState<NotificationSettings>(initialSettings);
+  // Дефолтные настройки, если не загружены
+  const defaultSettings: NotificationSettings = {
+    dailyDigestTime: '09:00',
+    deadlineReminderHours: [24, 2],
+  };
+  
+  const [notificationSettings, setNotificationSettings] = useState<NotificationSettings>(
+    initialSettings || defaultSettings
+  );
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isInitialMount = useRef(true);
   const lastSettingsRef = useRef<string>('');
 
   // Синхронизируем локальное состояние с пропсами при их изменении
   useEffect(() => {
+    if (!initialSettings) return;
     const currentSettingsStr = JSON.stringify(initialSettings);
     if (lastSettingsRef.current !== currentSettingsStr) {
       lastSettingsRef.current = currentSettingsStr;

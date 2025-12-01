@@ -21,8 +21,8 @@ export class TaskHistory {
   @JoinColumn({ name: 'task_id' })
   task!: Task;
 
-  @Column({ name: 'changed_by_user_id', type: 'int', nullable: true })
-  changedByUserId!: number | null;
+  @Column({ name: 'changed_by_user_id', type: 'bigint', nullable: true })
+  changedByTelegramId!: number | null;
 
   @ManyToOne(() => User, { nullable: true })
   @JoinColumn({ name: 'changed_by_user_id' })

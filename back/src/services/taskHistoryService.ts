@@ -6,7 +6,7 @@ type TaskHistoryField =
   | 'title'
   | 'description'
   | 'status'
-  | 'assignedUserId'
+  | 'assignedTelegramId'
   | 'assignedRoleId'
   | 'deadline'
   | 'labelId';
@@ -17,7 +17,7 @@ interface LogEntryInput {
   oldValue: string | null;
   newValue: string | null;
   changeType: 'create' | 'update';
-  changedByUserId: number | null;
+  changedByTelegramId: number | null;
 }
 
 export class TaskHistoryService {
@@ -27,7 +27,7 @@ export class TaskHistoryService {
     'title',
     'description',
     'status',
-    'assignedUserId',
+    'assignedTelegramId',
     'assignedRoleId',
     'deadline',
     'labelId',
@@ -39,7 +39,7 @@ export class TaskHistoryService {
       case 'description':
       case 'status':
         return task[field] ?? null;
-      case 'assignedUserId':
+      case 'assignedTelegramId':
       case 'assignedRoleId':
       case 'labelId':
         return task[field] !== null && task[field] !== undefined ? String(task[field]) : null;
@@ -56,7 +56,7 @@ export class TaskHistoryService {
     await this.repository.save(models);
   }
 
-  async logCreation(task: Task, changedByUserId: number | null): Promise<void> {
+  async logCreation(task: Task, changedByTelegramId: number | null): Promise<void> {
     const entries: LogEntryInput[] = [];
 
     for (const field of this.trackedFields) {
@@ -70,7 +70,7 @@ export class TaskHistoryService {
         oldValue: null,
         newValue,
         changeType: 'create',
-        changedByUserId,
+        changedByTelegramId,
       });
     }
 
@@ -81,14 +81,14 @@ export class TaskHistoryService {
         oldValue: null,
         newValue: 'created',
         changeType: 'create',
-        changedByUserId,
+        changedByTelegramId,
       });
     }
 
     await this.persist(entries);
   }
 
-  async logUpdates(previous: Task, current: Task, changedByUserId: number | null): Promise<void> {
+  async logUpdates(previous: Task, current: Task, changedByTelegramId: number | null): Promise<void> {
     const entries: LogEntryInput[] = [];
 
     for (const field of this.trackedFields) {
@@ -103,7 +103,7 @@ export class TaskHistoryService {
         oldValue,
         newValue,
         changeType: 'update',
-        changedByUserId,
+        changedByTelegramId,
       });
     }
 

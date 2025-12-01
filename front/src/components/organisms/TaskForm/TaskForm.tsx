@@ -472,8 +472,10 @@ export const TaskForm: React.FC<TaskFormProps> = ({
           </IconButton>
         </DialogTitle>
 
-        <DialogContent sx={{ pt: 2.5, px: 3, pb: 2 }}>
-          {formContent}
+        <DialogContent>
+         <Box py={2}>
+         {formContent}
+         </Box>
         </DialogContent>
 
         <Divider />

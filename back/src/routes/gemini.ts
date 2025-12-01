@@ -5,7 +5,7 @@ import { AppDataSource } from '../configs/database';
 import { Chat } from '../entities/Chat';
 import { Task } from '../entities/Task';
 import { Label } from '../entities/Label';
-import { authenticateToken } from '../middleware/auth';
+import { getTelegramId } from '../utils/getTelegramId';
 import multer from 'multer';
 
 const router = Router();
@@ -19,7 +19,7 @@ const upload = multer({
 });
 
 // POST /api/gemini/extract - извлечение задач из текста или аудио
-router.post('/extract', authenticateToken, upload.single('audioData'), async (req: any, res) => {
+router.post('/extract', upload.single('audioData'), async (req: any, res) => {
   try {
     const { text, chatId } = req.body;
     let audioData: Buffer | undefined;

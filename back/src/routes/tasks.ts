@@ -1,4 +1,4 @@
-import { Request, Router } from 'express';
+import { Router, Request } from 'express';
 import { AppDataSource } from '../configs/database';
 import { Task } from '../entities/Task';
 import { Chat } from '../entities/Chat';
@@ -7,20 +7,13 @@ import { User } from '../entities/User';
 import { Role } from '../entities/Role';
 import { Label } from '../entities/Label';
 import { taskManager } from '../services/task-service/task-service';
-import { authenticateToken } from '../middleware/auth';
 import { taskHistoryService } from '../services/taskHistoryService';
-
-interface AuthenticatedRequest extends Request {
-  user?: {
-    userId: number;
-    telegramId: number;
-  };
-}
+import { getTelegramId } from '../utils/getTelegramId';
 
 const router = Router();
 
 // GET /api/tasks/chat/:chatId - задачи чата
-router.get('/chat/:chatId', authenticateToken, async (req, res) => {
+router.get('/chat/:chatId', async (req: Request, res) => {
   try {
     const tasks = await taskManager.getChatTasks(parseInt(req.params.chatId));
     res.json(tasks);
@@ -30,7 +23,7 @@ router.get('/chat/:chatId', authenticateToken, async (req, res) => {
 });
 
 // GET /api/tasks/:id - задача по ID
-router.get('/:id', authenticateToken, async (req, res) => {
+router.get('/:id', async (req: Request, res) => {
   try {
     const taskId = parseInt(req.params.id);
     if (isNaN(taskId)) {
@@ -54,9 +47,14 @@ router.get('/:id', authenticateToken, async (req, res) => {
 });
 
 // POST /api/tasks - создать новую задачу
-router.post('/', authenticateToken, async (req: AuthenticatedRequest, res) => {
+router.post('/', async (req: Request, res) => {
   try {
-    const { title, description, assignedUserId, assignedRoleId, deadline, status, chatId, labelId } = req.body;
+    const telegramId = getTelegramId(req);
+    if (!telegramId) {
+      return res.status(401).json({ error: 'Telegram ID required' });
+    }
+
+    const { title, description, assignedTelegramId, assignedRoleId, deadline, status, chatId, labelId } = req.body;
     
     // Валидация обязательных полей
     if (!title || typeof title !== 'string' || title.trim().length === 0) {
@@ -85,14 +83,14 @@ router.post('/', authenticateToken, async (req: AuthenticatedRequest, res) => {
       return res.status(404).json({ error: 'Chat not found' });
     }
     
-    // Валидация assignedUserId и assignedRoleId
-    if (assignedUserId !== undefined && assignedUserId !== null) {
-      const userId = parseInt(assignedUserId);
-      if (isNaN(userId)) {
-        return res.status(400).json({ error: 'Invalid assignedUserId' });
+    // Валидация assignedTelegramId и assignedRoleId
+    if (assignedTelegramId !== undefined && assignedTelegramId !== null) {
+      const assignedTelegramIdNum = typeof assignedTelegramId === 'number' ? assignedTelegramId : parseInt(assignedTelegramId);
+      if (isNaN(assignedTelegramIdNum)) {
+        return res.status(400).json({ error: 'Invalid assignedTelegramId' });
       }
       const userRepository = AppDataSource.getRepository(User);
-      const user = await userRepository.findOne({ where: { id: userId } });
+      const user = await userRepository.findOne({ where: { telegramId: assignedTelegramIdNum } });
       if (!user) {
         return res.status(404).json({ error: 'Assigned user not found' });
       }
@@ -137,7 +135,7 @@ router.post('/', authenticateToken, async (req: AuthenticatedRequest, res) => {
     const task = taskRepository.create({
       title: title.trim(),
       description: description && typeof description === 'string' ? description.trim() : null,
-      assignedUserId: assignedUserId ? parseInt(assignedUserId) : null,
+      assignedTelegramId: assignedTelegramId ? (typeof assignedTelegramId === 'number' ? assignedTelegramId : parseInt(assignedTelegramId)) : null,
       assignedRoleId: assignedRoleId ? parseInt(assignedRoleId) : null,
       deadline: deadlineDate,
       status: (status as 'backlog' | 'in_progress' | 'completed') || 'backlog',
@@ -161,7 +159,7 @@ router.post('/', authenticateToken, async (req: AuthenticatedRequest, res) => {
       relations: ['assignedUser', 'assignedRole', 'chat', 'label'],
     });
 
-    await taskHistoryService.logCreation(savedTask, req.user?.userId ?? null);
+    await taskHistoryService.logCreation(savedTask, telegramId);
     
     res.status(201).json(taskWithRelations);
   } catch (error: any) {
@@ -174,14 +172,19 @@ router.post('/', authenticateToken, async (req: AuthenticatedRequest, res) => {
 });
 
 // PUT /api/tasks/:id - обновить задачу
-router.put('/:id', authenticateToken, async (req: AuthenticatedRequest, res) => {
+router.put('/:id', async (req: Request, res) => {
   try {
+    const telegramId = getTelegramId(req);
+    if (!telegramId) {
+      return res.status(401).json({ error: 'Telegram ID required' });
+    }
+
     const taskId = parseInt(req.params.id);
     if (isNaN(taskId)) {
       return res.status(400).json({ error: 'Invalid task ID' });
     }
     
-    const { title, description, assignedUserId, assignedRoleId, deadline, status, labelId } = req.body;
+    const { title, description, assignedTelegramId, assignedRoleId, deadline, status, labelId } = req.body;
     
     const taskRepo = AppDataSource.getRepository(Task);
     const task = await taskRepo.findOne({
@@ -208,21 +211,21 @@ router.put('/:id', authenticateToken, async (req: AuthenticatedRequest, res) => 
       task.description = description && typeof description === 'string' ? description.trim() : null;
     }
     
-    // Валидация и обновление assignedUserId
-    if (assignedUserId !== undefined) {
-      if (assignedUserId === null) {
-        task.assignedUserId = null;
+    // Валидация и обновление assignedTelegramId
+    if (assignedTelegramId !== undefined) {
+      if (assignedTelegramId === null) {
+        task.assignedTelegramId = null;
       } else {
-        const userId = parseInt(assignedUserId);
-        if (isNaN(userId)) {
-          return res.status(400).json({ error: 'Invalid assignedUserId' });
+        const assignedTelegramIdNum = typeof assignedTelegramId === 'number' ? assignedTelegramId : parseInt(assignedTelegramId);
+        if (isNaN(assignedTelegramIdNum)) {
+          return res.status(400).json({ error: 'Invalid assignedTelegramId' });
         }
         const userRepository = AppDataSource.getRepository(User);
-        const user = await userRepository.findOne({ where: { id: userId } });
+        const user = await userRepository.findOne({ where: { telegramId: assignedTelegramIdNum } });
         if (!user) {
           return res.status(404).json({ error: 'Assigned user not found' });
         }
-        task.assignedUserId = userId;
+        task.assignedTelegramId = assignedTelegramIdNum;
       }
     }
     
@@ -293,7 +296,11 @@ router.put('/:id', authenticateToken, async (req: AuthenticatedRequest, res) => 
       relations: ['assignedUser', 'assignedRole', 'chat', 'label'],
     });
 
-    await taskHistoryService.logUpdates(previousTaskState, updatedTask, req.user?.userId ?? null);
+    // Получаем userId по telegramId
+    const user = await AppDataSource.getRepository(User).findOne({ 
+      where: { telegramId: telegramId } 
+    }); 
+    await taskHistoryService.logUpdates(previousTaskState, updatedTask, telegramId);
     
     res.json(taskWithRelations);
   } catch (error) {
@@ -303,8 +310,13 @@ router.put('/:id', authenticateToken, async (req: AuthenticatedRequest, res) => 
 });
 
 // PATCH /api/tasks/:id/status - изменить статус задачи
-router.patch('/:id/status', authenticateToken, async (req: AuthenticatedRequest, res) => {
+router.patch('/:id/status', async (req: Request, res) => {
   try {
+    const telegramId = getTelegramId(req);
+    if (!telegramId) {
+      return res.status(401).json({ error: 'Telegram ID required' });
+    }
+
     const taskId = parseInt(req.params.id);
     if (isNaN(taskId)) {
       return res.status(400).json({ error: 'Invalid task ID' });
@@ -333,7 +345,11 @@ router.patch('/:id/status', authenticateToken, async (req: AuthenticatedRequest,
     task.status = status as 'backlog' | 'in_progress' | 'completed';
     const updatedTask = await taskRepo.save(task);
 
-    await taskHistoryService.logUpdates(previousTaskState, updatedTask, req.user?.userId ?? null);
+    // Получаем userId по telegramId
+    const user = await AppDataSource.getRepository(User).findOne({ 
+      where: { telegramId: telegramId } 
+    });
+    await taskHistoryService.logUpdates(previousTaskState, updatedTask, telegramId);
     
     const taskWithRelations = await taskRepo.findOne({
       where: { id: taskId },
@@ -348,7 +364,7 @@ router.patch('/:id/status', authenticateToken, async (req: AuthenticatedRequest,
 });
 
 // DELETE /api/tasks/:id - удалить задачу
-router.delete('/:id', authenticateToken, async (req, res) => {
+router.delete('/:id', async (req: Request, res) => {
   try {
     const taskId = parseInt(req.params.id);
     if (isNaN(taskId)) {

@@ -29,9 +29,32 @@ app.use(cors({
   origin: true, // Разрешаем все origins
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+  allowedHeaders: [
+    'Content-Type', 
+    'Authorization', 
+    'X-Requested-With',
+    'X-Telegram-Init-Data',
+    'X-Telegram-Id'
+  ],
   exposedHeaders: ['Content-Length', 'X-Foo', 'X-Bar'],
 }));
+
+// Логирование всех входящих запросов
+app.use((req, res, next) => {
+  console.log('📥 Incoming Request:', {
+    method: req.method,
+    url: req.url,
+    path: req.path,
+    headers: {
+      'x-telegram-init-data': req.headers['x-telegram-init-data'] ? 'present' : 'missing',
+      'x-telegram-id': req.headers['x-telegram-id'] || 'missing',
+      'origin': req.headers.origin,
+      'user-agent': req.headers['user-agent']?.substring(0, 50),
+    },
+    ip: req.ip,
+  });
+  next();
+});
 
 // Настраиваем Helmet с учетом Telegram Mini App
 app.use(helmet({

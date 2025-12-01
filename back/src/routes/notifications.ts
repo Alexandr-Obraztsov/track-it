@@ -1,23 +1,28 @@
-import { Router } from 'express';
+import { Router, Request } from 'express';
 import { AppDataSource } from '../configs/database';
 import { NotificationSettings } from '../entities/NotificationSettings';
-import { authenticateToken } from '../middleware/auth';
+import { getTelegramId } from '../utils/getTelegramId';
 
 const router = Router();
 
 // GET /api/notifications - получить настройки уведомлений текущего пользователя
-router.get('/', authenticateToken, async (req: any, res) => {
+router.get('/', async (req: Request, res) => {
   try {
+    const telegramId = getTelegramId(req);
+    if (!telegramId) {
+      return res.status(401).json({ error: 'Telegram ID required' });
+    }
+
     const notificationSettingsRepository = AppDataSource.getRepository(NotificationSettings);
     
     let settings = await notificationSettingsRepository.findOne({
-      where: { userId: req.user.userId },
+      where: { telegramId },
     });
 
     // Если настроек нет, создаем дефолтные
     if (!settings) {
       settings = notificationSettingsRepository.create({
-        userId: req.user.userId,
+        telegramId,
         dailyDigestTime: '09:00',
         deadlineReminderHours: [24],
       });
@@ -35,8 +40,13 @@ router.get('/', authenticateToken, async (req: any, res) => {
 });
 
 // PUT /api/notifications - обновить настройки уведомлений
-router.put('/', authenticateToken, async (req: any, res) => {
+router.put('/', async (req: Request, res) => {
   try {
+    const telegramId = getTelegramId(req);
+    if (!telegramId) {
+      return res.status(401).json({ error: 'Telegram ID required' });
+    }
+
     const { dailyDigestTime, deadlineReminderHours } = req.body;
 
     // Валидация
@@ -55,13 +65,13 @@ router.put('/', authenticateToken, async (req: any, res) => {
     const notificationSettingsRepository = AppDataSource.getRepository(NotificationSettings);
     
     let settings = await notificationSettingsRepository.findOne({
-      where: { userId: req.user.userId },
+      where: { telegramId },
     });
 
     if (!settings) {
       // Создаем новые настройки, если их нет
       settings = notificationSettingsRepository.create({
-        userId: req.user.userId,
+        telegramId,
         dailyDigestTime: dailyDigestTime || '09:00',
         deadlineReminderHours: deadlineReminderHours || [24],
       });

@@ -111,6 +111,11 @@ export const TaskCard: React.FC<TaskCardProps> = ({
                   lineHeight: 1.5,
                   fontSize: '0.75rem',
                   opacity: 0.8,
+                  display: '-webkit-box',
+                  WebkitLineClamp: 2,
+                  WebkitBoxOrient: 'vertical',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
                 }}
               >
                 {description}

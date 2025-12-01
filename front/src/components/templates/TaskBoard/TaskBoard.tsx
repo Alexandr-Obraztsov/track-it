@@ -112,9 +112,9 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({
           id: profile.id,
           telegramId: profile.telegramId,
           firstName: profile.firstName,
-          lastName: profile.lastName,
-          username: profile.username,
-          photoUrl: profile.photoUrl,
+          lastName: profile.lastName ?? null,
+          username: profile.username ?? null,
+          photoUrl: profile.photoUrl ?? null,
           createdAt: profile.createdAt || new Date().toISOString(),
         });
       } catch (error) {
